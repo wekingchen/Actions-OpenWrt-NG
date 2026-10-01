@@ -1,0 +1,2 @@
+# 每行一个必须出现在最终 image manifest 中的包。
+# 默认 Smoke Test 不强制额外软件包。
