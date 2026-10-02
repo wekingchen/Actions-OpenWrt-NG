@@ -1,0 +1,38 @@
+name: V1.3 Profile Hardening Test
+
+on:
+  push:
+    branches:
+      - test/v1.3-profile-hardening
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Profile Wizard 边界回归
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+
+    steps:
+    - name: 检出仓库
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 静态语法检查
+      run: |
+        set -Eeuo pipefail
+        node --check dashboard/assets/app.js
+        node --check dashboard/assets/wizard-core.js
+        node --check dashboard/assets/wizard.js
+        bash -n scripts/profile.sh
+        bash -n scripts/resolve-update-state.sh
+        bash -n scripts/dashboard/test-wizard.sh
+        git diff --check
+
+    - name: 运行 Profile Wizard 真实契约测试
+      run: |
+        set -Eeuo pipefail
+        bash scripts/dashboard/test-wizard.sh
