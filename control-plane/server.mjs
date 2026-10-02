@@ -18,6 +18,11 @@ import {
   sha256Base64Url
 } from "./lib/security.mjs";
 import { ControlPlaneStore } from "./lib/store.mjs";
+import {
+  ProfileTemplateError,
+  buildProfileTemplateFiles,
+  profileFilesObject
+} from "./lib/profile-template.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(here, "public");
@@ -313,6 +318,48 @@ export function createControlPlaneHandler({ config, store, github }) {
         return res.end();
       }
 
+      if (
+        req.method === "POST" &&
+        url.pathname === "/api/v1/profile-templates/preview"
+      ) {
+        if (!validMutationRequest(req, config.origin)) {
+          return json(res, 403, { error: "csrf_validation_failed" });
+        }
+        const session = await authenticatedSession(req);
+        if (!session) {
+          return json(res, 401, { error: "authentication_required" });
+        }
+
+        let payload;
+        try {
+          payload = await readJsonBody(req);
+        } catch (error) {
+          return json(res, error.status || 400, {
+            error: error.message || "invalid_json"
+          });
+        }
+
+        try {
+          const files = buildProfileTemplateFiles(payload);
+          return json(res, 200, {
+            profileId: payload.profileId,
+            files: files.map((file) => ({
+              path: file.path,
+              content: file.text,
+              mode: file.mode
+            }))
+          });
+        } catch (error) {
+          if (error instanceof ProfileTemplateError) {
+            return json(res, error.status, {
+              error: error.code,
+              validationErrors: error.validationErrors
+            });
+          }
+          throw error;
+        }
+      }
+
       if (req.method === "GET" && url.pathname === "/api/v1/repositories") {
         const session = await authenticatedSession(req);
         if (!session) return json(res, 401, { error: "authentication_required" });
@@ -334,6 +381,59 @@ export function createControlPlaneHandler({ config, store, github }) {
           repo
         );
         return json(res, 200, { owner, repo, profiles });
+      }
+
+      if (req.method === "POST" && profileMatch) {
+        if (!validMutationRequest(req, config.origin)) {
+          return json(res, 403, { error: "csrf_validation_failed" });
+        }
+        const session = await authenticatedSession(req);
+        if (!session) {
+          return json(res, 401, { error: "authentication_required" });
+        }
+
+        let payload;
+        try {
+          payload = await readJsonBody(req);
+        } catch (error) {
+          return json(res, error.status || 400, {
+            error: error.message || "invalid_json"
+          });
+        }
+
+        const owner = decodeURIComponent(profileMatch[1]);
+        const repo = decodeURIComponent(profileMatch[2]);
+        try {
+          const files = buildProfileTemplateFiles(payload);
+          const result = await github.createNewProfilePullRequest(
+            session.accessToken,
+            owner,
+            repo,
+            payload.profileId,
+            profileFilesObject(files)
+          );
+          return json(res, 201, {
+            profileId: payload.profileId,
+            ...result
+          });
+        } catch (error) {
+          if (error instanceof ProfileTemplateError) {
+            return json(res, error.status, {
+              error: error.code,
+              validationErrors: error.validationErrors
+            });
+          }
+          if (error instanceof ProfileWriteError) {
+            return json(res, error.status, { error: error.code });
+          }
+          if (error?.name === "GitHubRequestError") {
+            return json(res, 502, {
+              error: "github_profile_write_failed",
+              reason: githubErrorReason(error)
+            });
+          }
+          throw error;
+        }
       }
 
 
