@@ -8,7 +8,7 @@
     "directory": "./public",
     "binding": "ASSETS",
     "run_worker_first": true,
-    "html_handling": "none",
+    "html_handling": "auto-trailing-slash",
     "not_found_handling": "404-page"
   },
   "d1_databases": [
