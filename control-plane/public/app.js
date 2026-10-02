@@ -874,9 +874,15 @@ async function loadProfiles(repo) {
     action.textContent = "打开 →";
 
     button.append(leading, action);
-    button.addEventListener("click", () =>
-      openProfile(repo, profile.id).catch((error) => showError(error))
-    );
+    button.addEventListener("click", () => {
+      for (const item of root.querySelectorAll(".profile-item")) {
+        item.classList.remove("selected");
+        item.removeAttribute("aria-current");
+      }
+      button.classList.add("selected");
+      button.setAttribute("aria-current", "true");
+      openProfile(repo, profile.id).catch((error) => showError(error));
+    });
     root.appendChild(button);
   }
 }
@@ -971,9 +977,15 @@ async function init() {
       " · actions:" +
       repo.permissions.actions;
     button.append(leading, badge);
-    button.addEventListener("click", () =>
-      loadProfiles(repo).catch((error) => showError(error))
-    );
+    button.addEventListener("click", () => {
+      for (const item of root.querySelectorAll(".repo-item")) {
+        item.classList.remove("selected");
+        item.removeAttribute("aria-current");
+      }
+      button.classList.add("selected");
+      button.setAttribute("aria-current", "true");
+      loadProfiles(repo).catch((error) => showError(error));
+    });
     root.appendChild(button);
   }
 
@@ -985,6 +997,15 @@ async function init() {
       "<strong>还没有可访问仓库</strong><span>调整 GitHub App 安装范围后再刷新页面。</span>";
     root.appendChild(empty);
   }
+}
+
+for (const item of document.querySelectorAll(".sidebar-nav .nav-item")) {
+  item.addEventListener("click", () => {
+    for (const nav of document.querySelectorAll(".sidebar-nav .nav-item")) {
+      nav.classList.remove("active");
+    }
+    item.classList.add("active");
+  });
 }
 
 $("new-profile-open").addEventListener("click", openNewProfileForm);
