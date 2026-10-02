@@ -234,7 +234,7 @@ Profile ID 必须以字母或数字开头，只允许字母、数字、点、下
 - `.config` 与表单内容只在浏览器本地处理。
 - Wizard 不调用 GitHub API，不持有 Token，也不拥有仓库写权限。
 - 生成 ZIP 已通过真实 `profile.sh validate/export`、Update Checker 和 Manifest 验收器兼容测试。
-- V1.3 只负责生成 Profile；网页直接写仓库、登录 GitHub 与触发构建留给后续 V2 控制面。
+- V1.3 Wizard 本身仍只负责本地生成 Profile；如果已部署 V2 Control Plane，也可以在控制面中直接新建标准 Profile，并通过独立分支 + Pull Request 安全写入仓库。
 
 ## V2 Control Plane
 
@@ -426,7 +426,7 @@ scripts/lib/              DIY 可复用函数
 
 ## 创建自己的 Profile
 
-优先使用 **Profile Wizard** 生成标准 Profile；如果希望手工维护，也可以复制 `profiles/default/`：
+可以使用 **Profile Wizard** 在浏览器本地生成标准 Profile ZIP；如果已经部署 V2 Control Plane，也可以直接在控制面点击“新建 Profile”，服务端校验后通过独立分支 + Pull Request 写入。若希望手工维护，也可以复制 `profiles/default/`：
 
 ```text
 profiles/my-router/
