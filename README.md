@@ -58,7 +58,8 @@ profiles/default/
 ├── .config
 ├── diy-part1.sh
 ├── diy-part2.sh
-└── required-packages.txt
+├── required-packages.txt
+└── watch-sources.txt
 ```
 
 默认示例使用 Lean `master` + x86_64 generic，用于提供一个开箱即用的基准。
@@ -225,6 +226,8 @@ V1.3 提供浏览器本地运行的 **Profile Wizard**：
 - 配置 Manifest 必选包与额外 Git 上游。
 - 预览最终 `profile.env` 等文件。
 - 下载标准 `profiles/<id>/` ZIP。
+
+Profile ID 必须以字母或数字开头，只允许字母、数字、点、下划线和短横线，最大 64 个字符；向导与 Core 使用同一套校验规则。
 
 安全边界：
 
@@ -402,7 +405,8 @@ profiles/my-router/
 ├── .config
 ├── diy-part1.sh
 ├── diy-part2.sh
-└── required-packages.txt
+├── required-packages.txt
+└── watch-sources.txt
 ```
 
 然后在 **Run workflow** 时把 `profile` 填成：

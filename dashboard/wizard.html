@@ -35,8 +35,8 @@
             <label class="field">
               <span>Profile ID</span>
               <input id="profile-id" name="profileId" value="my-openwrt" required
-                     pattern="[A-Za-z0-9._-]+" autocomplete="off">
-              <small>目录名，只允许字母、数字、点、下划线和短横线。</small>
+                     pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" maxlength="64" autocomplete="off">
+              <small>目录名必须以字母或数字开头；仅允许字母、数字、点、下划线和短横线，最多 64 个字符。</small>
             </label>
 
             <label class="field">

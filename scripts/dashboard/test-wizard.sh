@@ -12,6 +12,20 @@ trap cleanup EXIT
 
 cd "$root"
 
+for bad_profile in "." ".." ".hidden" "-leading" "_leading"; do
+  if bash scripts/profile.sh validate "$bad_profile" >"$tmp/profile-invalid.log" 2>&1; then
+    echo "ERROR: unsafe Profile ID unexpectedly passed profile.sh: $bad_profile" >&2
+    exit 1
+  fi
+  grep -q 'invalid profile name' "$tmp/profile-invalid.log"
+
+  if bash scripts/resolve-update-state.sh "$bad_profile" "$tmp/invalid-update-state.txt" >"$tmp/update-invalid.log" 2>&1; then
+    echo "ERROR: unsafe Profile ID unexpectedly passed resolve-update-state.sh: $bad_profile" >&2
+    exit 1
+  fi
+  grep -q 'invalid profile id' "$tmp/update-invalid.log"
+done
+
 zip_file="$tmp/profile.zip"
 extract_dir="$tmp/extracted"
 mkdir -p "$extract_dir"

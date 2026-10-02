@@ -5,12 +5,13 @@ profile_id="${1:?profile id is required}"
 output_file="${2:?output file is required}"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-profile_file="$root/profiles/$profile_id/profile.env"
 
-[[ "$profile_id" =~ ^[A-Za-z0-9._-]+$ ]] || {
+[[ "$profile_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || {
   echo "ERROR: invalid profile id: $profile_id" >&2
   exit 1
 }
+
+profile_file="$root/profiles/$profile_id/profile.env"
 
 [ -f "$profile_file" ] || {
   echo "ERROR: profile not found: $profile_file" >&2

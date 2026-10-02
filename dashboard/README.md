@@ -16,7 +16,10 @@ OpenWrt NG V1.3 的 GitHub Pages Dashboard 与 Profile Wizard。
 
 - `index.html`：页面结构
 - `assets/style.css`：响应式样式
-- `assets/app.js`：只读渲染逻辑
+- `assets/app.js`：只读 Dashboard 渲染逻辑
+- `wizard.html`：Profile Wizard 页面
+- `assets/wizard.js`：Wizard 表单、预览与本地下载逻辑
+- `assets/wizard-core.js`：Profile 校验、文件生成与 ZIP 封装核心
 - `data/status.json`：占位 schema；CI 发布前会用真实数据覆盖
 - `../scripts/dashboard/export-data.py`：GitHub / Profile 数据导出器
 - `../scripts/dashboard/validate-data.py`：schema 与敏感信息校验
@@ -47,6 +50,8 @@ V1.3 新增 `wizard.html`。
 
 - 浏览器本地读取 / 粘贴 `.config`
 - 生成标准 `profiles/<id>/` 六文件结构
+- Profile ID 与 Core 共用安全命名边界：字母或数字开头，最大 64 个字符
+- 对上传 / 粘贴内容做基础 Kconfig 形态校验
 - 客户端生成 ZIP，不上传配置
 - 生成器回归测试：`scripts/dashboard/test-wizard.mjs`
 - Core 集成测试：`scripts/dashboard/test-wizard.sh`
