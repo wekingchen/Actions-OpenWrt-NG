@@ -168,6 +168,13 @@ jobs:
       with:
         persist-credentials: false
 
+    - name: 查询该状态是否已经处理
+      id: state-cache
+      uses: actions/cache/restore@v6
+      with:
+        path: .update-state/${{ matrix.profile }}
+        key: openwrt-ng-upstream-${{ matrix.profile }}-${{ matrix.hash }}
+
     - name: 重新确认上游状态
       env:
         PROFILE_ID: ${{ matrix.profile }}
@@ -175,12 +182,10 @@ jobs:
       run: |
         set -Eeuo pipefail
 
-        state_dir=".update-state/$PROFILE_ID"
-        state_file="$state_dir/state.txt"
-        mkdir -p "$state_dir"
+        current_state="$RUNNER_TEMP/openwrt-ng-update-state.txt"
 
         actual="$(
-          bash scripts/resolve-update-state.sh "$PROFILE_ID" "$state_file" |
+          bash scripts/resolve-update-state.sh "$PROFILE_ID" "$current_state" |
             tail -n1
         )"
 
@@ -191,15 +196,10 @@ jobs:
           exit 1
         }
 
-        echo "上游状态："
-        cat "$state_file"
+        echo "CURRENT_UPDATE_STATE=$current_state" >> "$GITHUB_ENV"
 
-    - name: 查询该状态是否已经处理
-      id: state-cache
-      uses: actions/cache/restore@v6
-      with:
-        path: .update-state/${{ matrix.profile }}
-        key: openwrt-ng-upstream-${{ matrix.profile }}-${{ matrix.hash }}
+        echo "上游状态："
+        cat "$current_state"
 
     - name: 触发对应 Profile 构建
       if: steps.state-cache.outputs.cache-hit != 'true' || inputs.force == true
@@ -216,6 +216,16 @@ jobs:
           --silent
 
         echo "已触发 Profile：$PROFILE_ID"
+
+    - name: 准备状态缓存
+      if: steps.state-cache.outputs.cache-hit != 'true'
+      env:
+        PROFILE_ID: ${{ matrix.profile }}
+      run: |
+        set -Eeuo pipefail
+        state_dir=".update-state/$PROFILE_ID"
+        mkdir -p "$state_dir"
+        cp "$CURRENT_UPDATE_STATE" "$state_dir/state.txt"
 
     - name: 记录已处理上游状态
       if: steps.state-cache.outputs.cache-hit != 'true'
