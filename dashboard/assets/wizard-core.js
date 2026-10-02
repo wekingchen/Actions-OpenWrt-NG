@@ -15,8 +15,9 @@ export function normalizeLines(value) {
 
 export function validateProfileInput(input) {
   const errors = [];
-  if (!/^[A-Za-z0-9._-]+$/.test(input.profileId || "")) {
-    errors.push("Profile ID 只能包含字母、数字、点、下划线和短横线。");
+  const profileId = String(input.profileId ?? "");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(profileId)) {
+    errors.push("Profile ID 必须以字母或数字开头，仅包含字母、数字、点、下划线和短横线，且最多 64 个字符。");
   }
   if (!(input.profileName || "").trim()) errors.push("请填写显示名称。");
   if (/\r|\n/.test(input.profileName || "")) errors.push("显示名称不能包含换行。");
@@ -24,8 +25,13 @@ export function validateProfileInput(input) {
   if (/\r|\n/.test(input.sourceRepo || "")) errors.push("源码仓库不能包含换行。");
   if (!(input.sourceBranch || "").trim()) errors.push("请填写分支或 Tag。");
   if (/\r|\n/.test(input.sourceBranch || "")) errors.push("分支或 Tag 不能包含换行。");
-  if (!(input.configText || "").trim()) errors.push("请上传或粘贴 .config。");
-  if ((input.configText || "").includes("\0")) errors.push(".config 包含非法 NUL 字符。");
+  const configText = String(input.configText ?? "");
+  if (!configText.trim()) {
+    errors.push("请上传或粘贴 .config。");
+  } else if (!/^(?:CONFIG_[A-Za-z0-9_]+=|# CONFIG_[A-Za-z0-9_]+ is not set$)/m.test(configText)) {
+    errors.push("输入内容看起来不是有效的 OpenWrt/Kconfig .config。");
+  }
+  if (configText.includes("\0")) errors.push(".config 包含非法 NUL 字符。");
 
   const required = normalizeLines(input.requiredPackages);
   for (const raw of required ? required.split("\n") : []) {

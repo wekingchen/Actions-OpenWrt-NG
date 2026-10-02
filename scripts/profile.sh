@@ -6,7 +6,7 @@ profile_id="${2:-default}"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-[[ "$profile_id" =~ ^[A-Za-z0-9._-]+$ ]] || {
+[[ "$profile_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || {
   echo "ERROR: invalid profile name: $profile_id" >&2
   exit 1
 }
