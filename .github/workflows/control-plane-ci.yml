@@ -61,6 +61,11 @@ jobs:
         grep -q 'control_plane_request_id:' .github/workflows/build-openwrt.yml
         grep -q 'cp:{0}' .github/workflows/build-openwrt.yml
         grep -q 'return_run_details: true' control-plane/lib/github.mjs
+        grep -q 'friendlyError' control-plane/public/app.js
+        grep -q 'Profile 可读取' control-plane/public/app.js
+        grep -q 'role="alert"' control-plane/public/index.html
+        grep -q 'TOKEN_ENCRYPTION_KEY 至少需要 32 个字符' .github/workflows/deploy-control-plane.yml
+        grep -q 'Administration / Workflows' .github/workflows/deploy-control-plane.yml
 
         bad_github_secrets="$(
           grep -nE '\$\{\{[[:space:]]*secrets\.GITHUB_' .github/workflows/*.yml |
