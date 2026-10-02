@@ -15,20 +15,20 @@ async function init() {
     const config = await loadControlPlaneConfig();
 
     if (!config.enabled) {
-      state.textContent = "尚未启用";
+      state.textContent = "模板默认关闭";
       state.className = "status-pill warning";
       detail.textContent =
-        "V2.0A Auth Broker 尚未配置。公开 Dashboard 仍保持只读，V1.3 Profile Wizard 不受影响。";
+        "当前仓库尚未绑定自己的 Control Plane。这是公共模板的安全默认值；Dashboard 与 Profile Wizard 仍可独立使用。";
       endpoint.textContent = "Control Plane URL：未配置";
       action.hidden = true;
       return;
     }
 
     const target = buildControlPlaneUrl(config, "/");
-    state.textContent = "可连接";
+    state.textContent = "已启用";
     state.className = "status-pill success";
     detail.textContent =
-      "登录与 GitHub 授权将在独立的同源控制面中完成；公开 Pages 不接收 GitHub Token。";
+      "将打开该模板实例自己的同源控制面。GitHub 登录、Profile 编辑和 Builder 调度均在控制面完成，公开 Pages 不接收 GitHub Token。";
     endpoint.textContent = "Control Plane URL：" + config.controlPlaneUrl;
     action.href = target;
     action.hidden = false;
