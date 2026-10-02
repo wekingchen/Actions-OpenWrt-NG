@@ -1,5 +1,5 @@
 name: OpenWrt NG Builder
-run-name: Build · ${{ github.event.inputs.profile || github.event.client_payload.profile || 'default' }}
+run-name: Build · ${{ github.event.inputs.profile || github.event.client_payload.profile || 'default' }}${{ github.event.inputs.control_plane_request_id && format(' · cp:{0}', github.event.inputs.control_plane_request_id) || '' }}
 
 on:
   workflow_dispatch:
@@ -14,6 +14,11 @@ on:
         required: true
         default: true
         type: boolean
+      control_plane_request_id:
+        description: "Control Plane 请求标识（自动使用；手动运行请留空）"
+        required: false
+        default: ""
+        type: string
   repository_dispatch:
     types: [source-code-update]
 
