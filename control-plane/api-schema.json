@@ -336,6 +336,12 @@
         "reason": {
           "type": "string",
           "minLength": 1
+        },
+        "validationErrors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -629,6 +635,175 @@
         },
         "release": {
           "$ref": "#/$defs/buildRelease"
+        }
+      }
+    },
+    "profileTemplateInput": {
+      "type": "object",
+      "required": [
+        "profileId",
+        "profileName",
+        "sourceRepo",
+        "sourceBranch",
+        "adapter",
+        "configText",
+        "autoUpdate",
+        "uploadRelease",
+        "uploadFirmware",
+        "maximizeSpace",
+        "streamLog",
+        "requiredPackages",
+        "watchSources"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "profileName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "sourceRepo": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "sourceBranch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "adapter": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "configText": {
+          "type": "string",
+          "minLength": 1
+        },
+        "autoUpdate": {
+          "type": "boolean"
+        },
+        "uploadRelease": {
+          "type": "boolean"
+        },
+        "uploadFirmware": {
+          "type": "boolean"
+        },
+        "maximizeSpace": {
+          "type": "boolean"
+        },
+        "streamLog": {
+          "type": "boolean"
+        },
+        "requiredPackages": {
+          "type": "string"
+        },
+        "watchSources": {
+          "type": "string"
+        }
+      }
+    },
+    "profileTemplatePreviewFile": {
+      "type": "object",
+      "required": [
+        "path",
+        "content",
+        "mode"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^profiles/[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[^/]+$"
+        },
+        "content": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "100644",
+            "100755"
+          ]
+        }
+      }
+    },
+    "profileTemplatePreviewResponse": {
+      "type": "object",
+      "required": [
+        "profileId",
+        "files"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "files": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "items": {
+            "$ref": "#/$defs/profileTemplatePreviewFile"
+          }
+        }
+      }
+    },
+    "profileCreateResponse": {
+      "type": "object",
+      "required": [
+        "profileId",
+        "branch",
+        "commitSha",
+        "changedFiles",
+        "action",
+        "pullRequest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commitSha": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{40}$"
+        },
+        "changedFiles": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "items": {
+            "type": "string"
+          }
+        },
+        "action": {
+          "const": "create"
+        },
+        "pullRequest": {
+          "type": "object",
+          "required": [
+            "number",
+            "url"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "number": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "url": {
+              "type": "string"
+            }
+          }
         }
       }
     }
