@@ -40,13 +40,12 @@ GitHub
 
 - Repository metadata: read
 - Repository contents: read
-- Actions: read
 
 V2.0A 不需要：
 
 - Contents: write
 - Pull requests: write
-- Actions: write
+- Actions: read / write
 - Administration
 - Secrets
 
@@ -92,3 +91,70 @@ V2.0C 网页触发 Builder 时再评估 Actions/Workflow 相关写能力。
 这里禁止放任何 Secret 或 Token。
 
 V2.0A 在未部署 BFF 时保持 `enabled=false`，因此主干 Pages 不会出现“看似可登录、实际泄漏凭据”的半成品状态。
+
+
+## 部署最小步骤
+
+### 1. 创建 GitHub App
+
+建议设置：
+
+- Homepage URL：你的 Control Plane HTTPS 地址，例如 `https://control.example.com`
+- Callback URL：`https://control.example.com/api/v1/auth/callback`
+- User access token expiration：保持开启
+- Repository permissions：Metadata read、Contents read
+- 不需要生成 GitHub App private key；V2.0A 只使用 user access token Web Flow
+- 安装范围由用户在 GitHub 安装页选择目标仓库
+
+GitHub App 创建后记录：
+
+- Client ID
+- Client secret
+- App slug
+
+### 2. 准备环境变量
+
+```bash
+CONTROL_PLANE_ORIGIN=https://control.example.com
+GITHUB_APP_CLIENT_ID=...
+GITHUB_APP_CLIENT_SECRET=...
+GITHUB_APP_SLUG=...
+TOKEN_ENCRYPTION_KEY=<至少 32 字符的高熵随机值>
+CONTROL_PLANE_DB=/data/control-plane.db
+SESSION_TTL_SECONDS=604800
+SESSION_IDLE_TTL_SECONDS=86400
+PORT=8787
+```
+
+生产环境必须使用 HTTPS。只有显式设置：
+
+```bash
+CONTROL_PLANE_ALLOW_INSECURE_LOCALHOST=true
+```
+
+时才允许 localhost / 127.0.0.1 使用 HTTP 调试。
+
+### 3. Docker 运行
+
+```bash
+docker build -f control-plane/Dockerfile -t openwrt-ng-control-plane .
+docker run -d \
+  --name openwrt-ng-control-plane \
+  --restart unless-stopped \
+  -p 127.0.0.1:8787:8787 \
+  -v openwrt-ng-control-plane-data:/data \
+  --env-file /path/to/control-plane.env \
+  openwrt-ng-control-plane
+```
+
+前面再使用 Caddy / Nginx / Cloudflare Tunnel 等提供 HTTPS 反向代理。
+
+### 4. 最后再启用 Pages 入口
+
+只有 Control Plane 已能通过 HTTPS 正常访问后，才修改：
+
+`dashboard/data/control-plane.json`
+
+把 `enabled` 设为 `true` 并填写公开的 `controlPlaneUrl` / `githubAppSlug`。
+
+Client secret、token、数据库和环境文件绝不能进入该 JSON。
