@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { GitHubAppClient } from "./lib/github.mjs";
+import { GitHubAppClient, ProfileWriteError, githubErrorReason } from "./lib/github.mjs";
 import {
   hashOpaque,
   oauthCookie,
@@ -90,6 +90,35 @@ function securityHeaders(res) {
 
 function sessionTokenFromRequest(req) {
   return parseCookies(req.headers.cookie || "").ong_session || "";
+}
+
+function validMutationRequest(req, origin) {
+  return (
+    req.headers.origin === origin &&
+    req.headers["x-openwrt-ng-csrf"] === "1"
+  );
+}
+
+async function readJsonBody(req, limit = 5 * 1024 * 1024) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.from(chunk);
+    size += buffer.length;
+    if (size > limit) {
+      const error = new Error("request_body_too_large");
+      error.status = 413;
+      throw error;
+    }
+    chunks.push(buffer);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+  } catch {
+    const error = new Error("invalid_json");
+    error.status = 400;
+    throw error;
+  }
 }
 
 export function createControlPlaneHandler({ config, store, github }) {
@@ -263,6 +292,9 @@ export function createControlPlaneHandler({ config, store, github }) {
       }
 
       if (req.method === "POST" && url.pathname === "/api/v1/logout") {
+        if (!validMutationRequest(req, config.origin)) {
+          return json(res, 403, { error: "csrf_validation_failed" });
+        }
         const opaque = sessionTokenFromRequest(req);
         if (opaque) store.deleteSession(hashOpaque(opaque));
         res.setHeader(
@@ -297,6 +329,75 @@ export function createControlPlaneHandler({ config, store, github }) {
           repo
         );
         return json(res, 200, { owner, repo, profiles });
+      }
+
+
+      const profileDetailMatch = url.pathname.match(
+        /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/([^/]+)$/
+      );
+      if (req.method === "GET" && profileDetailMatch) {
+        const session = await authenticatedSession(req);
+        if (!session) return json(res, 401, { error: "authentication_required" });
+        const owner = decodeURIComponent(profileDetailMatch[1]);
+        const repo = decodeURIComponent(profileDetailMatch[2]);
+        const profileId = decodeURIComponent(profileDetailMatch[3]);
+        try {
+          const detail = await github.getProfile(
+            session.accessToken,
+            owner,
+            repo,
+            profileId
+          );
+          return json(res, 200, detail);
+        } catch (error) {
+          if (error instanceof ProfileWriteError) {
+            return json(res, error.status, { error: error.code });
+          }
+          throw error;
+        }
+      }
+
+      const profileWriteMatch = url.pathname.match(
+        /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/([^/]+)\/pull-request$/
+      );
+      if (req.method === "POST" && profileWriteMatch) {
+        if (!validMutationRequest(req, config.origin)) {
+          return json(res, 403, { error: "csrf_validation_failed" });
+        }
+        const session = await authenticatedSession(req);
+        if (!session) return json(res, 401, { error: "authentication_required" });
+
+        let payload;
+        try {
+          payload = await readJsonBody(req);
+        } catch (error) {
+          return json(res, error.status || 400, { error: error.message || "invalid_json" });
+        }
+
+        const owner = decodeURIComponent(profileWriteMatch[1]);
+        const repo = decodeURIComponent(profileWriteMatch[2]);
+        const profileId = decodeURIComponent(profileWriteMatch[3]);
+        try {
+          const result = await github.createProfilePullRequest(
+            session.accessToken,
+            owner,
+            repo,
+            profileId,
+            payload
+          );
+          return json(res, 201, result);
+        } catch (error) {
+          if (error instanceof ProfileWriteError) {
+            return json(res, error.status, { error: error.code });
+          }
+          if (error?.name === "GitHubRequestError") {
+            return json(res, 502, {
+              error: "github_profile_write_failed",
+              reason: githubErrorReason(error)
+            });
+          }
+          throw error;
+        }
       }
 
       const staticFiles = {

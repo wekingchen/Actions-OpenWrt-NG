@@ -32,7 +32,7 @@ h2 { margin: 0 0 10px; }
 .button.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
 .repo-list, .profile-list { display: grid; gap: 8px; margin-top: 14px; }
 .repo-item, .profile-item { width: 100%; display: flex; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: inherit; text-align: left; }
-.repo-item { cursor: pointer; font: inherit; }
+.repo-item, .profile-item { cursor: pointer; font: inherit; }
 .repo-item span, .profile-item code { color: var(--muted); font-size: 12px; }
 #user-box { display: flex; align-items: center; gap: 8px; }
 #user-box img { border-radius: 50%; }
@@ -41,3 +41,16 @@ h2 { margin: 0 0 10px; }
   header, .heading, .repo-item, .profile-item { align-items: flex-start; flex-direction: column; }
   h1 { font-size: 34px; }
 }
+
+.field-label { display: block; margin: 16px 0 7px; font-size: 12px; font-weight: 800; color: var(--muted); }
+.file-select { width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); color: var(--text); font: inherit; }
+.editor { width: 100%; min-height: 360px; resize: vertical; border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: var(--bg); color: var(--text); font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 2; }
+.editor:read-only { opacity: .72; cursor: not-allowed; }
+.editor-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.preview-box { margin-top: 16px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); }
+.preview-box h3 { margin: 0 0 10px; }
+.preview-box pre { margin: 0; max-height: 420px; overflow: auto; white-space: pre; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.permission-pill { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 7px 10px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.success { padding: 12px; border-radius: 10px; background: rgba(35,134,54,.1); color: #238636; }
+.success a { color: inherit; font-weight: 800; }
+button:disabled { opacity: .55; cursor: not-allowed; }

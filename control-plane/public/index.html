@@ -10,9 +10,9 @@
   <main class="shell">
     <header>
       <div>
-        <p class="eyebrow">OpenWrt NG · V2.0A</p>
+        <p class="eyebrow">OpenWrt NG · V2.0B</p>
         <h1>Control Plane</h1>
-        <p class="muted">GitHub 登录、仓库授权与 Profile 只读管理。</p>
+        <p class="muted">GitHub 登录、Profile 在线编辑，以及通过新分支 + Pull Request 安全保存。</p>
       </div>
       <div id="user-box"></div>
     </header>
@@ -42,6 +42,34 @@
       <p class="eyebrow">Profiles</p>
       <h2 id="profile-title">Profiles</h2>
       <div id="profiles" class="profile-list"></div>
+    </section>
+
+    <section class="card" id="editor-card" hidden>
+      <div class="heading">
+        <div>
+          <p class="eyebrow">Profile Editor</p>
+          <h2 id="editor-title">编辑 Profile</h2>
+          <p class="muted" id="editor-meta"></p>
+        </div>
+        <span class="permission-pill" id="write-permission"></span>
+      </div>
+
+      <label class="field-label" for="file-select">文件</label>
+      <select id="file-select" class="file-select"></select>
+
+      <label class="field-label" for="editor-content">内容</label>
+      <textarea id="editor-content" class="editor" spellcheck="false"></textarea>
+
+      <div class="editor-actions">
+        <button class="button secondary" id="preview-change" type="button">预览变更</button>
+        <button class="button" id="create-pr" type="button" disabled>创建分支并发起 PR</button>
+      </div>
+
+      <div id="preview-card" class="preview-box" hidden>
+        <h3>变更预览</h3>
+        <pre id="diff-preview"></pre>
+      </div>
+      <p class="success" id="write-result" hidden></p>
     </section>
 
     <p class="error" id="error" hidden></p>
