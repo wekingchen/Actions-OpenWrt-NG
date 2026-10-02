@@ -91,7 +91,8 @@ const github = {
       defaultBranch: "main",
       private: false,
       permissions: {
-        contents: "read"
+        contents: "write",
+        pullRequests: "write"
       }
     }];
   },
@@ -104,6 +105,77 @@ const github = {
       path: "profiles/default",
       sha: "abc"
     }];
+  },
+  async getProfile(token, owner, repo, profileId) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(profileId, "default");
+    return {
+      owner,
+      repo,
+      defaultBranch: "main",
+      baseRefSha: "a".repeat(40),
+      profile: {
+        id: profileId,
+        path: "profiles/default",
+        files: {
+          ".config": {
+            path: "profiles/default/.config",
+            sha: "cfg",
+            exists: true,
+            content: "CONFIG_TEST=y\n"
+          },
+          "profile.env": {
+            path: "profiles/default/profile.env",
+            sha: "env",
+            exists: true,
+            content: "PROFILE_NAME=\"Test\"\n"
+          },
+          "diy-part1.sh": {
+            path: "profiles/default/diy-part1.sh",
+            sha: "d1",
+            exists: true,
+            content: "#!/bin/bash\n"
+          },
+          "diy-part2.sh": {
+            path: "profiles/default/diy-part2.sh",
+            sha: "d2",
+            exists: true,
+            content: "#!/bin/bash\n"
+          },
+          "required-packages.txt": {
+            path: "profiles/default/required-packages.txt",
+            sha: "req",
+            exists: true,
+            content: ""
+          },
+          "watch-sources.txt": {
+            path: "profiles/default/watch-sources.txt",
+            sha: "watch",
+            exists: true,
+            content: ""
+          }
+        }
+      }
+    };
+  },
+  async createProfilePullRequest(token, owner, repo, profileId, payload) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(profileId, "default");
+    assert.equal(payload.baseRefSha, "a".repeat(40));
+    assert.equal(payload.files[".config"], "CONFIG_TEST=m\n");
+    return {
+      branch: "openwrt-ng/profile-default-test",
+      commitSha: "b".repeat(40),
+      changedFiles: [".config"],
+      pullRequest: {
+        number: 7,
+        url: "https://github.com/acme/router/pull/7"
+      }
+    };
   }
 };
 
@@ -301,13 +373,87 @@ assert.deepEqual((await profiles.json()).profiles, [{
   sha: "abc"
 }]);
 
+
+const detail = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/default",
+    { headers: { Cookie: sessionCookie } }
+  ),
+  configuredEnv,
+  deps
+);
+const detailBody = await detail.json();
+assert.equal(detail.status, 200);
+assert.equal(detailBody.baseRefSha, "a".repeat(40));
+assert.equal(detailBody.profile.files[".config"].content, "CONFIG_TEST=y\n");
+
+const rejectedWrite = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/default/pull-request",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        baseRefSha: "a".repeat(40),
+        files: {
+          ".config": "CONFIG_TEST=m\n"
+        }
+      })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(rejectedWrite.status, 403);
+assert.deepEqual(await rejectedWrite.json(), {
+  error: "csrf_validation_failed"
+});
+
+const writeFiles = {
+  ".config": "CONFIG_TEST=m\n",
+  "profile.env": "PROFILE_NAME=\"Test\"\n",
+  "diy-part1.sh": "#!/bin/bash\n",
+  "diy-part2.sh": "#!/bin/bash\n",
+  "required-packages.txt": "",
+  "watch-sources.txt": ""
+};
+const write = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/default/pull-request",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        baseRefSha: "a".repeat(40),
+        files: writeFiles
+      })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(write.status, 201);
+assert.equal((await write.json()).pullRequest.number, 7);
+
 const opaque = sessionCookie.split("=", 2)[1];
 assert.ok(store.sessions.has(hashOpaque(decodeURIComponent(opaque))));
 
 const logout = await handleControlPlaneRequest(
   new Request("https://worker.example/api/v1/logout", {
     method: "POST",
-    headers: { Cookie: sessionCookie }
+    headers: {
+      Cookie: sessionCookie,
+      Origin: "https://worker.example",
+      "X-OpenWrt-NG-CSRF": "1"
+    }
   }),
   configuredEnv,
   deps
