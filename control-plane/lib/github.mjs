@@ -28,9 +28,27 @@ export function githubErrorReason(error) {
     error && typeof error.githubError === "string"
       ? error.githubError
       : "";
-  return /^[a-z0-9_]{1,64}$/.test(code)
-    ? code
-    : "github_request_failed";
+  if (/^[a-z0-9_]{1,64}$/.test(code)) return code;
+
+  const status = Number(error?.httpStatus || 0);
+  if (Number.isInteger(status) && status >= 100 && status <= 599) {
+    return `github_http_${status}`;
+  }
+  return "github_request_failed";
+}
+
+async function parseOAuthResponse(response) {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {}
+
+  const params = new URLSearchParams(text);
+  if (![...params.keys()].length) return {};
+  return Object.fromEntries(params.entries());
 }
 
 export class GitHubAppClient {
@@ -57,11 +75,12 @@ export class GitHubAppClient {
       method: "POST",
       headers: {
         Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded"
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "OpenWrt-NG-Control-Plane"
       },
       body: new URLSearchParams(params)
     });
-    const body = await response.json().catch(() => ({}));
+    const body = await parseOAuthResponse(response);
     if (!response.ok || !body.access_token) {
       throw asJsonError(response, body);
     }
