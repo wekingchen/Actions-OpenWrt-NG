@@ -37,6 +37,10 @@ GitHub App / GitHub API
 - Session 同时具有绝对过期与闲置过期。
 - GitHub user token 临近到期时由 Worker 自动 refresh。
 - V2.0A 只需要 GitHub Repository Metadata read + Contents read。
+- V2.0B 写入严格限定在 `profiles/<id>/` 的标准文件，默认分支永不由控制面直接修改。
+- V2.0B 使用 Git Database API 原子创建 commit，再创建独立分支与 Pull Request。
+- 所有状态变更请求同时校验精确 Origin 与 `X-OpenWrt-NG-CSRF` 请求头。
+- 保存前携带默认分支基线 SHA；若仓库已变化，返回 `409 repository_changed`，要求重新加载后再编辑。
 
 ## 目录
 
@@ -197,7 +201,51 @@ https://...workers.dev/api/v1/health
 
 以上五步真实通过后，V2.0A 的端到端链路即验证完成。
 
-### 8. 在自己的模板实例中启用 GitHub Pages V2 入口
+### 8. V2.0B：在线编辑 Profile 并通过 PR 保存
+
+V2.0B 不允许直接写默认分支。编辑流程固定为：
+
+```text
+读取默认分支 + 基线 SHA
+        ↓
+编辑标准 Profile 文件
+        ↓
+浏览器预览变更
+        ↓
+服务端再次校验基线 SHA
+        ↓
+原子创建 Git commit
+        ↓
+创建 openwrt-ng/profile-* 分支
+        ↓
+创建 Pull Request
+        ↓
+用户在 GitHub 审核后决定是否合并
+```
+
+GitHub App 需要把 Repository permissions 调整为：
+
+- Metadata：Read-only
+- Contents：Read and write
+- Pull requests：Read and write
+- Actions：No access
+
+新增权限后，已安装该 App 的账户需要在 GitHub 中批准权限变更后才会生效。为了避免旧 user token 沿用旧权限，批准后建议退出 Control Plane 并重新登录一次。
+
+V2.0B 只接受以下文件：
+
+```text
+.config
+profile.env
+diy-part1.sh
+diy-part2.sh
+required-packages.txt
+watch-sources.txt
+```
+
+控制面不会接受任意仓库路径，也不会修改 `.github/workflows/*`，因此本阶段不需要 Workflows 权限。
+
+### 9. 在自己的模板实例中启用 GitHub Pages V2 入口
 
 **公共模板仓库的 `main` 应继续保持默认关闭，不应提交模板维护者自己的 workers.dev 地址或 GitHub App slug。**
 
