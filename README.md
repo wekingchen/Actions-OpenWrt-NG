@@ -4,7 +4,7 @@
 
 项目理念参考 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)：尽量把日常使用保持为“准备一个 `.config`，运行一次 Workflow”。在此基础上，提供更完整的缓存、构建诊断、配置留档、上游追溯、最小权限 Release 和失败恢复能力。
 
-> 当前状态：**V1**。通用 Core 已完成端到端真实构建验证：Update Checker → repository dispatch → Builder → Manifest / Config Record → Release → Cleanup 全链路通过。
+> 当前状态：**Core V1 稳定**。V1.1 Workflow Summary 已完成真实验证；V1.2 GitHub Pages Dashboard 已完成分支侧真实数据与 Pages Artifact 验证，等待主干首次 Pages 部署确认。
 
 ## V1 验证状态
 
@@ -184,6 +184,31 @@ Summary 只是展示层：
 - Summary 生成异常不会把原本成功的构建改成失败。
 - 完整日志、Artifact 和配置留档仍然保留，便于深度排障。
 
+## GitHub Pages Dashboard
+
+V1.2 提供只读的 **OpenWrt NG Dashboard**，把分散在 Actions、Profiles 和 Releases 中的信息集中到一个静态页面。
+
+Dashboard 展示：
+
+- Profile、源码、分支、Adapter 与自动追新状态。
+- 最近 Builder Runs、触发方式、真实上游源码 commit 与构建耗时。
+- 当前上游源码是否已经由最近成功构建覆盖。
+- 最近 Releases、固件附件以及直接下载入口。
+
+安全边界：
+
+- 浏览器只读取 CI 生成的静态 `status.json`。
+- 浏览器不调用 GitHub API，也不持有 GitHub Token。
+- 数据生成 job 只有 `contents: read` 与 `actions: read`。
+- 只有独立 Pages deploy job 拥有 `pages: write` 与 `id-token: write`。
+- Dashboard 删除或故障不会影响 Builder、Update Checker 或 Release。
+
+首次启用时，在仓库：
+
+**Settings → Pages → Build and deployment → Source → GitHub Actions**
+
+选择一次即可。未启用时 Dashboard workflow 会正常生成 Pages Artifact，但跳过公开部署并在 Summary 给出提示。
+
 ## 构建与诊断
 
 Core 提供：
@@ -326,7 +351,9 @@ luci|https://github.com/openwrt/luci|master
 .github/workflows/
 ├── build-openwrt.yml     主构建 / Release / cleanup
 ├── update-checker.yml    通用 Git 上游更新检查
-└── release-existing.yml Build 成功后的 Release 恢复
+├── release-existing.yml Build 成功后的 Release 恢复
+└── pages-dashboard.yml  Dashboard 数据生成与 Pages 部署
+dashboard/                只读静态 Dashboard
 adapters/                 源码准备适配层
 profiles/
 └── default/
@@ -337,6 +364,7 @@ profiles/
     ├── required-packages.txt
     └── watch-sources.txt
 scripts/                  通用构建与追溯工具
+scripts/dashboard/        Dashboard 数据导出与校验
 scripts/lib/              DIY 可复用函数
 ```
 

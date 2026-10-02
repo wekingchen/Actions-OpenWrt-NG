@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenWrt NG Dashboard</title>
+  <meta name="description" content="OpenWrt NG build status dashboard">
+  <link rel="stylesheet" href="./assets/style.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-header">
+      <div>
+        <p class="eyebrow">OpenWrt NG</p>
+        <h1>Build Dashboard</h1>
+        <p class="subtitle">Profiles、构建、上游状态与 Release 的统一只读视图。</p>
+      </div>
+      <div class="header-actions">
+        <a class="button secondary" id="repo-link" href="#" target="_blank" rel="noreferrer">Repository</a>
+        <a class="button" id="actions-link" href="#" target="_blank" rel="noreferrer">Actions</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero-grid" aria-label="Overview">
+        <article class="status-card primary-card">
+          <div class="card-heading">
+            <div>
+              <p class="section-kicker">Latest Build</p>
+              <h2 id="latest-build-title">Loading…</h2>
+            </div>
+            <span class="status-pill neutral" id="latest-build-status">…</span>
+          </div>
+          <dl class="metric-list" id="latest-build-metrics"></dl>
+          <div class="card-actions">
+            <a class="text-link" id="latest-build-link" href="#" target="_blank" rel="noreferrer">查看本次构建 →</a>
+          </div>
+        </article>
+
+        <article class="status-card">
+          <p class="section-kicker">Upstream</p>
+          <div class="big-status" id="upstream-status">—</div>
+          <p class="muted" id="upstream-detail">正在读取上游状态…</p>
+        </article>
+
+        <article class="status-card">
+          <p class="section-kicker">Latest Release</p>
+          <div class="big-status mono" id="latest-release-tag">—</div>
+          <p class="muted" id="latest-release-time">—</p>
+          <div class="card-actions">
+            <a class="text-link" id="latest-release-link" href="#" target="_blank" rel="noreferrer">打开 Release →</a>
+          </div>
+        </article>
+
+        <article class="status-card">
+          <p class="section-kicker">Profiles</p>
+          <div class="big-number" id="profile-count">0</div>
+          <p class="muted" id="auto-update-count">0 个启用自动追新</p>
+        </article>
+      </section>
+
+      <section class="content-section">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Profiles</p>
+            <h2>构建配置</h2>
+          </div>
+          <p class="section-note">Profile 是 Dashboard 的主视图单位。</p>
+        </div>
+        <div class="profile-grid" id="profiles-grid"></div>
+      </section>
+
+      <section class="content-section">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Build History</p>
+            <h2>最近构建</h2>
+          </div>
+          <a class="text-link" id="all-runs-link" href="#" target="_blank" rel="noreferrer">查看全部 Actions →</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>状态</th>
+                <th>Profile</th>
+                <th>触发</th>
+                <th>Commit</th>
+                <th>耗时</th>
+                <th>时间</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="builds-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="content-section">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Releases</p>
+            <h2>最近发布</h2>
+          </div>
+          <a class="text-link" id="all-releases-link" href="#" target="_blank" rel="noreferrer">查看全部 Releases →</a>
+        </div>
+        <div class="release-list" id="release-list"></div>
+      </section>
+    </main>
+
+    <footer>
+      <span id="generated-at">Data not loaded</span>
+      <span>Dashboard 只读，不参与编译或发布决策。</span>
+    </footer>
+  </div>
+
+  <template id="profile-template">
+    <article class="profile-card">
+      <div class="card-heading">
+        <div>
+          <p class="section-kicker profile-id"></p>
+          <h3 class="profile-name"></h3>
+        </div>
+        <span class="status-pill profile-status"></span>
+      </div>
+      <dl class="profile-meta"></dl>
+      <div class="profile-footer">
+        <span class="update-badge"></span>
+        <a class="text-link profile-run-link" href="#" target="_blank" rel="noreferrer">最近构建 →</a>
+      </div>
+    </article>
+  </template>
+
+  <template id="release-template">
+    <article class="release-card">
+      <div>
+        <p class="release-tag mono"></p>
+        <p class="muted release-meta"></p>
+      </div>
+      <div class="release-assets"></div>
+      <a class="button secondary release-link" href="#" target="_blank" rel="noreferrer">查看 Release</a>
+    </article>
+  </template>
+
+  <script src="./assets/app.js" defer></script>
+</body>
+</html>

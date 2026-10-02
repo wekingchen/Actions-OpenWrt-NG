@@ -1,0 +1,142 @@
+name: OpenWrt NG Dashboard
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "dashboard/**"
+      - "scripts/dashboard/**"
+      - "profiles/**"
+      - ".github/workflows/pages-dashboard.yml"
+  workflow_run:
+    workflows:
+      - "OpenWrt NG Builder"
+      - "OpenWrt NG Update Checker"
+      - "Release Existing Build"
+    types:
+      - completed
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: openwrt-ng-pages
+  cancel-in-progress: true
+
+jobs:
+  build-site:
+    name: 生成 Dashboard 静态站点
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+    - name: 检出仓库
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 静态检查
+      run: |
+        set -Eeuo pipefail
+        python3 -m py_compile \
+          scripts/dashboard/export-data.py \
+          scripts/dashboard/validate-data.py
+        node --check dashboard/assets/app.js
+        git diff --check
+
+    - name: 导出 Dashboard 数据
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -Eeuo pipefail
+        python3 scripts/dashboard/export-data.py \
+          --repository "$GITHUB_REPOSITORY" \
+          --output dashboard/data/status.json \
+          --runs 10 \
+          --releases 10
+
+        python3 scripts/dashboard/validate-data.py \
+          --repository "$GITHUB_REPOSITORY" \
+          --path dashboard/data/status.json
+
+    - name: 打包 Pages Artifact
+      run: |
+        set -Eeuo pipefail
+
+        tar \
+          --dereference \
+          --hard-dereference \
+          --directory dashboard \
+          -cvf "$RUNNER_TEMP/artifact.tar" \
+          --exclude=.git \
+          --exclude=.github \
+          .
+
+        tar -tf "$RUNNER_TEMP/artifact.tar" >/dev/null
+
+    - name: 上传 Pages Artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: github-pages
+        path: ${{ runner.temp }}/artifact.tar
+        retention-days: 1
+        if-no-files-found: error
+
+  deploy:
+    name: 部署 GitHub Pages
+    if: github.ref == 'refs/heads/main'
+    needs: build-site
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+    - name: 检查 GitHub Pages 设置
+      id: pages
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -Eeuo pipefail
+
+        pages_json="$RUNNER_TEMP/pages.json"
+        if gh api "repos/$GITHUB_REPOSITORY/pages" > "$pages_json" 2>/dev/null; then
+          build_type="$(jq -r '.build_type // ""' "$pages_json")"
+          html_url="$(jq -r '.html_url // ""' "$pages_json")"
+
+          if [ "$build_type" = "workflow" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub Pages 已启用：$html_url"
+            exit 0
+          fi
+        fi
+
+        echo "enabled=false" >> "$GITHUB_OUTPUT"
+        {
+          echo "## OpenWrt NG Dashboard"
+          echo
+          echo "Pages 尚未配置为 GitHub Actions，本次只生成了可部署 Artifact，没有执行公开部署。"
+          echo
+          echo "请在仓库 Settings → Pages → Build and deployment → Source 选择 **GitHub Actions**，然后重新运行 **OpenWrt NG Dashboard**。"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: 配置 GitHub Pages
+      if: steps.pages.outputs.enabled == 'true'
+      uses: actions/configure-pages@v6
+
+    - name: 部署 Dashboard
+      if: steps.pages.outputs.enabled == 'true'
+      id: deployment
+      uses: actions/deploy-pages@v5

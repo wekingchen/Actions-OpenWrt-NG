@@ -1,4 +1,5 @@
 name: OpenWrt NG Builder
+run-name: Build · ${{ github.event.inputs.profile || github.event.client_payload.profile || 'default' }}
 
 on:
   workflow_dispatch:

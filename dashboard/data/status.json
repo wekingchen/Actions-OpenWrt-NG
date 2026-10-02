@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "generated_at": null,
+  "repository": {
+    "name": "Actions-OpenWrt-NG",
+    "full_name": null,
+    "html_url": null,
+    "actions_url": null,
+    "releases_url": null,
+    "default_branch": null,
+    "is_template": false,
+    "version": "V1.2 Preview"
+  },
+  "latest_build": null,
+  "profiles": [],
+  "latest_builds": [],
+  "latest_releases": [],
+  "update_status": [],
+  "latest_update_run": null
+}
