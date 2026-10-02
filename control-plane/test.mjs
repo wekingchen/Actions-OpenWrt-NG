@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { GitHubAppClient } from "./lib/github.mjs";
+import { GitHubAppClient, githubErrorReason } from "./lib/github.mjs";
 import {
   decryptString,
   encryptString,
@@ -32,6 +32,30 @@ const consumedState = store.consumeOAuthState(hashOpaque("state"));
 assert.equal(consumedState.verifier, "verifier");
 assert.equal(consumedState.browserHash, hashOpaque("browser"));
 assert.equal(store.consumeOAuthState(hashOpaque("state")), null);
+
+
+const oauthErrorClient = new GitHubAppClient(
+  {
+    clientId: "Iv1.bad",
+    clientSecret: "bad-secret",
+    redirectUri: "https://example.test/api/v1/auth/callback"
+  },
+  async () =>
+    Response.json(
+      {
+        error: "incorrect_client_credentials",
+        error_description: "The client_id and/or client_secret passed are incorrect."
+      },
+      { status: 200 }
+    )
+);
+await assert.rejects(
+  () => oauthErrorClient.exchangeCode("code", "verifier"),
+  (error) => {
+    assert.equal(githubErrorReason(error), "incorrect_client_credentials");
+    return true;
+  }
+);
 
 const calls = [];
 const fakeFetch = async (url, options = {}) => {

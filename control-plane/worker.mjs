@@ -1,4 +1,4 @@
-import { GitHubAppClient } from "./lib/github.mjs";
+import { GitHubAppClient, githubErrorReason } from "./lib/github.mjs";
 import { D1ControlPlaneStore } from "./lib/d1-store.mjs";
 import {
   hashOpaque,
@@ -236,7 +236,13 @@ export async function handleControlPlaneRequest(
         return json(400, { error: "missing_oauth_browser_binding" });
       }
 
-      const pending = await deps.store.consumeOAuthState(hashOpaque(state));
+      let pending;
+      try {
+        pending = await deps.store.consumeOAuthState(hashOpaque(state));
+      } catch (error) {
+        console.error("OAuth callback state store failed", error);
+        return json(500, { error: "oauth_state_store_failed" });
+      }
       if (!pending) {
         return json(
           400,
@@ -262,24 +268,57 @@ export async function handleControlPlaneRequest(
         );
       }
 
-      const token = await deps.github.exchangeCode(code, pending.verifier);
-      const user = await deps.github.getUser(token.accessToken);
+      let token;
+      try {
+        token = await deps.github.exchangeCode(code, pending.verifier);
+      } catch (error) {
+        console.error("GitHub OAuth code exchange failed", error);
+        return json(
+          502,
+          {
+            error: "github_oauth_exchange_failed",
+            reason: githubErrorReason(error)
+          },
+          {
+            "Set-Cookie": oauthCookie("", {
+              secure: config.secureCookie,
+              maxAge: 0
+            })
+          }
+        );
+      }
+
+      let user;
+      try {
+        user = await deps.github.getUser(token.accessToken);
+      } catch (error) {
+        console.error("GitHub user lookup failed", error);
+        return json(502, {
+          error: "github_user_lookup_failed",
+          reason: githubErrorReason(error)
+        });
+      }
       if (!user?.login) {
         return json(502, { error: "invalid_github_user" });
       }
 
       const opaqueSession = randomToken(32);
       const sessionExpiresAt = Date.now() + config.sessionTtlMs;
-      await deps.store.createSession({
-        sessionHash: hashOpaque(opaqueSession),
-        userLogin: user.login,
-        avatarUrl: user.avatar_url || "",
-        accessToken: token.accessToken,
-        refreshToken: token.refreshToken,
-        githubExpiresAt: token.expiresAt,
-        refreshExpiresAt: token.refreshExpiresAt,
-        sessionExpiresAt
-      });
+      try {
+        await deps.store.createSession({
+          sessionHash: hashOpaque(opaqueSession),
+          userLogin: user.login,
+          avatarUrl: user.avatar_url || "",
+          accessToken: token.accessToken,
+          refreshToken: token.refreshToken,
+          githubExpiresAt: token.expiresAt,
+          refreshExpiresAt: token.refreshExpiresAt,
+          sessionExpiresAt
+        });
+      } catch (error) {
+        console.error("OAuth callback session store failed", error);
+        return json(500, { error: "oauth_session_store_failed" });
+      }
 
       return redirect(pending.returnTo, [
         sessionCookie(opaqueSession, {
