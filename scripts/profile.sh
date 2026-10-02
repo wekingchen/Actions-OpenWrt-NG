@@ -52,9 +52,11 @@ PREFLIGHT_SCRIPT="$(resolve_path "${PREFLIGHT_SCRIPT:-}")"
 POST_FEEDS_SCRIPT="$(resolve_path "${POST_FEEDS_SCRIPT:-}")"
 FILES_DIR="$(resolve_path "${FILES_DIR:-}")"
 REQUIRED_PACKAGES_FILE="$(resolve_path "${REQUIRED_PACKAGES_FILE:-}")"
+WATCH_SOURCES_FILE="$(resolve_path "${WATCH_SOURCES_FILE:-}")"
 ADAPTER_SCRIPT="$root/adapters/$ADAPTER.sh"
 MAKE_LD_LIBRARY_PATH_RELATIVE="${MAKE_LD_LIBRARY_PATH_RELATIVE:-}"
 PROFILE_NAME="${PROFILE_NAME:-$profile_id}"
+AUTO_UPDATE="${AUTO_UPDATE:-false}"
 MAXIMIZE_BUILD_SPACE="${MAXIMIZE_BUILD_SPACE:-false}"
 STREAM_BUILD_LOG="${STREAM_BUILD_LOG:-true}"
 UPLOAD_BIN_DIR="${UPLOAD_BIN_DIR:-false}"
@@ -77,6 +79,11 @@ for optional_script in "$DIY_PART1" "$DIY_PART2" "$PREFLIGHT_SCRIPT" "$POST_FEED
   }
 done
 
+if [ -n "$WATCH_SOURCES_FILE" ] && [ ! -f "$WATCH_SOURCES_FILE" ]; then
+  echo "ERROR: watch sources file not found: $WATCH_SOURCES_FILE" >&2
+  exit 1
+fi
+
 if [ -n "$MAKE_LD_LIBRARY_PATH_RELATIVE" ]; then
   [[ "$MAKE_LD_LIBRARY_PATH_RELATIVE" != /* ]] || {
     echo "ERROR: MAKE_LD_LIBRARY_PATH_RELATIVE must be relative" >&2
@@ -88,7 +95,7 @@ if [ -n "$MAKE_LD_LIBRARY_PATH_RELATIVE" ]; then
   }
 fi
 
-for flag in MAXIMIZE_BUILD_SPACE STREAM_BUILD_LOG UPLOAD_BIN_DIR UPLOAD_FIRMWARE UPLOAD_RELEASE; do
+for flag in AUTO_UPDATE MAXIMIZE_BUILD_SPACE STREAM_BUILD_LOG UPLOAD_BIN_DIR UPLOAD_FIRMWARE UPLOAD_RELEASE; do
   value="${!flag}"
   [[ "$value" = true || "$value" = false ]] || {
     echo "ERROR: $flag must be true/false, got: $value" >&2
@@ -130,6 +137,8 @@ case "$command_name" in
     emit_env POST_FEEDS_SCRIPT "$POST_FEEDS_SCRIPT"
     emit_env FILES_DIR "$FILES_DIR"
     emit_env REQUIRED_PACKAGES_FILE "$REQUIRED_PACKAGES_FILE"
+    emit_env WATCH_SOURCES_FILE "$WATCH_SOURCES_FILE"
+    emit_env AUTO_UPDATE "$AUTO_UPDATE"
     emit_env MAKE_LD_LIBRARY_PATH_RELATIVE "$MAKE_LD_LIBRARY_PATH_RELATIVE"
     emit_env MAXIMIZE_BUILD_SPACE "$MAXIMIZE_BUILD_SPACE"
     emit_env STREAM_BUILD_LOG "$STREAM_BUILD_LOG"
