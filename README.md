@@ -4,7 +4,7 @@
 
 项目理念参考 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)：尽量把日常使用保持为“准备一个 `.config`，运行一次 Workflow”。在此基础上，提供更完整的缓存、构建诊断、配置留档、上游追溯、最小权限 Release 和失败恢复能力。
 
-> 当前状态：**Core V1 稳定**。V1.1 Workflow Summary 已完成真实验证；V1.2 GitHub Pages Dashboard 已完成分支侧真实数据与 Pages Artifact 验证，等待主干首次 Pages 部署确认。
+> 当前状态：**V1.2**。Core V1 稳定，V1.1 Workflow Summary 与 V1.2 GitHub Pages Dashboard 均已完成真实验证和主干部署。
 
 ## V1 验证状态
 
@@ -185,6 +185,8 @@ Summary 只是展示层：
 - 完整日志、Artifact 和配置留档仍然保留，便于深度排障。
 
 ## GitHub Pages Dashboard
+
+正式 Dashboard：<https://wekingchen.github.io/Actions-OpenWrt-NG/>
 
 V1.2 提供只读的 **OpenWrt NG Dashboard**，把分散在 Actions、Profiles 和 Releases 中的信息集中到一个静态页面。
 
