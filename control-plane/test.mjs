@@ -107,6 +107,158 @@ assert.equal(
   "OpenWrt-NG-Control-Plane"
 );
 
+
+const profileBaseSha = "a".repeat(40);
+const profileFileContents = {
+  ".config": "CONFIG_TEST=y\n",
+  "profile.env": "PROFILE_NAME=\"Test\"\n",
+  "diy-part1.sh": "#!/bin/bash\n",
+  "diy-part2.sh": "#!/bin/bash\n",
+  "required-packages.txt": "",
+  "watch-sources.txt": ""
+};
+const profileCalls = [];
+const profileFetch = async (url, options = {}) => {
+  const parsed = new URL(String(url));
+  const path = parsed.pathname.replace(/^\/repos\/acme\/router/, "");
+  const method = String(options.method || "GET").toUpperCase();
+  profileCalls.push({ path, method, body: options.body || "" });
+
+  if (method === "GET" && path === "") {
+    return Response.json({ default_branch: "main" });
+  }
+  if (method === "GET" && path === "/commits/main") {
+    return Response.json({ sha: profileBaseSha });
+  }
+  if (
+    method === "GET" &&
+    path === "/contents/profiles/default" &&
+    parsed.searchParams.get("ref") === "main"
+  ) {
+    return Response.json(
+      Object.keys(profileFileContents).map((name) => ({
+        type: "file",
+        name,
+        path: "profiles/default/" + name,
+        sha: "old-" + name
+      }))
+    );
+  }
+  if (
+    method === "GET" &&
+    path.startsWith("/contents/profiles/default/") &&
+    parsed.searchParams.get("ref") === "main"
+  ) {
+    const name = decodeURIComponent(
+      path.slice("/contents/profiles/default/".length)
+    );
+    return Response.json({
+      type: "file",
+      name,
+      path: "profiles/default/" + name,
+      sha: "old-" + name,
+      encoding: "base64",
+      content: Buffer.from(profileFileContents[name], "utf8").toString("base64")
+    });
+  }
+  if (method === "GET" && path === "/git/commits/" + profileBaseSha) {
+    return Response.json({ sha: profileBaseSha, tree: { sha: "base-tree" } });
+  }
+  if (method === "POST" && path === "/git/blobs") {
+    const body = JSON.parse(options.body);
+    return Response.json({
+      sha: "blob-" + Buffer.from(body.content).toString("hex").slice(0, 12)
+    }, { status: 201 });
+  }
+  if (method === "POST" && path === "/git/trees") {
+    return Response.json({ sha: "new-tree" }, { status: 201 });
+  }
+  if (method === "POST" && path === "/git/commits") {
+    return Response.json({ sha: "b".repeat(40) }, { status: 201 });
+  }
+  if (method === "POST" && path === "/git/refs") {
+    return Response.json({ ref: "refs/heads/openwrt-ng/test" }, { status: 201 });
+  }
+  if (method === "POST" && path === "/pulls") {
+    return Response.json({
+      number: 17,
+      html_url: "https://github.com/acme/router/pull/17"
+    }, { status: 201 });
+  }
+  if (method === "DELETE" && path.startsWith("/git/refs/heads/")) {
+    return new Response(null, { status: 204 });
+  }
+
+  return Response.json({ message: "unexpected profile request" }, { status: 500 });
+};
+
+const profileClient = new GitHubAppClient(
+  {
+    clientId: "Iv1.profile",
+    clientSecret: "profile-secret",
+    redirectUri: "https://example.test/api/v1/auth/callback"
+  },
+  profileFetch
+);
+const loadedProfile = await profileClient.getProfile(
+  "ghu_profile",
+  "acme",
+  "router",
+  "default"
+);
+assert.equal(loadedProfile.baseRefSha, profileBaseSha);
+assert.equal(
+  loadedProfile.profile.files[".config"].content,
+  "CONFIG_TEST=y\n"
+);
+
+const changedProfileFiles = {
+  ...profileFileContents,
+  ".config": "CONFIG_TEST=m\n"
+};
+const createdProfilePr = await profileClient.createProfilePullRequest(
+  "ghu_profile",
+  "acme",
+  "router",
+  "default",
+  {
+    baseRefSha: profileBaseSha,
+    files: changedProfileFiles
+  }
+);
+assert.equal(createdProfilePr.pullRequest.number, 17);
+assert.deepEqual(createdProfilePr.changedFiles, [".config"]);
+assert.match(createdProfilePr.branch, /^openwrt-ng\/profile-default-/);
+assert.ok(
+  profileCalls.some((call) =>
+    call.method === "POST" && call.path === "/git/trees"
+  )
+);
+assert.ok(
+  profileCalls.some((call) =>
+    call.method === "POST" && call.path === "/pulls"
+  )
+);
+
+await assert.rejects(
+  () =>
+    profileClient.createProfilePullRequest(
+      "ghu_profile",
+      "acme",
+      "router",
+      "default",
+      {
+        baseRefSha: "c".repeat(40),
+        files: changedProfileFiles
+      }
+    ),
+  (error) => {
+    assert.equal(error.code, "repository_changed");
+    assert.equal(error.status, 409);
+    return true;
+  }
+);
+
 const calls = [];
 const fakeFetch = async (url, options = {}) => {
   calls.push({ url: String(url), options });
@@ -138,7 +290,10 @@ const fakeFetch = async (url, options = {}) => {
       installations: [
         {
           id: 101,
-          permissions: { contents: "read", actions: "read" }
+          permissions: {
+            contents: "write",
+            pull_requests: "write"
+          }
         }
       ]
     });
@@ -299,7 +454,11 @@ try {
 
   const logout = await fetch(base + "/api/v1/logout", {
     method: "POST",
-    headers: { Cookie: cookie }
+    headers: {
+      Cookie: cookie,
+      Origin: "http://127.0.0.1",
+      "X-OpenWrt-NG-CSRF": "1"
+    }
   });
   assert.equal(logout.status, 204);
 
