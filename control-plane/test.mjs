@@ -584,6 +584,16 @@ const fakeFetch = async (url, options = {}) => {
   }
 
   if (
+    parsed?.pathname === "/repos/acme/router/git/commits/" + "d".repeat(40) &&
+    String(options.method || "GET").toUpperCase() === "GET"
+  ) {
+    return Response.json({
+      sha: "d".repeat(40),
+      tree: { sha: "server-base-tree" }
+    });
+  }
+
+  if (
     parsed?.pathname === "/repos/acme/router/git/blobs" &&
     String(options.method || "GET").toUpperCase() === "POST"
   ) {
