@@ -178,6 +178,10 @@ function canWriteRepo(repo) {
   );
 }
 
+function canReadActions(repo) {
+  return ["read", "write"].includes(repo?.permissions?.actions);
+}
+
 function canRunRepo(repo) {
   return repo?.permissions?.actions === "write";
 }
@@ -427,11 +431,26 @@ async function setupBuildControl(repo, profileId) {
   $("build-detail").hidden = true;
   showBuildResult();
 
+  const readable = canReadActions(repo);
   const ready = canRunRepo(repo);
   $("actions-permission").textContent = ready
     ? "Actions 可调度"
-    : "只读：需 Actions 写权限";
+    : readable
+      ? "Actions 只读"
+      : "需 Actions 权限";
   $("trigger-build").disabled = !ready;
+  $("refresh-builds").disabled = !readable;
+
+  if (!readable) {
+    const root = $("build-runs");
+    root.replaceChildren();
+    const note = document.createElement("p");
+    note.className = "muted";
+    note.textContent =
+      "当前 GitHub App 未授予 Actions 权限；Profile 编辑与 PR 功能仍可正常使用。";
+    root.appendChild(note);
+    return;
+  }
 
   await loadBuildRuns();
 }
