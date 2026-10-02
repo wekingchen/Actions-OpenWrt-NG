@@ -518,6 +518,7 @@ export class GitHubAppClient {
         method: "POST",
         body: {
           ref: state.defaultBranch,
+          return_run_details: true,
           inputs: {
             profile: profileId,
             publish_release: payload.publishRelease === true,
@@ -564,10 +565,12 @@ export class GitHubAppClient {
         `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}/artifacts?per_page=100`,
         token
       ),
-      this.api(
-        `/repos/${safeOwner}/${safeRepo}/releases?per_page=100`,
-        token
-      )
+      run.status === "completed"
+        ? this.api(
+            `/repos/${safeOwner}/${safeRepo}/releases?per_page=100`,
+            token
+          )
+        : Promise.resolve([])
     ]);
 
     const jobs = Array.isArray(jobsBody.jobs) ? jobsBody.jobs : [];
