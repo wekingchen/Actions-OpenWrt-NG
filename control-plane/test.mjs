@@ -57,6 +57,33 @@ await assert.rejects(
   }
 );
 
+
+let oauthRequestHeaders;
+const formOAuthClient = new GitHubAppClient(
+  {
+    clientId: "Iv1.form",
+    clientSecret: "form-secret",
+    redirectUri: "https://example.test/api/v1/auth/callback"
+  },
+  async (_url, options = {}) => {
+    oauthRequestHeaders = new Headers(options.headers || {});
+    return new Response(
+      "access_token=ghu_form_access&token_type=bearer&expires_in=28800&refresh_token=ghr_form_refresh&refresh_token_expires_in=15897600&scope=",
+      {
+        status: 200,
+        headers: { "content-type": "application/x-www-form-urlencoded" }
+      }
+    );
+  }
+);
+const formToken = await formOAuthClient.exchangeCode("code", "verifier");
+assert.equal(formToken.accessToken, "ghu_form_access");
+assert.equal(formToken.refreshToken, "ghr_form_refresh");
+assert.equal(
+  oauthRequestHeaders.get("user-agent"),
+  "OpenWrt-NG-Control-Plane"
+);
+
 const calls = [];
 const fakeFetch = async (url, options = {}) => {
   calls.push({ url: String(url), options });
