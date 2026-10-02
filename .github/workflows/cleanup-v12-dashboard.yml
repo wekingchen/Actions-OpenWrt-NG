@@ -1,0 +1,50 @@
+name: V1.2 Dashboard Cleanup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/cleanup-v12-dashboard.yml"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+    - name: 清理 Dashboard 测试分支与测试 Runs
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -Eeuo pipefail
+
+        branch_ref="heads/feature/pages-dashboard"
+        if gh api "repos/$GITHUB_REPOSITORY/git/ref/$branch_ref" >/dev/null 2>&1; then
+          gh api -X DELETE \
+            "repos/$GITHUB_REPOSITORY/git/refs/$branch_ref" \
+            --silent
+          echo "已删除测试分支 feature/pages-dashboard"
+        else
+          echo "测试分支已不存在"
+        fi
+
+        for run_id in \
+          36975951059 \
+          36976016694 \
+          36976133685 \
+          36976229353 \
+          36976429946 \
+          36976453002 \
+          36976578729 \
+          36976985868 \
+          36976985950
+        do
+          gh api -X DELETE \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" \
+            --silent || true
+        done
+
+        echo "Dashboard 测试记录清理完成"
