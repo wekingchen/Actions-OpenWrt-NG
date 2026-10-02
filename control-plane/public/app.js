@@ -721,6 +721,8 @@ async function setupBuildControl(repo, profileId) {
 async function openProfile(repo, profileId) {
   showError();
   showWriteResult();
+  $("new-profile-card").hidden = true;
+  invalidateNewProfilePreview();
   await setupBuildControl(repo, profileId);
 
   const data = await request(
