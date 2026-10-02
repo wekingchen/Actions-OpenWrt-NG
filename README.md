@@ -4,7 +4,7 @@
 
 项目理念参考 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)：尽量把日常使用保持为“准备一个 `.config`，运行一次 Workflow”。在此基础上，提供更完整的缓存、构建诊断、配置留档、上游追溯、最小权限 Release 和失败恢复能力。
 
-> 当前稳定版：**V1.3**。Core V1、V1.1 Workflow Summary、V1.2 GitHub Pages Dashboard 与 V1.3 Profile Wizard 均已完成真实验证和主干部署。V2 Control Plane 正在独立分支开发。
+> 当前稳定基础为 **V1.3**；**V2.0A Control Plane 已完成真实端到端验证**，包括 GitHub OAuth 登录、GitHub App 安装仓库枚举与 `profiles/*` 只读访问。
 
 ## V1 验证状态
 
@@ -250,11 +250,11 @@ D1 + Worker Secrets
 GitHub App
 ```
 
-因此使用 V2 **不需要自备 VPS、Docker 或 Caddy**。V2.0A 已实现 GitHub App 登录、安装仓库选择和只读 Profile 访问；GitHub user access token / refresh token 只在 Worker 侧加密存入 D1，公开 Pages 与浏览器脚本都不保存 GitHub Token。
+因此使用 V2 **不需要自备 VPS、Docker 或 Caddy**。V2.0A 已实现并完成真实验证：GitHub App 登录、安装仓库选择、仓库枚举和只读 Profile 访问；GitHub user access token / refresh token 只在 Worker 侧加密存入 D1，公开 Pages 与浏览器脚本都不保存 GitHub Token。
 
 项目提供 **Deploy V2 Control Plane** 手动 Workflow：第一次可以无 GitHub App Secret bootstrap 部署，拿到 workers.dev URL 后再创建 GitHub App并同步 Secret。Node.js + SQLite + Docker 仅保留为可选自托管方式。
 
-当前 `dashboard/data/control-plane.json` 默认 `enabled=false`；只有真实 OAuth / 仓库 / Profile 验证通过后才启用入口。详细步骤见 `control-plane/README.md`。
+作为公共模板，`dashboard/data/control-plane.json` 在本仓库 `main` 中**刻意保持 `enabled=false` 且不绑定维护者个人 Worker / GitHub App**。使用者从模板创建自己的仓库后，完成自己的 Control Plane 部署与真实验证，再在自己的仓库中启用入口。详细步骤见 `control-plane/README.md`。
 
 ## 构建与诊断
 
