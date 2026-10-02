@@ -272,6 +272,8 @@ control_plane_request_id = 服务端随机生成
 
 Builder 增加一个可选的 `control_plane_request_id` 输入。手动运行时保持为空即可；Control Plane 调度时会自动填入，用于精确关联本次点击与实际 Actions Run。
 
+调度请求同时设置 GitHub 的 `return_run_details=true`：支持该能力时直接获得 `workflow_run_id` 并按 Run ID 轮询；若 GitHub 返回旧式空响应，则自动退回 `control_plane_request_id` 搜索。两条路径均保留，避免依赖 Actions Run 列表的传播延迟。
+
 页面可查看：
 
 - queued / running / completed 与最终 conclusion。
