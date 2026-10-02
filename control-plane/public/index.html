@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenWrt NG Control Plane</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <p class="eyebrow">OpenWrt NG · V2.0A</p>
+        <h1>Control Plane</h1>
+        <p class="muted">GitHub 登录、仓库授权与 Profile 只读管理。</p>
+      </div>
+      <div id="user-box"></div>
+    </header>
+
+    <section class="card" id="login-card">
+      <h2>连接 GitHub</h2>
+      <p class="muted">授权信息只由当前 Control Plane 服务端保存；浏览器不会获得 GitHub access token。</p>
+      <a class="button" href="/api/v1/auth/start?return_to=/">使用 GitHub 登录</a>
+    </section>
+
+    <section class="card" id="repo-card" hidden>
+      <div class="heading">
+        <div>
+          <p class="eyebrow">Repositories</p>
+          <h2>已授权仓库</h2>
+        </div>
+        <button class="button secondary" id="logout" type="button">退出登录</button>
+      </div>
+      <div id="repositories" class="repo-list"></div>
+    </section>
+
+    <section class="card" id="profile-card" hidden>
+      <p class="eyebrow">Profiles</p>
+      <h2 id="profile-title">Profiles</h2>
+      <div id="profiles" class="profile-list"></div>
+    </section>
+
+    <p class="error" id="error" hidden></p>
+  </main>
+  <script type="module" src="/assets/app.js"></script>
+</body>
+</html>

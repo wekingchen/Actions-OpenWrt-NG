@@ -1,0 +1,199 @@
+import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import { GitHubAppClient } from "./lib/github.mjs";
+import {
+  decryptString,
+  encryptString,
+  hashOpaque,
+  safeReturnTo,
+  sha256Base64Url
+} from "./lib/security.mjs";
+import { ControlPlaneStore } from "./lib/store.mjs";
+import { createControlPlaneHandler } from "./server.mjs";
+
+const secret = "0123456789abcdef0123456789abcdef";
+const encrypted = encryptString("ghu_example", secret);
+assert.notEqual(encrypted, "ghu_example");
+assert.equal(decryptString(encrypted, secret), "ghu_example");
+assert.equal(safeReturnTo("/repos?a=1"), "/repos?a=1");
+assert.equal(safeReturnTo("https://evil.example"), "/");
+assert.equal(safeReturnTo("//evil.example"), "/");
+assert.equal(sha256Base64Url("abc").length > 40, true);
+
+const store = new ControlPlaneStore(":memory:", secret);
+store.createOAuthState({
+  stateHash: hashOpaque("state"),
+  verifier: "verifier",
+  returnTo: "/",
+  expiresAt: Date.now() + 60_000
+});
+assert.equal(
+  store.consumeOAuthState(hashOpaque("state")).verifier,
+  "verifier"
+);
+assert.equal(store.consumeOAuthState(hashOpaque("state")), null);
+
+const calls = [];
+const fakeFetch = async (url, options = {}) => {
+  calls.push({ url: String(url), options });
+
+  if (String(url).endsWith("/login/oauth/access_token")) {
+    return new Response(
+      JSON.stringify({
+        access_token: "ghu_test_access",
+        expires_in: 28_800,
+        refresh_token: "ghr_test_refresh",
+        refresh_token_expires_in: 15_552_000
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
+  }
+
+  if (String(url).endsWith("/user")) {
+    return Response.json({
+      login: "tester",
+      avatar_url: "https://avatars.githubusercontent.com/u/1?v=4"
+    });
+  }
+
+  if (String(url).includes("/user/installations?")) {
+    return Response.json({
+      installations: [
+        {
+          id: 101,
+          permissions: { contents: "read", actions: "read" }
+        }
+      ]
+    });
+  }
+
+  if (String(url).includes("/user/installations/101/repositories?")) {
+    return Response.json({
+      repositories: [
+        {
+          name: "router",
+          full_name: "acme/router",
+          private: false,
+          default_branch: "main",
+          owner: { login: "acme" }
+        }
+      ]
+    });
+  }
+
+  if (String(url).endsWith("/repos/acme/router/contents/profiles")) {
+    return Response.json([
+      { type: "dir", name: "default", path: "profiles/default", sha: "abc" },
+      { type: "file", name: "README.md", path: "profiles/README.md", sha: "def" }
+    ]);
+  }
+
+  throw new Error("Unexpected fake GitHub request: " + url);
+};
+
+const config = {
+  origin: "http://127.0.0.1",
+  secureCookie: false,
+  clientId: "Iv1.test",
+  clientSecret: "client-secret",
+  encryptionSecret: secret,
+  sessionTtlMs: 3600_000,
+  apiVersion: "2022-11-28"
+};
+
+const github = new GitHubAppClient(
+  {
+    clientId: config.clientId,
+    clientSecret: config.clientSecret,
+    redirectUri: config.origin + "/api/v1/auth/callback",
+    apiVersion: config.apiVersion
+  },
+  fakeFetch
+);
+
+const handler = createControlPlaneHandler({ config, store, github });
+const server = createServer(handler);
+await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+const address = server.address();
+const base = `http://127.0.0.1:${address.port}`;
+
+try {
+  const health = await fetch(base + "/api/v1/health");
+  assert.equal(health.status, 200);
+  assert.deepEqual(await health.json(), { ok: true, version: 1 });
+
+  const start = await fetch(base + "/api/v1/auth/start?return_to=/", {
+    redirect: "manual"
+  });
+  assert.equal(start.status, 302);
+  const authorize = new URL(start.headers.get("location"));
+  assert.equal(authorize.hostname, "github.com");
+  assert.equal(authorize.searchParams.get("code_challenge_method"), "S256");
+  const state = authorize.searchParams.get("state");
+  assert.ok(state);
+
+  const callback = await fetch(
+    base +
+      "/api/v1/auth/callback?code=test-code&state=" +
+      encodeURIComponent(state),
+    { redirect: "manual" }
+  );
+  assert.equal(callback.status, 302);
+  assert.equal(callback.headers.get("location"), "/");
+  const setCookie = callback.headers.get("set-cookie");
+  assert.match(setCookie, /ong_session=/);
+  assert.match(setCookie, /HttpOnly/);
+  assert.doesNotMatch(setCookie, /ghu_test_access|ghr_test_refresh/);
+  const cookie = setCookie.split(";", 1)[0];
+
+  const session = await fetch(base + "/api/v1/session", {
+    headers: { Cookie: cookie }
+  });
+  const sessionBody = await session.json();
+  assert.equal(sessionBody.authenticated, true);
+  assert.equal(sessionBody.user.login, "tester");
+  assert.equal(JSON.stringify(sessionBody).includes("ghu_"), false);
+  assert.equal(JSON.stringify(sessionBody).includes("ghr_"), false);
+
+  const repos = await fetch(base + "/api/v1/repositories", {
+    headers: { Cookie: cookie }
+  });
+  const reposBody = await repos.json();
+  assert.equal(reposBody.repositories.length, 1);
+  assert.equal(reposBody.repositories[0].fullName, "acme/router");
+  assert.equal(reposBody.repositories[0].permissions.contents, "read");
+
+  const profiles = await fetch(
+    base + "/api/v1/repositories/acme/router/profiles",
+    { headers: { Cookie: cookie } }
+  );
+  const profilesBody = await profiles.json();
+  assert.deepEqual(profilesBody.profiles, [
+    { id: "default", path: "profiles/default", sha: "abc" }
+  ]);
+
+  const logout = await fetch(base + "/api/v1/logout", {
+    method: "POST",
+    headers: { Cookie: cookie }
+  });
+  assert.equal(logout.status, 204);
+
+  const afterLogout = await fetch(base + "/api/v1/session", {
+    headers: { Cookie: cookie }
+  });
+  assert.deepEqual(await afterLogout.json(), { authenticated: false });
+
+  assert.ok(
+    calls.some((call) =>
+      call.url.includes("/user/installations/101/repositories")
+    )
+  );
+
+  console.log("Control Plane server tests passed.");
+} finally {
+  await new Promise((resolve) => server.close(resolve));
+  store.close();
+}
