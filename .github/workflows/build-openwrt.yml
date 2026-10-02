@@ -569,65 +569,46 @@ jobs:
         release_tag="$(date +'%Y.%m.%d-%H%M')-${GITHUB_RUN_NUMBER}"
         mapfile -t assets < <(find release-bundle/assets -maxdepth 1 -type f -print | sort)
 
-        cleanup_failed_release() {
-          local status="$?"
-          if [ "$status" -ne 0 ]; then
-            echo "Release 发布失败，清理未完成的草稿/标签：$release_tag" >&2
+        cleanup_release() {
+          release_id="$(
+            gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              --jq ".[] | select(.tag_name == \"$release_tag\") | .id" \
+              2>/dev/null | head -n1 || true
+          )"
 
-            release_id="$(
-              gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-                --jq ".[] | select(.tag_name == \"$release_tag\") | .id" \
-                2>/dev/null | head -n1 || true
-            )"
-
-            if [ -n "$release_id" ]; then
-              gh api -X DELETE \
-                "repos/$GITHUB_REPOSITORY/releases/$release_id" \
-                --silent || true
-            fi
-
+          if [ -n "$release_id" ]; then
             gh api -X DELETE \
-              "repos/$GITHUB_REPOSITORY/git/refs/tags/$release_tag" \
+              "repos/$GITHUB_REPOSITORY/releases/$release_id" \
               --silent || true
           fi
-          exit "$status"
+
+          gh api -X DELETE \
+            "repos/$GITHUB_REPOSITORY/git/refs/tags/$release_tag" \
+            --silent || true
         }
-        trap cleanup_failed_release EXIT
 
-        gh release create "$release_tag" \
-          --repo "$GITHUB_REPOSITORY" \
-          --target "$GITHUB_SHA" \
-          --title "$release_tag" \
-          --notes-file release-bundle/release.txt \
-          --draft
+        published=false
+        for attempt in 1 2 3; do
+          echo "创建 Release（第 $attempt/3 次）"
 
-        for asset in "${assets[@]}"; do
-          uploaded=false
+          if gh release create "$release_tag" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$release_tag" \
+            --notes-file release-bundle/release.txt; then
+            published=true
+            break
+          fi
 
-          for attempt in 1 2 3; do
-            echo "上传附件：$(basename "$asset")（第 $attempt/3 次）"
-
-            if gh release upload "$release_tag" "$asset" \
-              --repo "$GITHUB_REPOSITORY" \
-              --clobber; then
-              uploaded=true
-              break
-            fi
-
-            sleep "$((attempt * 3))"
-          done
-
-          [ "$uploaded" = true ] || {
-            echo "ERROR: Release 附件上传连续失败：$asset" >&2
-            exit 1
-          }
+          echo "本次发布失败，清理可能残留的 Release/tag 后重试" >&2
+          cleanup_release
+          sleep "$((attempt * 3))"
         done
 
-        gh release edit "$release_tag" \
-          --repo "$GITHUB_REPOSITORY" \
-          --draft=false
-
-        trap - EXIT
+        [ "$published" = true ] || {
+          echo "ERROR: Release 连续 3 次发布失败" >&2
+          exit 1
+        }
 
         echo "发布完成：$release_tag"
         echo "status=success" >> "$GITHUB_OUTPUT"
