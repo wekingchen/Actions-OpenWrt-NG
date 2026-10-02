@@ -4,7 +4,7 @@
 
 项目理念参考 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)：尽量把日常使用保持为“准备一个 `.config`，运行一次 Workflow”。在此基础上，提供更完整的缓存、构建诊断、配置留档、上游追溯、最小权限 Release 和失败恢复能力。
 
-> 当前稳定基础为 **V1.3**；**V2.0A Control Plane 已完成真实端到端验证**，包括 GitHub OAuth 登录、GitHub App 安装仓库枚举与 `profiles/*` 只读访问。
+> 当前稳定基础为 **V1.3**；**V2.0A Control Plane 已完成真实端到端验证**。V2.0B 正在开发“Profile 在线编辑 → 原子 commit → 新分支 → Pull Request”，不会直接修改默认分支。
 
 ## V1 验证状态
 
@@ -251,6 +251,8 @@ GitHub App
 ```
 
 因此使用 V2 **不需要自备 VPS、Docker 或 Caddy**。V2.0A 已实现并完成真实验证：GitHub App 登录、安装仓库选择、仓库枚举和只读 Profile 访问；GitHub user access token / refresh token 只在 Worker 侧加密存入 D1，公开 Pages 与浏览器脚本都不保存 GitHub Token。
+
+V2.0B 在此基础上增加在线 Profile 编辑，但保存固定走“预览 → 基线 SHA 冲突检查 → 原子 commit → 新分支 → Pull Request”，不直接写 `main`。写入范围只允许标准 `profiles/<id>/` 文件，并为状态变更请求增加同源 Origin + CSRF 请求头校验。
 
 项目提供 **Deploy V2 Control Plane** 手动 Workflow：第一次可以无 GitHub App Secret bootstrap 部署，拿到 workers.dev URL 后再创建 GitHub App并同步 Secret。Node.js + SQLite + Docker 仅保留为可选自托管方式。
 
