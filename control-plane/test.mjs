@@ -439,7 +439,8 @@ try {
   const reposBody = await repos.json();
   assert.equal(reposBody.repositories.length, 1);
   assert.equal(reposBody.repositories[0].fullName, "acme/router");
-  assert.equal(reposBody.repositories[0].permissions.contents, "read");
+  assert.equal(reposBody.repositories[0].permissions.contents, "write");
+  assert.equal(reposBody.repositories[0].permissions.pullRequests, "write");
   assert.equal("installationId" in reposBody.repositories[0], false);
   assert.equal("actions" in reposBody.repositories[0].permissions, false);
 
