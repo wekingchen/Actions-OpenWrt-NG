@@ -9,6 +9,14 @@ const PROFILE_FILES = [
   "watch-sources.txt"
 ];
 
+const ACTIVE_BUILD_STATUSES = new Set([
+  "queued",
+  "in_progress",
+  "requested",
+  "waiting",
+  "pending"
+]);
+
 const editorState = {
   repo: null,
   profileId: "",
@@ -18,6 +26,17 @@ const editorState = {
   currentFile: ".config",
   previewValid: false
 };
+
+const buildState = {
+  repo: null,
+  profileId: "",
+  requestId: "",
+  pollTimer: null,
+  pollAttempts: 0,
+  activeRunId: 0
+};
+
+const MAX_BUILD_POLL_ATTEMPTS = 480;
 
 function showError(message = "") {
   const node = $("error");
@@ -42,6 +61,12 @@ function showWriteResult(message = "", url = "") {
   }
 }
 
+function showBuildResult(message = "") {
+  const node = $("build-result");
+  node.hidden = !message;
+  node.textContent = message;
+}
+
 async function request(path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
   const headers = {
@@ -64,7 +89,13 @@ async function request(path, options = {}) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const suffix = body.reason ? ` · ${body.reason}` : "";
-    throw new Error((body.error || `HTTP ${response.status}`) + suffix);
+    const error = new Error(
+      (body.error || `HTTP ${response.status}`) + suffix
+    );
+    error.code = body.error || "";
+    error.status = response.status;
+    error.body = body;
+    throw error;
   }
   return body;
 }
@@ -149,9 +180,334 @@ function canWriteRepo(repo) {
   );
 }
 
+function canReadActions(repo) {
+  return ["read", "write"].includes(repo?.permissions?.actions);
+}
+
+function canRunRepo(repo) {
+  return repo?.permissions?.actions === "write";
+}
+
+function clearBuildPolling() {
+  if (buildState.pollTimer) {
+    clearTimeout(buildState.pollTimer);
+    buildState.pollTimer = null;
+  }
+}
+
+function formatTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+function buildStatusLabel(run) {
+  if (run.status !== "completed") {
+    const labels = {
+      queued: "排队中",
+      in_progress: "运行中",
+      requested: "等待中",
+      waiting: "等待中",
+      pending: "等待中"
+    };
+    return labels[run.status] || run.status || "未知";
+  }
+
+  const conclusions = {
+    success: "成功",
+    failure: "失败",
+    cancelled: "已取消",
+    skipped: "已跳过",
+    timed_out: "超时",
+    action_required: "需要操作",
+    neutral: "中性"
+  };
+  return conclusions[run.conclusion] || run.conclusion || "已完成";
+}
+
+function statusClass(run) {
+  if (run.status !== "completed") return "status-running";
+  if (run.conclusion === "success") return "status-success";
+  if (run.conclusion === "failure" || run.conclusion === "timed_out") {
+    return "status-failure";
+  }
+  return "status-neutral";
+}
+
+async function loadBuildDetail(runId) {
+  const repo = buildState.repo;
+  if (!repo || !runId) return null;
+
+  const data = await request(
+    `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds/${runId}`
+  );
+  const run = data.run;
+  buildState.activeRunId = run.id;
+
+  $("build-detail").hidden = false;
+  $("build-detail-title").textContent =
+    `#${run.runNumber} · ${buildStatusLabel(run)}`;
+  $("build-summary-link").href = run.summaryUrl || run.url;
+
+  const jobs = $("build-jobs");
+  jobs.replaceChildren();
+  const jobsTitle = document.createElement("h4");
+  jobsTitle.textContent = "Jobs";
+  jobs.appendChild(jobsTitle);
+  if (!run.jobs.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "暂时还没有 Job 信息。";
+    jobs.appendChild(empty);
+  } else {
+    for (const job of run.jobs) {
+      const row = document.createElement("a");
+      row.className = "build-link-row";
+      row.href = job.url || run.url;
+      row.target = "_blank";
+      row.rel = "noreferrer";
+      const strong = document.createElement("strong");
+      strong.textContent = job.name;
+      const span = document.createElement("span");
+      span.textContent =
+        job.status === "completed"
+          ? (job.conclusion || "completed")
+          : job.status;
+      row.append(strong, span);
+      jobs.appendChild(row);
+    }
+  }
+
+  const artifacts = $("build-artifacts");
+  artifacts.replaceChildren();
+  const artifactsTitle = document.createElement("h4");
+  artifactsTitle.textContent = "Artifacts";
+  artifacts.appendChild(artifactsTitle);
+  const availableArtifacts = run.artifacts.filter((item) => !item.expired);
+  if (!availableArtifacts.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "当前没有可下载 Artifact。";
+    artifacts.appendChild(empty);
+  } else {
+    for (const artifact of availableArtifacts) {
+      const row = document.createElement("a");
+      row.className = "build-link-row";
+      row.href = artifact.url;
+      row.target = "_blank";
+      row.rel = "noreferrer";
+      const strong = document.createElement("strong");
+      strong.textContent = artifact.name;
+      const span = document.createElement("span");
+      span.textContent =
+        `${Math.max(1, Math.round(artifact.sizeBytes / 1024))} KiB`;
+      row.append(strong, span);
+      artifacts.appendChild(row);
+    }
+  }
+
+  const release = $("build-release");
+  release.replaceChildren();
+  const releaseTitle = document.createElement("h4");
+  releaseTitle.textContent = "Release";
+  release.appendChild(releaseTitle);
+  if (run.release) {
+    const link = document.createElement("a");
+    link.className = "build-link-row";
+    link.href = run.release.url;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    const strong = document.createElement("strong");
+    strong.textContent = run.release.name || run.release.tag;
+    const span = document.createElement("span");
+    span.textContent = formatTime(run.release.publishedAt);
+    link.append(strong, span);
+    release.appendChild(link);
+  } else {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent =
+      run.status === "completed"
+        ? "本次运行没有匹配到 Release。"
+        : "运行完成后如成功发布，会在这里显示。";
+    release.appendChild(empty);
+  }
+
+  return run;
+}
+
+function finishBuildPolling(run) {
+  clearBuildPolling();
+  buildState.requestId = "";
+  buildState.activeRunId = 0;
+  buildState.pollAttempts = 0;
+  showBuildResult(
+    `构建 #${run.runNumber} 已完成：${buildStatusLabel(run)}。`
+  );
+}
+
+async function pollActiveBuild() {
+  if (!buildState.activeRunId) return;
+  const run = await loadBuildDetail(buildState.activeRunId);
+  if (!run) return;
+
+  buildState.pollAttempts += 1;
+  showBuildResult(
+    `构建 #${run.runNumber}：${buildStatusLabel(run)}。`
+  );
+
+  if (ACTIVE_BUILD_STATUSES.has(run.status)) {
+    scheduleBuildPoll(15000);
+  } else {
+    finishBuildPolling(run);
+  }
+}
+
+function scheduleBuildPoll(delay = 5000) {
+  clearBuildPolling();
+  if (
+    (!buildState.activeRunId && !buildState.requestId) ||
+    buildState.pollAttempts >= MAX_BUILD_POLL_ATTEMPTS
+  ) {
+    return;
+  }
+
+  buildState.pollTimer = setTimeout(async () => {
+    try {
+      if (buildState.activeRunId) {
+        await pollActiveBuild();
+      } else {
+        await loadBuildRuns({
+          requestId: buildState.requestId,
+          polling: true
+        });
+      }
+    } catch (error) {
+      buildState.pollAttempts += 1;
+      showBuildResult(
+        `状态刷新暂时失败，将继续自动重试：${error.message}`
+      );
+      scheduleBuildPoll(5000);
+    }
+  }, delay);
+}
+
+async function loadBuildRuns(options = {}) {
+  const repo = buildState.repo;
+  if (!repo || !buildState.profileId) return;
+
+  const requestId = options.requestId || "";
+  const params = new URLSearchParams({
+    profile: buildState.profileId,
+    limit: "10"
+  });
+  if (requestId) params.set("request_id", requestId);
+
+  const data = await request(
+    `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds?${params}`
+  );
+  const root = $("build-runs");
+  root.replaceChildren();
+
+  if (!data.runs.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = requestId
+      ? "已提交到 GitHub，正在等待 Actions Run 建立…"
+      : "这个 Profile 暂无 Builder 运行记录。";
+    root.appendChild(empty);
+
+    if (requestId) {
+      buildState.pollAttempts += 1;
+      scheduleBuildPoll(2500);
+    }
+    return;
+  }
+
+  for (const run of data.runs) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "build-item";
+
+    const left = document.createElement("span");
+    const strong = document.createElement("strong");
+    strong.textContent = `#${run.runNumber} · ${run.displayTitle}`;
+    const small = document.createElement("small");
+    small.textContent =
+      `${formatTime(run.createdAt)} · ${run.headSha.slice(0, 12)}`;
+    left.append(strong, small);
+
+    const status = document.createElement("span");
+    status.className = `status-pill ${statusClass(run)}`;
+    status.textContent = buildStatusLabel(run);
+
+    button.append(left, status);
+    button.addEventListener("click", () =>
+      loadBuildDetail(run.id).catch((error) => showError(error.message))
+    );
+    root.appendChild(button);
+  }
+
+  const first = data.runs[0];
+  if (requestId) {
+    buildState.activeRunId = first.id;
+    await pollActiveBuild();
+    return;
+  }
+
+  if (ACTIVE_BUILD_STATUSES.has(first.status)) {
+    buildState.activeRunId = first.id;
+    buildState.pollAttempts = 0;
+    await pollActiveBuild();
+  }
+}
+
+async function setupBuildControl(repo, profileId) {
+  clearBuildPolling();
+  buildState.repo = repo;
+  buildState.profileId = profileId;
+  buildState.requestId = "";
+  buildState.pollAttempts = 0;
+  buildState.activeRunId = 0;
+
+  $("build-card").hidden = false;
+  $("build-title").textContent = `${repo.fullName} · ${profileId}`;
+  $("build-meta").textContent =
+    "固定触发 OpenWrt NG Builder；Control Plane 不接受任意 workflow 或 ref。";
+  $("publish-release").checked = false;
+  $("build-detail").hidden = true;
+  showBuildResult();
+
+  const readable = canReadActions(repo);
+  const ready = canRunRepo(repo);
+  $("actions-permission").textContent = ready
+    ? "Actions 可调度"
+    : readable
+      ? "Actions 只读"
+      : "需 Actions 权限";
+  $("trigger-build").disabled = !ready;
+  $("refresh-builds").disabled = !readable;
+
+  if (!readable) {
+    const root = $("build-runs");
+    root.replaceChildren();
+    const note = document.createElement("p");
+    note.className = "muted";
+    note.textContent =
+      "当前 GitHub App 未授予 Actions 权限；Profile 编辑与 PR 功能仍可正常使用。";
+    root.appendChild(note);
+    return;
+  }
+
+  await loadBuildRuns();
+}
+
 async function openProfile(repo, profileId) {
   showError();
   showWriteResult();
+  await setupBuildControl(repo, profileId);
+
   const data = await request(
     `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}`
   );
@@ -165,9 +521,9 @@ async function openProfile(repo, profileId) {
   editorState.previewValid = false;
 
   for (const name of PROFILE_FILES) {
-    const content = data.profile.files[name]?.content || "";
-    editorState.original[name] = content;
-    editorState.files[name] = content;
+    const fileContent = data.profile.files[name]?.content || "";
+    editorState.original[name] = fileContent;
+    editorState.files[name] = fileContent;
   }
 
   $("editor-card").hidden = false;
@@ -199,7 +555,9 @@ async function openProfile(repo, profileId) {
 
 async function loadProfiles(repo) {
   showError();
+  clearBuildPolling();
   $("editor-card").hidden = true;
+  $("build-card").hidden = true;
   const data = await request(
     `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles`
   );
@@ -285,7 +643,9 @@ async function init() {
       " · contents:" +
       repo.permissions.contents +
       " · pull-requests:" +
-      repo.permissions.pullRequests;
+      repo.permissions.pullRequests +
+      " · actions:" +
+      repo.permissions.actions;
     button.append(title, meta);
     button.addEventListener("click", () =>
       loadProfiles(repo).catch((error) => showError(error.message))
@@ -367,7 +727,67 @@ $("create-pr").addEventListener("click", async () => {
   }
 });
 
+$("trigger-build").addEventListener("click", async () => {
+  const repo = buildState.repo;
+  if (!repo || !buildState.profileId || !canRunRepo(repo)) return;
+
+  const button = $("trigger-build");
+  button.disabled = true;
+  button.textContent = "正在提交…";
+  showError();
+  showBuildResult();
+
+  try {
+    const result = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(buildState.profileId)}/builds`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          publishRelease: $("publish-release").checked
+        })
+      }
+    );
+
+    buildState.requestId = result.requestId;
+    buildState.activeRunId = Number(result.runId || 0);
+    buildState.pollAttempts = 0;
+
+    if (buildState.activeRunId) {
+      showBuildResult(
+        `GitHub 已创建 Run ${buildState.activeRunId}，正在读取运行状态…`
+      );
+      await pollActiveBuild();
+    } else {
+      showBuildResult(
+        `已提交 Builder 请求 ${result.requestId}，正在等待 GitHub 建立运行记录…`
+      );
+      await loadBuildRuns({ requestId: result.requestId });
+    }
+  } catch (error) {
+    if (error.code === "build_already_active" && error.body?.activeRun) {
+      const run = error.body.activeRun;
+      showError(
+        `这个 Profile 已有构建 #${run.runNumber} 正在${buildStatusLabel(run)}，不会重复触发。`
+      );
+      await loadBuildDetail(run.id);
+    } else {
+      showError(error.message);
+    }
+  } finally {
+    button.textContent = "开始构建";
+    button.disabled = !canRunRepo(repo);
+  }
+});
+
+$("refresh-builds").addEventListener("click", () => {
+  clearBuildPolling();
+  buildState.requestId = "";
+  buildState.pollAttempts = 0;
+  loadBuildRuns().catch((error) => showError(error.message));
+});
+
 $("logout").addEventListener("click", async () => {
+  clearBuildPolling();
   await request("/api/v1/logout", { method: "POST" });
   location.reload();
 });

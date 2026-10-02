@@ -92,7 +92,8 @@ const github = {
       private: false,
       permissions: {
         contents: "write",
-        pullRequests: "write"
+        pullRequests: "write",
+        actions: "write"
       }
     }];
   },
@@ -158,6 +159,68 @@ const github = {
           }
         }
       }
+    };
+  },
+  async listBuilderRuns(token, owner, repo, options = {}) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    if (options.requestId) {
+      assert.equal(options.requestId, "abcdef1234567890");
+    }
+    return [{
+      id: 123,
+      runNumber: 9,
+      displayTitle: "Build · default · cp:abcdef1234567890",
+      status: "completed",
+      conclusion: "success",
+      event: "workflow_dispatch",
+      headBranch: "main",
+      headSha: "d".repeat(40),
+      createdAt: "2026-10-02T00:00:00Z",
+      updatedAt: "2026-10-02T00:10:00Z",
+      url: "https://github.com/acme/router/actions/runs/123"
+    }];
+  },
+  async triggerBuilder(token, owner, repo, profileId, payload) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(profileId, "default");
+    assert.equal(payload.publishRelease, false);
+    return {
+      accepted: true,
+      requestId: "abcdef1234567890",
+      profileId: "default",
+      publishRelease: false,
+      ref: "main",
+      runId: 0,
+      runUrl: ""
+    };
+  },
+  async getBuilderRun(token, owner, repo, runId) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(String(runId), "123");
+    return {
+      id: 123,
+      runNumber: 9,
+      runAttempt: 1,
+      displayTitle: "Build · default · cp:abcdef1234567890",
+      status: "completed",
+      conclusion: "success",
+      event: "workflow_dispatch",
+      headBranch: "main",
+      headSha: "d".repeat(40),
+      createdAt: "2026-10-02T00:00:00Z",
+      updatedAt: "2026-10-02T00:10:00Z",
+      runStartedAt: "2026-10-02T00:00:10Z",
+      url: "https://github.com/acme/router/actions/runs/123",
+      summaryUrl: "https://github.com/acme/router/actions/runs/123",
+      jobs: [],
+      artifacts: [],
+      release: null
     };
   },
   async createProfilePullRequest(token, owner, repo, profileId, payload) {
@@ -357,7 +420,8 @@ assert.equal(reposBody.repositories[0].fullName, "acme/router");
 assert.equal("installationId" in reposBody.repositories[0], false);
 assert.deepEqual(reposBody.repositories[0].permissions, {
   contents: "write",
-  pullRequests: "write"
+  pullRequests: "write",
+  actions: "write"
 });
 
 const profiles = await handleControlPlaneRequest(
@@ -443,6 +507,65 @@ const write = await handleControlPlaneRequest(
 );
 assert.equal(write.status, 201);
 assert.equal((await write.json()).pullRequest.number, 7);
+
+const builds = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/builds?profile=default&request_id=abcdef1234567890",
+    { headers: { Cookie: sessionCookie } }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(builds.status, 200);
+assert.equal((await builds.json()).runs[0].id, 123);
+
+const buildDetail = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/builds/123",
+    { headers: { Cookie: sessionCookie } }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(buildDetail.status, 200);
+assert.equal((await buildDetail.json()).run.id, 123);
+
+const rejectedBuild = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/default/builds",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ publishRelease: false })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(rejectedBuild.status, 403);
+
+const build = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/default/builds",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ publishRelease: false })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(build.status, 202);
+assert.equal((await build.json()).requestId, "abcdef1234567890");
 
 const opaque = sessionCookie.split("=", 2)[1];
 assert.ok(store.sessions.has(hashOpaque(decodeURIComponent(opaque))));

@@ -20,6 +20,14 @@ const PROFILE_FILE_MODES = Object.freeze({
 });
 
 const PROFILE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const BUILDER_WORKFLOW = "build-openwrt.yml";
+const ACTIVE_BUILD_STATUSES = new Set([
+  "queued",
+  "in_progress",
+  "requested",
+  "waiting",
+  "pending"
+]);
 const MAX_PROFILE_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_PROFILE_TOTAL_BYTES = 4 * 1024 * 1024;
 
@@ -49,6 +57,15 @@ export class ProfileWriteError extends Error {
   constructor(code, status = 400, message = code) {
     super(message);
     this.name = "ProfileWriteError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
+export class BuildControlError extends Error {
+  constructor(code, status = 400, message = code) {
+    super(message);
+    this.name = "BuildControlError";
     this.code = code;
     this.status = status;
   }
@@ -105,11 +122,13 @@ function branchSlug(profileId) {
   return slug || "profile";
 }
 
-function shortNonce() {
+function shortNonce(length = 8) {
   if (globalThis.crypto?.randomUUID) {
-    return globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+    return globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, length);
   }
-  return String(Date.now()).slice(-8);
+  return (String(Date.now()) + Math.random().toString(16).slice(2))
+    .replace(/[^0-9a-f]/gi, "")
+    .slice(0, length);
 }
 
 function refPath(branchName) {
@@ -256,7 +275,8 @@ export class GitHubAppClient {
             permissions: {
               contents: installation.permissions?.contents || "none",
               pullRequests:
-                installation.permissions?.pull_requests || "none"
+                installation.permissions?.pull_requests || "none",
+              actions: installation.permissions?.actions || "none"
             }
           });
         }
@@ -390,6 +410,223 @@ export class GitHubAppClient {
         path: `profiles/${profileId}`,
         files
       }
+    };
+  }
+
+
+  async listBuilderRuns(token, owner, repo, options = {}) {
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const profileId = String(options.profileId || "").trim();
+    const requestId = String(options.requestId || "").trim();
+    const limit = Math.min(20, Math.max(1, Number(options.limit) || 10));
+
+    if (profileId && !PROFILE_ID_RE.test(profileId)) {
+      throw new BuildControlError("invalid_profile_id", 400);
+    }
+    if (requestId && !/^[0-9a-f]{8,32}$/i.test(requestId)) {
+      throw new BuildControlError("invalid_build_request_id", 400);
+    }
+
+    const body = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/workflows/${BUILDER_WORKFLOW}/runs?per_page=100`,
+      token
+    );
+    const runs = Array.isArray(body.workflow_runs) ? body.workflow_runs : [];
+
+    return runs
+      .filter((run) => {
+        const title = String(run.display_title || run.name || "");
+        if (profileId) {
+          const prefix = `Build · ${profileId}`;
+          if (title !== prefix && !title.startsWith(prefix + " · ")) {
+            return false;
+          }
+        }
+        if (requestId && !title.includes(`cp:${requestId}`)) return false;
+        return true;
+      })
+      .slice(0, limit)
+      .map((run) => ({
+        id: Number(run.id),
+        runNumber: Number(run.run_number || 0),
+        displayTitle: run.display_title || run.name || "",
+        status: run.status || "unknown",
+        conclusion: run.conclusion || "",
+        event: run.event || "",
+        headBranch: run.head_branch || "",
+        headSha: run.head_sha || "",
+        createdAt: run.created_at || "",
+        updatedAt: run.updated_at || "",
+        url: run.html_url || ""
+      }));
+  }
+
+  async triggerBuilder(token, owner, repo, profileId, payload = {}) {
+    if (!PROFILE_ID_RE.test(String(profileId || ""))) {
+      throw new BuildControlError("invalid_profile_id", 400);
+    }
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      Array.isArray(payload) ||
+      Object.keys(payload).some((key) => key !== "publishRelease")
+    ) {
+      throw new BuildControlError("invalid_build_request", 400);
+    }
+    if (typeof payload.publishRelease !== "boolean") {
+      throw new BuildControlError("invalid_publish_release", 400);
+    }
+
+    const state = await this.repositoryState(token, owner, repo);
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const safeProfile = encodeSegment(profileId);
+
+    try {
+      const profile = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/contents/profiles/${safeProfile}?ref=${encodeSegment(state.defaultBranch)}`,
+        token
+      );
+      if (!Array.isArray(profile)) {
+        throw new BuildControlError("profile_not_found", 404);
+      }
+    } catch (error) {
+      if (error instanceof BuildControlError) throw error;
+      if (error?.httpStatus === 404) {
+        throw new BuildControlError("profile_not_found", 404);
+      }
+      throw error;
+    }
+
+    const recent = await this.listBuilderRuns(token, owner, repo, {
+      profileId,
+      limit: 20
+    });
+    const active = recent.find((run) => ACTIVE_BUILD_STATUSES.has(run.status));
+    if (active) {
+      const error = new BuildControlError("build_already_active", 409);
+      error.activeRun = active;
+      throw error;
+    }
+
+    const requestId = shortNonce(16);
+    const dispatched = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/workflows/${BUILDER_WORKFLOW}/dispatches`,
+      token,
+      {
+        method: "POST",
+        body: {
+          ref: state.defaultBranch,
+          return_run_details: true,
+          inputs: {
+            profile: profileId,
+            publish_release: payload.publishRelease === true,
+            control_plane_request_id: requestId
+          }
+        }
+      }
+    );
+
+    return {
+      accepted: true,
+      requestId,
+      profileId,
+      publishRelease: payload.publishRelease === true,
+      ref: state.defaultBranch,
+      runId: Number(dispatched?.workflow_run_id || 0),
+      runUrl: dispatched?.html_url || ""
+    };
+  }
+
+  async getBuilderRun(token, owner, repo, runId) {
+    const numericRunId = Number(runId);
+    if (!Number.isSafeInteger(numericRunId) || numericRunId <= 0) {
+      throw new BuildControlError("invalid_run_id", 400);
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const run = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}`,
+      token
+    );
+    const workflowPath = String(run.path || "").split("@", 1)[0];
+    if (workflowPath !== ".github/workflows/" + BUILDER_WORKFLOW) {
+      throw new BuildControlError("not_builder_run", 404);
+    }
+
+    const [jobsBody, artifactsBody, releases] = await Promise.all([
+      this.api(
+        `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}/jobs?per_page=100`,
+        token
+      ),
+      this.api(
+        `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}/artifacts?per_page=100`,
+        token
+      ),
+      run.status === "completed"
+        ? this.api(
+            `/repos/${safeOwner}/${safeRepo}/releases?per_page=100`,
+            token
+          )
+        : Promise.resolve([])
+    ]);
+
+    const jobs = Array.isArray(jobsBody.jobs) ? jobsBody.jobs : [];
+    const artifacts = Array.isArray(artifactsBody.artifacts)
+      ? artifactsBody.artifacts
+      : [];
+    const release = Array.isArray(releases)
+      ? releases.find(
+          (item) =>
+            String(item.target_commitish || "") === String(run.head_sha || "") &&
+            String(item.tag_name || "").endsWith(`-${run.run_number}`)
+        )
+      : null;
+
+    return {
+      id: numericRunId,
+      runNumber: Number(run.run_number || 0),
+      runAttempt: Number(run.run_attempt || 1),
+      displayTitle: run.display_title || run.name || "",
+      status: run.status || "unknown",
+      conclusion: run.conclusion || "",
+      event: run.event || "",
+      headBranch: run.head_branch || "",
+      headSha: run.head_sha || "",
+      createdAt: run.created_at || "",
+      updatedAt: run.updated_at || "",
+      runStartedAt: run.run_started_at || "",
+      url: run.html_url || "",
+      summaryUrl: run.html_url || "",
+      jobs: jobs.map((job) => ({
+        id: Number(job.id),
+        name: job.name || "",
+        status: job.status || "unknown",
+        conclusion: job.conclusion || "",
+        startedAt: job.started_at || "",
+        completedAt: job.completed_at || "",
+        url: job.html_url || ""
+      })),
+      artifacts: artifacts.map((artifact) => ({
+        id: Number(artifact.id),
+        name: artifact.name || "",
+        sizeBytes: Number(artifact.size_in_bytes || 0),
+        expired: Boolean(artifact.expired),
+        createdAt: artifact.created_at || "",
+        expiresAt: artifact.expires_at || "",
+        url:
+          `https://github.com/${owner}/${repo}/actions/runs/${numericRunId}/artifacts/${artifact.id}`
+      })),
+      release: release
+        ? {
+            tag: release.tag_name || "",
+            name: release.name || release.tag_name || "",
+            url: release.html_url || "",
+            publishedAt: release.published_at || ""
+          }
+        : null
     };
   }
 

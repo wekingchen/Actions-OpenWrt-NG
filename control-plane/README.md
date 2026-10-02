@@ -41,6 +41,9 @@ GitHub App / GitHub API
 - V2.0B 使用 Git Database API 原子创建 commit，再创建独立分支与 Pull Request。
 - 所有状态变更请求同时校验精确 Origin 与 `X-OpenWrt-NG-CSRF` 请求头。
 - 保存前携带默认分支基线 SHA；若仓库已变化，返回 `409 repository_changed`，要求重新加载后再编辑。
+- V2.0C 只允许调度固定的 `.github/workflows/build-openwrt.yml`，不接受浏览器传入任意 workflow、ref 或额外 inputs。
+- V2.0C 同一 Profile 已有 queued / running 构建时拒绝重复触发，避免误操作浪费 Actions 时长。
+- Builder 调度使用服务端生成的随机 request ID 与实际 Actions Run 关联；若 GitHub dispatch API 直接返回 run ID，也会兼容使用。
 
 ## 目录
 
@@ -230,7 +233,9 @@ GitHub App 需要把 Repository permissions 调整为：
 - Metadata：Read-only
 - Contents：Read and write
 - Pull requests：Read and write
-- Actions：No access
+- Actions：No access（仅 V2.0B）
+
+进入 V2.0C 后再把 Actions 调整为 **Read and write**。不需要 Administration，也不需要 Workflows 权限
 
 新增权限后，已安装该 App 的账户需要在 GitHub 中批准权限变更后才会生效。为了避免旧 user token 沿用旧权限，批准后建议退出 Control Plane 并重新登录一次。
 
@@ -247,7 +252,49 @@ watch-sources.txt
 
 控制面不会接受任意仓库路径，也不会修改 `.github/workflows/*`，因此本阶段不需要 Workflows 权限。
 
-### 9. 在自己的模板实例中启用 GitHub Pages V2 入口
+### 9. V2.0C：触发 Builder 与查看运行状态
+
+V2.0C 核心链路已在独立 Test 仓完成真实端到端验证：
+
+- Control Plane 成功触发固定 Builder。
+- request ID 与实际 Actions Run 精确对应。
+- Run / Job 状态可读取并跟踪。
+- 编译、Manifest 校验、最终配置留档、固件 Artifact 上传与 Workflow Summary 均真实成功。
+- 首轮真实验收明确关闭 Release，因此发布 Job 正常跳过，Test 仓未留下测试 Release；Release 识别/展示逻辑由自动化回归测试覆盖。
+
+V2.0C 在 V2.0B 的权限基础上额外需要：
+
+- Actions：Read and write
+
+GitHub 官方对 `workflow_dispatch` 要求 Actions write；读取 workflow runs、jobs 和 artifacts 只需要 Actions read。控制面虽然获得 Actions write，但服务端接口只暴露固定 Builder 调度，不允许浏览器指定其他 workflow 或任意 ref。
+
+控制面固定调用：
+
+```text
+.github/workflows/build-openwrt.yml
+ref = 仓库默认分支
+profile = 当前选择的 Profile
+publish_release = 用户明确选择
+control_plane_request_id = 服务端随机生成
+```
+
+Builder 增加一个可选的 `control_plane_request_id` 输入。手动运行时保持为空即可；Control Plane 调度时会自动填入，用于精确关联本次点击与实际 Actions Run。
+
+调度请求同时设置 GitHub 的 `return_run_details=true`：支持该能力时直接获得 `workflow_run_id` 并按 Run ID 轮询；若 GitHub 返回旧式空响应，则自动退回 `control_plane_request_id` 搜索。两条路径均保留，避免依赖 Actions Run 列表的传播延迟。
+
+页面可查看：
+
+- queued / running / completed 与最终 conclusion。
+- 各 Job 状态及 GitHub Actions 链接。
+- 当前 Run 产生的 Artifact 名称、大小与 GitHub 下载链接。
+- 与当前 Builder Run 匹配的 Release。
+- GitHub Actions Run 页面；该页面同时是 Workflow Summary 的入口。
+
+Artifact 链接使用 GitHub 自身的登录态，不把 GitHub access token 暴露给浏览器。
+
+同一 Profile 已经存在活动构建时，Control Plane 返回 `409 build_already_active`，不会再次排队。
+
+### 10. 在自己的模板实例中启用 GitHub Pages V2 入口
 
 **公共模板仓库的 `main` 应继续保持默认关闭，不应提交模板维护者自己的 workers.dev 地址或 GitHub App slug。**
 

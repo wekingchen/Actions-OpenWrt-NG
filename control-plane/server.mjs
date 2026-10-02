@@ -2,7 +2,12 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { GitHubAppClient, ProfileWriteError, githubErrorReason } from "./lib/github.mjs";
+import {
+  BuildControlError,
+  GitHubAppClient,
+  ProfileWriteError,
+  githubErrorReason
+} from "./lib/github.mjs";
 import {
   hashOpaque,
   oauthCookie,
@@ -393,6 +398,118 @@ export function createControlPlaneHandler({ config, store, github }) {
           if (error?.name === "GitHubRequestError") {
             return json(res, 502, {
               error: "github_profile_write_failed",
+              reason: githubErrorReason(error)
+            });
+          }
+          throw error;
+        }
+      }
+
+
+      const buildsMatch = url.pathname.match(
+        /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/builds$/
+      );
+      if (req.method === "GET" && buildsMatch) {
+        const session = await authenticatedSession(req);
+        if (!session) return json(res, 401, { error: "authentication_required" });
+        const owner = decodeURIComponent(buildsMatch[1]);
+        const repo = decodeURIComponent(buildsMatch[2]);
+        try {
+          const runs = await github.listBuilderRuns(
+            session.accessToken,
+            owner,
+            repo,
+            {
+              profileId: url.searchParams.get("profile") || "",
+              requestId: url.searchParams.get("request_id") || "",
+              limit: url.searchParams.get("limit") || 10
+            }
+          );
+          return json(res, 200, { owner, repo, runs });
+        } catch (error) {
+          if (error instanceof BuildControlError) {
+            return json(res, error.status, { error: error.code });
+          }
+          if (error?.name === "GitHubRequestError") {
+            return json(res, 502, {
+              error: "github_build_status_failed",
+              reason: githubErrorReason(error)
+            });
+          }
+          throw error;
+        }
+      }
+
+      const buildDetailMatch = url.pathname.match(
+        /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/builds\/(\d+)$/
+      );
+      if (req.method === "GET" && buildDetailMatch) {
+        const session = await authenticatedSession(req);
+        if (!session) return json(res, 401, { error: "authentication_required" });
+        const owner = decodeURIComponent(buildDetailMatch[1]);
+        const repo = decodeURIComponent(buildDetailMatch[2]);
+        try {
+          const run = await github.getBuilderRun(
+            session.accessToken,
+            owner,
+            repo,
+            buildDetailMatch[3]
+          );
+          return json(res, 200, { owner, repo, run });
+        } catch (error) {
+          if (error instanceof BuildControlError) {
+            return json(res, error.status, { error: error.code });
+          }
+          if (error?.name === "GitHubRequestError") {
+            return json(res, 502, {
+              error: "github_build_status_failed",
+              reason: githubErrorReason(error)
+            });
+          }
+          throw error;
+        }
+      }
+
+      const buildTriggerMatch = url.pathname.match(
+        /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/([^/]+)\/builds$/
+      );
+      if (req.method === "POST" && buildTriggerMatch) {
+        if (!validMutationRequest(req, config.origin)) {
+          return json(res, 403, { error: "csrf_validation_failed" });
+        }
+        const session = await authenticatedSession(req);
+        if (!session) return json(res, 401, { error: "authentication_required" });
+
+        let payload;
+        try {
+          payload = await readJsonBody(req);
+        } catch (error) {
+          return json(res, error.status || 400, {
+            error: error.message || "invalid_json"
+          });
+        }
+
+        const owner = decodeURIComponent(buildTriggerMatch[1]);
+        const repo = decodeURIComponent(buildTriggerMatch[2]);
+        const profileId = decodeURIComponent(buildTriggerMatch[3]);
+        try {
+          const result = await github.triggerBuilder(
+            session.accessToken,
+            owner,
+            repo,
+            profileId,
+            payload
+          );
+          return json(res, 202, result);
+        } catch (error) {
+          if (error instanceof BuildControlError) {
+            const body = { error: error.code };
+            if (error.activeRun) body.activeRun = error.activeRun;
+            return json(res, error.status, body);
+          }
+          if (error?.name === "GitHubRequestError") {
+            return json(res, 502, {
+              error: "github_builder_dispatch_failed",
               reason: githubErrorReason(error)
             });
           }
