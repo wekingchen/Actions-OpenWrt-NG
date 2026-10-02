@@ -92,7 +92,8 @@ const github = {
       private: false,
       permissions: {
         contents: "write",
-        pullRequests: "write"
+        pullRequests: "write",
+        actions: "write"
       }
     }];
   },
@@ -357,7 +358,8 @@ assert.equal(reposBody.repositories[0].fullName, "acme/router");
 assert.equal("installationId" in reposBody.repositories[0], false);
 assert.deepEqual(reposBody.repositories[0].permissions, {
   contents: "write",
-  pullRequests: "write"
+  pullRequests: "write",
+  actions: "write"
 });
 
 const profiles = await handleControlPlaneRequest(
