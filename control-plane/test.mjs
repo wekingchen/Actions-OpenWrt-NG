@@ -576,6 +576,51 @@ const fakeFetch = async (url, options = {}) => {
   const parsed = new URL(String(url));
   const path = parsed.pathname;
 
+  if (
+    parsed?.pathname === "/repos/acme/router/contents/profiles/new-profile" &&
+    parsed.searchParams.get("ref") === "main"
+  ) {
+    return Response.json({ message: "Not Found" }, { status: 404 });
+  }
+
+  if (
+    parsed?.pathname === "/repos/acme/router/git/blobs" &&
+    String(options.method || "GET").toUpperCase() === "POST"
+  ) {
+    return Response.json({ sha: "blob-server-test" }, { status: 201 });
+  }
+
+  if (
+    parsed?.pathname === "/repos/acme/router/git/trees" &&
+    String(options.method || "GET").toUpperCase() === "POST"
+  ) {
+    return Response.json({ sha: "server-new-tree" }, { status: 201 });
+  }
+
+  if (
+    parsed?.pathname === "/repos/acme/router/git/commits" &&
+    String(options.method || "GET").toUpperCase() === "POST"
+  ) {
+    return Response.json({ sha: "e".repeat(40) }, { status: 201 });
+  }
+
+  if (
+    parsed?.pathname === "/repos/acme/router/git/refs" &&
+    String(options.method || "GET").toUpperCase() === "POST"
+  ) {
+    return Response.json({ ref: "refs/heads/openwrt-ng/profile-new-profile-test" }, { status: 201 });
+  }
+
+  if (
+    parsed?.pathname === "/repos/acme/router/pulls" &&
+    String(options.method || "GET").toUpperCase() === "POST"
+  ) {
+    return Response.json({
+      number: 18,
+      html_url: "https://github.com/acme/router/pull/18"
+    }, { status: 201 });
+  }
+
   if (path === "/repos/acme/router") {
     return Response.json({ default_branch: "main" });
   }
@@ -781,6 +826,41 @@ try {
   assert.deepEqual(profilesBody.profiles, [
     { id: "default", path: "profiles/default", sha: "abc" }
   ]);
+
+  const previewProfileTemplate = await fetch(
+    base + "/api/v1/profile-templates/preview",
+    {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: "http://127.0.0.1",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(templateInput)
+    }
+  );
+  assert.equal(previewProfileTemplate.status, 200);
+  const previewProfileTemplateBody = await previewProfileTemplate.json();
+  assert.equal(previewProfileTemplateBody.files.length, 6);
+
+  const createProfileResponse = await fetch(
+    base + "/api/v1/repositories/acme/router/profiles",
+    {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: "http://127.0.0.1",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(templateInput)
+    }
+  );
+  assert.equal(createProfileResponse.status, 201);
+  const createProfileResponseBody = await createProfileResponse.json();
+  assert.equal(createProfileResponseBody.profileId, "new-profile");
+  assert.equal(createProfileResponseBody.pullRequest.number, 18);
 
   const builds = await fetch(
     base + "/api/v1/repositories/acme/router/builds?profile=default",
