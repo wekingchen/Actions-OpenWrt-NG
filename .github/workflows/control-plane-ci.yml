@@ -15,6 +15,7 @@ on:
       - "control-plane/**"
       - ".github/workflows/control-plane-ci.yml"
       - ".github/workflows/deploy-control-plane.yml"
+      - ".github/workflows/build-openwrt.yml"
 
 permissions:
   contents: read
