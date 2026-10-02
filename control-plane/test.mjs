@@ -292,10 +292,15 @@ const builderFetch = async (url, options = {}) => {
   ) {
     const body = JSON.parse(options.body);
     assert.equal(body.ref, "main");
+    assert.equal(body.return_run_details, true);
     assert.equal(body.inputs.profile, "default");
     assert.equal(body.inputs.publish_release, false);
     assert.match(body.inputs.control_plane_request_id, /^[0-9a-f]{16}$/);
-    return new Response(null, { status: 204 });
+    return Response.json({
+      workflow_run_id: 123,
+      run_url: "https://api.github.com/repos/acme/router/actions/runs/123",
+      html_url: "https://github.com/acme/router/actions/runs/123"
+    });
   }
   if (method === "GET" && path === "/actions/runs/123") {
     return Response.json({
@@ -368,8 +373,11 @@ const dispatched = await builderClient.triggerBuilder(
 );
 assert.equal(dispatched.accepted, true);
 assert.equal(dispatched.ref, "main");
-assert.equal(dispatched.runId, 0);
-assert.equal(dispatched.runUrl, "");
+assert.equal(dispatched.runId, 123);
+assert.equal(
+  dispatched.runUrl,
+  "https://github.com/acme/router/actions/runs/123"
+);
 assert.match(dispatched.requestId, /^[0-9a-f]{16}$/);
 
 const builderDetail = await builderClient.getBuilderRun(
