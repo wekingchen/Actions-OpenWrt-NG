@@ -295,6 +295,8 @@ export function createControlPlaneHandler({ config, store, github }) {
 
       const staticFiles = {
         "/": ["index.html", "text/html; charset=utf-8"],
+        "/app.js": ["app.js", "text/javascript; charset=utf-8"],
+        "/style.css": ["style.css", "text/css; charset=utf-8"],
         "/assets/app.js": ["app.js", "text/javascript; charset=utf-8"],
         "/assets/style.css": ["style.css", "text/css; charset=utf-8"]
       };
