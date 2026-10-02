@@ -199,10 +199,16 @@ const base = `http://127.0.0.1:${address.port}`;
 try {
   const health = await fetch(base + "/api/v1/health");
   assert.equal(health.status, 200);
-  assert.deepEqual(await health.json(), { ok: true, version: 1 });
+  assert.deepEqual(await health.json(), {
+    ok: true,
+    version: 1,
+    runtime: "self-hosted-node",
+    configured: true
+  });
 
   const publicConfig = await fetch(base + "/api/v1/config");
   assert.deepEqual(await publicConfig.json(), {
+    configured: true,
     githubAppInstallUrl:
       "https://github.com/apps/openwrt-ng-test/installations/new"
   });
