@@ -1,0 +1,198 @@
+name: Release Existing Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "已有 OpenWrt NG workflow run ID"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  TZ: Asia/Shanghai
+
+jobs:
+  release-existing:
+    name: 从已有 Build Artifact 发布 Release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+    - name: 校验来源 Run
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SOURCE_RUN_ID: ${{ inputs.run_id }}
+      run: |
+        set -Eeuo pipefail
+
+        [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]] || {
+          echo "ERROR: run_id 必须是数字" >&2
+          exit 1
+        }
+
+        source_head_sha="$(
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" \
+            --jq '.head_sha'
+        )"
+        source_run_number="$(
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" \
+            --jq '.run_number'
+        )"
+        build_result="$(
+          gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100" \
+            --jq '.jobs[] | select(.name == "编译 OpenWrt 固件") | .conclusion' \
+            | head -n1
+        )"
+
+        [[ "$source_head_sha" =~ ^[0-9a-f]{40}$ ]] || {
+          echo "ERROR: 来源 Run head SHA 无效：$source_head_sha" >&2
+          exit 1
+        }
+        [ "$build_result" = "success" ] || {
+          echo "ERROR: 来源 Run 的 build job 不是 success：$build_result" >&2
+          exit 1
+        }
+
+        echo "SOURCE_HEAD_SHA=$source_head_sha" >> "$GITHUB_ENV"
+        echo "SOURCE_RUN_NUMBER=$source_run_number" >> "$GITHUB_ENV"
+
+        echo "来源 Run：#$source_run_number / $SOURCE_RUN_ID"
+        echo "来源提交：$source_head_sha"
+
+    - name: 下载已有 Release 交接包
+      uses: actions/download-artifact@v8
+      with:
+        name: OpenWrt_NG_release_bundle_${{ inputs.run_id }}
+        path: release-bundle
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        repository: ${{ github.repository }}
+        run-id: ${{ inputs.run_id }}
+
+    - name: 修复并校验 Release 交接包
+      run: |
+        set -Eeuo pipefail
+
+        [ -s release-bundle/release.txt ] || {
+          echo "ERROR: release.txt 缺失" >&2
+          exit 1
+        }
+        [ -d release-bundle/assets ] || {
+          echo "ERROR: assets 目录缺失" >&2
+          exit 1
+        }
+
+        diff_file="release-bundle/assets/config-changes.diff"
+        stats_file="release-bundle/assets/config-stats.env"
+
+        if [ -e "$diff_file" ] && [ ! -s "$diff_file" ]; then
+          [ -s "$stats_file" ] || {
+            echo "ERROR: config-changes.diff 为空且 config-stats.env 缺失" >&2
+            exit 1
+          }
+
+          changed="$(sed -n 's/^CONFIG_CHANGED=//p' "$stats_file" | tail -n1)"
+          added="$(sed -n 's/^CONFIG_ADDED=//p' "$stats_file" | tail -n1)"
+          removed="$(sed -n 's/^CONFIG_REMOVED=//p' "$stats_file" | tail -n1)"
+
+          if [ "$changed" = "0" ] && [ "$added" = "0" ] && [ "$removed" = "0" ]; then
+            echo "# No semantic CONFIG changes." > "$diff_file"
+            echo "已为零差异 config-changes.diff 补充说明行"
+          else
+            echo "ERROR: config-changes.diff 为空，但配置统计并非全 0" >&2
+            exit 1
+          fi
+        fi
+
+        mapfile -t assets < <(
+          find release-bundle/assets -maxdepth 1 -type f -print | sort
+        )
+        [ "${#assets[@]}" -gt 0 ] || {
+          echo "ERROR: Release 没有附件" >&2
+          exit 1
+        }
+
+        empty_assets=()
+        for asset in "${assets[@]}"; do
+          [ -s "$asset" ] || empty_assets+=("$asset")
+        done
+
+        if [ "${#empty_assets[@]}" -gt 0 ]; then
+          echo "ERROR: 仍存在 0 字节附件：" >&2
+          printf '  - %s\n' "${empty_assets[@]}" >&2
+          exit 1
+        fi
+
+        find release-bundle/assets \
+          -maxdepth 1 -type f \
+          -printf '  - %f (%s bytes)\n' | sort
+
+        cat >> release-bundle/release.txt <<EOF
+
+        恢复发布来源：
+        - 原 OpenWrt NG Run: #$SOURCE_RUN_NUMBER
+        - 原 Run ID: ${{ inputs.run_id }}
+        - 原仓库构建 Commit: $SOURCE_HEAD_SHA
+        - 恢复 Workflow Run ID: $GITHUB_RUN_ID
+
+        说明：恢复发布复用原 Build 已验证的 Release bundle；由于 GitHub Actions
+        GITHUB_TOKEN 对历史 commit/tag 写入存在限制，恢复 Release 的 tag 由当前
+        main 创建，实际固件来源以上述原 Run / Commit 为准。
+        EOF
+
+    - name: 发布已有构建到 Release
+      id: release-upload
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -Eeuo pipefail
+
+        release_tag="$(date +'%Y.%m.%d-%H%M')-run${SOURCE_RUN_NUMBER}-r${GITHUB_RUN_NUMBER}"
+        mapfile -t assets < <(
+          find release-bundle/assets -maxdepth 1 -type f -print | sort
+        )
+
+        # 复用 OpenWrt NG Run #1 已验证成功的 Release 创建路径：
+        # 不指定历史 --target，不手工创建历史 tag，不使用 draft。
+        gh release create "$release_tag" "${assets[@]}" \
+          --repo "$GITHUB_REPOSITORY" \
+          --title "$release_tag" \
+          --notes-file release-bundle/release.txt
+
+        echo "发布完成：$release_tag"
+        echo "status=success" >> "$GITHUB_OUTPUT"
+
+    - name: 清理旧 Releases
+      if: steps.release-upload.outputs.status == 'success' && !cancelled()
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -Eeuo pipefail
+
+        mapfile -t releases < <(
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq '.[] | [.created_at, .id, .tag_name] | @tsv' |
+          sort -r
+        )
+
+        index=0
+        for row in "${releases[@]}"; do
+          index=$((index + 1))
+          [ "$index" -le 10 ] && continue
+
+          release_id="$(printf '%s\n' "$row" | cut -f2)"
+          tag_name="$(printf '%s\n' "$row" | cut -f3-)"
+
+          echo "删除旧 Release：$tag_name"
+          gh api -X DELETE \
+            "repos/${GITHUB_REPOSITORY}/releases/$release_id" \
+            --silent
+          gh api -X DELETE \
+            "repos/${GITHUB_REPOSITORY}/git/refs/tags/$tag_name" \
+            --silent || true
+        done

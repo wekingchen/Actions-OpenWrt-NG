@@ -1,0 +1,699 @@
+name: OpenWrt NG Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Profile 目录名（profiles/<name>）"
+        required: true
+        default: "default"
+        type: string
+      publish_release:
+        description: "是否允许发布 Release（仍受 Profile UPLOAD_RELEASE 控制）"
+        required: true
+        default: true
+        type: boolean
+  repository_dispatch:
+    types: [source-code-update]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openwrt-ng-${{ github.event.inputs.profile || github.event.client_payload.profile || 'default' }}
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Shanghai
+  CCACHE_COMPILERCHECK: content
+  CCACHE_MAXSIZE: 1G
+
+jobs:
+  preflight:
+    name: 构建前快速预检
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      profile: ${{ steps.profile.outputs.profile }}
+      maximize_space: ${{ steps.profile.outputs.maximize_space }}
+
+    steps:
+    - name: 检出仓库
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 解析并校验 Profile
+      id: profile
+      env:
+        REQUESTED_PROFILE: ${{ github.event.inputs.profile || github.event.client_payload.profile || 'default' }}
+      run: |
+        set -Eeuo pipefail
+        chmod +x scripts/*.sh adapters/*.sh
+        scripts/profile.sh validate "$REQUESTED_PROFILE"
+        scripts/profile.sh export "$REQUESTED_PROFILE"
+
+        # 当前 step 需要直接读取此布尔值作为 job output；
+        # GITHUB_ENV 写入项只会在后续 step 生效。
+        # shellcheck disable=SC1090
+        source "profiles/$REQUESTED_PROFILE/profile.env"
+        maximize_space="${MAXIMIZE_BUILD_SPACE:-false}"
+        [[ "$maximize_space" = true || "$maximize_space" = false ]] || {
+          echo "ERROR: MAXIMIZE_BUILD_SPACE must be true/false" >&2
+          exit 1
+        }
+
+        printf 'profile=%s\n' "$REQUESTED_PROFILE" >> "$GITHUB_OUTPUT"
+        printf 'maximize_space=%s\n' "$maximize_space" >> "$GITHUB_OUTPUT"
+
+    - name: 静态预检
+      run: |
+        set -Eeuo pipefail
+
+        mapfile -t shell_files < <(
+          find adapters scripts profiles -type f -name '*.sh' -print | sort
+        )
+
+        for file in "${shell_files[@]}"; do
+          bash -n "$file"
+        done
+
+        if command -v shellcheck >/dev/null 2>&1; then
+          shellcheck -S error "${shell_files[@]}"
+        fi
+
+        mapfile -t python_files < <(
+          find adapters scripts profiles -type f -name '*.py' -print | sort
+        )
+        if [ "${#python_files[@]}" -gt 0 ]; then
+          python3 -m py_compile "${python_files[@]}"
+        fi
+
+        git diff --check
+
+        python3 - <<'PY'
+        from pathlib import Path
+
+        workflow = Path(".github/workflows/build-openwrt.yml").read_text()
+        build = workflow.split("\n  build:\n", 1)[1].split("\n  release:\n", 1)[0]
+
+        maximize = build.find("- name: 扩展构建空间（Profile 可选）")
+        checkout = build.find("- name: 检出仓库")
+
+        if maximize < 0 or checkout < 0:
+            raise SystemExit("预检错误：build 缺少空间扩展或 checkout step")
+        if maximize > checkout:
+            raise SystemExit(
+                "预检错误：构建空间扩展必须在 checkout 之前，"
+                "否则重挂载 /home/runner/work 会遮蔽已检出的仓库"
+            )
+
+        print("空间扩展 / checkout 顺序检查通过")
+        PY
+
+        echo "静态预检通过"
+
+    - name: 运行 Profile Preflight Hook
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -Eeuo pipefail
+
+        metadata_file="$GITHUB_WORKSPACE/openwrt-ng-preflight.env"
+        : > "$metadata_file"
+
+        if [ -n "$PREFLIGHT_SCRIPT" ]; then
+          echo "执行 Profile Preflight：$PREFLIGHT_SCRIPT"
+          OPENWRT_NG_PREFLIGHT_ENV="$metadata_file" bash "$PREFLIGHT_SCRIPT"
+        fi
+
+        python3 - "$metadata_file" <<'PY'
+        import re
+        import sys
+        from pathlib import Path
+
+        path = Path(sys.argv[1])
+        seen = set()
+
+        for number, raw in enumerate(path.read_text().splitlines(), 1):
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if not re.fullmatch(r"[A-Z][A-Z0-9_]*=[^\r\n]*", line):
+                raise SystemExit(
+                    f"Invalid preflight metadata at line {number}: {raw!r}"
+                )
+            key = line.split("=", 1)[0]
+            if key in seen:
+                raise SystemExit(f"Duplicate preflight metadata key: {key}")
+            seen.add(key)
+
+        print(f"Preflight metadata validated: {len(seen)} entries")
+        PY
+
+    - name: 上传 Preflight 元数据
+      uses: actions/upload-artifact@v7
+      with:
+        name: OpenWrt_NG_preflight_${{ github.run_id }}
+        path: openwrt-ng-preflight.env
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+
+  build:
+    name: 编译 OpenWrt 固件
+    needs: preflight
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      release_ready: ${{ steps.release-assets.outputs.status }}
+
+    steps:
+    - name: 扩展构建空间（Profile 可选）
+      if: needs.preflight.outputs.maximize_space == 'true'
+      uses: easimon/maximize-build-space@c28619d8999a147d5e09c1199f84ff6af6ad5794
+      with:
+        root-reserve-mb: 2048
+        swap-size-mb: 1
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-codeql: 'true'
+        remove-docker-images: 'true'
+
+    - name: 检出仓库
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 下载 Preflight 元数据
+      uses: actions/download-artifact@v8
+      with:
+        name: OpenWrt_NG_preflight_${{ github.run_id }}
+        path: .openwrt-ng-preflight
+
+    - name: 加载 Preflight 元数据
+      run: |
+        set -Eeuo pipefail
+
+        metadata_file=".openwrt-ng-preflight/openwrt-ng-preflight.env"
+        [ -f "$metadata_file" ] || {
+          echo "ERROR: Preflight metadata artifact missing" >&2
+          exit 1
+        }
+
+        while IFS= read -r line; do
+          [ -n "$line" ] || continue
+          [[ "$line" = \#* ]] && continue
+          [[ "$line" =~ ^[A-Z][A-Z0-9_]*=.*$ ]] || {
+            echo "ERROR: invalid Preflight metadata: $line" >&2
+            exit 1
+          }
+          key="${line%%=*}"
+          printf '%s\n' "$line" >> "$GITHUB_ENV"
+        done < "$metadata_file"
+
+    - name: 释放 Runner 空间
+      run: |
+        set -Eeuo pipefail
+        echo "清理前："
+        df -hT
+        sudo rm -rf \
+          /usr/share/dotnet \
+          /usr/local/lib/android \
+          /opt/ghc \
+          /opt/hostedtoolcache/CodeQL || true
+        sudo docker image prune --all --force || true
+        echo "清理后："
+        df -hT
+
+    - name: 安装通用编译依赖
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        set -Eeuo pipefail
+        sudo apt-get -qq update
+        sudo apt-get -qq install -y \
+          asciidoc autoconf automake autopoint binutils bison build-essential bzip2 \
+          ccache clang cmake cpio curl device-tree-compiler flex g++ g++-multilib \
+          gawk gcc-multilib gettext git gperf help2man intltool libc6-dev-i386 \
+          libelf-dev libfuse-dev libglib2.0-dev libgmp-dev libltdl-dev libmpc-dev \
+          libmpfr-dev libncurses-dev libpython3-dev libreadline-dev libssl-dev \
+          libtool ninja-build patch pkgconf python3 python3-pyelftools \
+          python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig \
+          texinfo unzip wget xmlto xxd zlib1g-dev zstd
+        sudo apt-get -qq clean
+
+    - name: 加载 Profile
+      env:
+        PROFILE_ID_INPUT: ${{ needs.preflight.outputs.profile }}
+        PUBLISH_RELEASE_INPUT: ${{ github.event.inputs.publish_release }}
+      run: |
+        set -Eeuo pipefail
+        chmod +x scripts/*.sh adapters/*.sh
+        scripts/profile.sh export "$PROFILE_ID_INPUT"
+
+        if [ -n "$PUBLISH_RELEASE_INPUT" ] && [ "$PUBLISH_RELEASE_INPUT" != "true" ]; then
+          echo "UPLOAD_RELEASE=false" >> "$GITHUB_ENV"
+        fi
+
+        echo "FILE_DATE=$(date +'%Y%m%d%H%M')" >> "$GITHUB_ENV"
+
+    - name: Adapter 额外依赖
+      run: |
+        set -Eeuo pipefail
+        "$ADAPTER_SCRIPT" install-deps
+
+    - name: 准备 OpenWrt 源码
+      run: |
+        set -Eeuo pipefail
+        "$ADAPTER_SCRIPT" prepare
+        [ -d "$GITHUB_WORKSPACE/openwrt" ] || {
+          echo "ERROR: Adapter 未生成 openwrt build root" >&2
+          exit 1
+        }
+
+    - name: 运行 DIY Part 1
+      run: |
+        set -Eeuo pipefail
+        if [ -n "$DIY_PART1" ]; then
+          (
+            cd openwrt
+            bash "$DIY_PART1"
+          )
+        fi
+
+    - name: 更新 Feeds
+      run: |
+        set -Eeuo pipefail
+        cd openwrt
+        ./scripts/feeds update -a
+
+    - name: 运行 Feeds 更新后 Hook
+      run: |
+        set -Eeuo pipefail
+        if [ -n "$POST_FEEDS_SCRIPT" ]; then
+          (
+            cd openwrt
+            bash "$POST_FEEDS_SCRIPT"
+          )
+        fi
+
+    - name: 计算 Feeds 指纹
+      id: feeds
+      run: |
+        set -Eeuo pipefail
+        scripts/trace-feeds.sh           "$GITHUB_WORKSPACE/openwrt"           "$RUNNER_TEMP/openwrt-ng-feed-commits.txt"
+
+        feed_hash="$(sha256sum "$RUNNER_TEMP/openwrt-ng-feed-commits.txt" | awk '{print $1}')"
+        echo "hash=$feed_hash" >> "$GITHUB_OUTPUT"
+        echo "FEED_FINGERPRINT=$feed_hash" >> "$GITHUB_ENV"
+        echo "FEED_COMMITS_FILE=$RUNNER_TEMP/openwrt-ng-feed-commits.txt" >> "$GITHUB_ENV"
+
+    - name: 恢复源码下载缓存
+      id: dl-cache
+      uses: actions/cache/restore@v6
+      with:
+        path: openwrt/dl
+        key: openwrt-ng-dl-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-${{ steps.feeds.outputs.hash }}
+        restore-keys: |
+          openwrt-ng-dl-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-
+
+    - name: 安装 Feeds
+      run: |
+        set -Eeuo pipefail
+        cd openwrt
+        ./scripts/feeds install -a
+
+    - name: 加载配置并运行 DIY Part 2
+      run: |
+        set -Eeuo pipefail
+
+        cp "$CONFIG_FILE" "$RUNNER_TEMP/openwrt-ng-repository.config"
+        cp "$CONFIG_FILE" openwrt/.config
+
+        if [ -n "$FILES_DIR" ] && [ -d "$FILES_DIR" ]; then
+          rm -rf openwrt/files
+          cp -a "$FILES_DIR" openwrt/files
+        fi
+
+        if [ -n "$DIY_PART2" ]; then
+          set +e
+          (
+            cd openwrt
+            bash "$DIY_PART2"
+          ) > openwrt/diy-part2.log 2>&1
+          diy_status=$?
+          set -e
+
+          if [ "$diy_status" -ne 0 ]; then
+            echo "::group::DIY Part 2 错误摘要"
+            grep -nE '(ERROR:|error:|Error [0-9]+|not found|dependency|recursive dependency|Traceback|SystemExit)' \
+              openwrt/diy-part2.log | tail -n 200 || true
+            echo
+            tail -n 300 openwrt/diy-part2.log || true
+            echo "::endgroup::"
+            exit "$diy_status"
+          fi
+
+          tail -n 80 openwrt/diy-part2.log || true
+        fi
+
+        (
+          cd openwrt
+          make defconfig
+        )
+
+    - name: 计算编译缓存指纹
+      id: build-cache
+      run: |
+        set -Eeuo pipefail
+        {
+          sha256sum openwrt/.config
+          sha256sum "$PROFILE_DIR/profile.env"
+          sha256sum "$ADAPTER_SCRIPT"
+          printf 'source=%s\n' "$SOURCE_COMMIT"
+          printf 'feeds=%s\n' "$FEED_FINGERPRINT"
+          [ -z "$PREFLIGHT_SCRIPT" ] || sha256sum "$PREFLIGHT_SCRIPT"
+          [ -z "$DIY_PART1" ] || sha256sum "$DIY_PART1"
+          [ -z "$POST_FEEDS_SCRIPT" ] || sha256sum "$POST_FEEDS_SCRIPT"
+          [ -z "$DIY_PART2" ] || sha256sum "$DIY_PART2"
+          [ ! -s "$GITHUB_WORKSPACE/.openwrt-ng-upstreams.env" ] ||
+            sort "$GITHUB_WORKSPACE/.openwrt-ng-upstreams.env"
+        } | sha256sum | awk '{print "hash="$1}' >> "$GITHUB_OUTPUT"
+
+        build_hash="$(tail -n1 "$GITHUB_OUTPUT" | cut -d= -f2-)"
+        echo "BUILD_CACHE_FINGERPRINT=$build_hash" >> "$GITHUB_ENV"
+        echo "编译缓存指纹：$build_hash"
+
+    - name: 恢复编译缓存
+      id: build-cache-restore
+      uses: actions/cache/restore@v6
+      with:
+        path: |
+          openwrt/staging_dir/host/ccache
+          openwrt/staging_dir/target-*/ccache
+          openwrt/.cache/go-build
+          ~/.ccache
+        key: openwrt-ng-build-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-${{ steps.build-cache.outputs.hash }}
+        restore-keys: |
+          openwrt-ng-build-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-
+
+    - name: 下载软件包源码
+      run: |
+        set -Eeuo pipefail
+        cd openwrt
+        make download -j8
+        find dl -type f -size -1024c -print -delete || true
+
+    - name: 保存源码下载缓存
+      if: steps.dl-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: openwrt/dl
+        key: openwrt-ng-dl-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-${{ steps.feeds.outputs.hash }}
+
+    - name: 编译固件
+      id: compile
+      run: |
+        set -Eeuo pipefail
+        export BUILD_STARTED_AT="$(date +%s)"
+        scripts/compile.sh           "$GITHUB_WORKSPACE/openwrt"           "$GITHUB_WORKSPACE/build.log"           "$GITHUB_WORKSPACE/build-failure.log"
+        echo "status=success" >> "$GITHUB_OUTPUT"
+
+    - name: 保存编译缓存
+      if: steps.compile.outputs.status == 'success' && steps.build-cache-restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: |
+          openwrt/staging_dir/host/ccache
+          openwrt/staging_dir/target-*/ccache
+          openwrt/.cache/go-build
+          ~/.ccache
+        key: openwrt-ng-build-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-${{ steps.build-cache.outputs.hash }}
+
+    - name: 校验固件 Manifest
+      id: manifest
+      run: |
+        set -Eeuo pipefail
+        manifest_record="$RUNNER_TEMP/openwrt-ng-manifests.txt"
+        scripts/validate-manifest.sh           "$GITHUB_WORKSPACE/openwrt"           "$REQUIRED_PACKAGES_FILE"           "$manifest_record"
+        echo "MANIFEST_RECORD_FILE=$manifest_record" >> "$GITHUB_ENV"
+        echo "status=success" >> "$GITHUB_OUTPUT"
+
+    - name: 生成最终配置留档
+      id: config-record
+      run: |
+        set -Eeuo pipefail
+        scripts/archive-config.sh           "$RUNNER_TEMP/openwrt-ng-repository.config"           "$GITHUB_WORKSPACE/openwrt/.config"           "$GITHUB_WORKSPACE/openwrt"           "$GITHUB_WORKSPACE/config-record"
+        echo "status=success" >> "$GITHUB_OUTPUT"
+
+    - name: 上传最终配置留档
+      uses: actions/upload-artifact@v7
+      with:
+        name: OpenWrt_config_record_${{ env.PROFILE_ID }}_${{ env.FILE_DATE }}
+        path: config-record
+        if-no-files-found: error
+        retention-days: 30
+
+    - name: 上传编译失败诊断
+      if: failure() && !cancelled()
+      uses: actions/upload-artifact@v7
+      with:
+        name: OpenWrt_failure_${{ env.PROFILE_ID }}_${{ github.run_id }}
+        path: |
+          build.log
+          build-failure.log
+          openwrt/diy-part2.log
+          openwrt/logs
+        if-no-files-found: ignore
+        retention-days: 7
+
+    - name: 上传完整 bin 目录
+      if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: OpenWrt_bin_${{ env.PROFILE_ID }}_${{ env.FILE_DATE }}
+        path: openwrt/bin
+        if-no-files-found: error
+        retention-days: 30
+        compression-level: 0
+
+    - name: 上传固件目录
+      if: steps.compile.outputs.status == 'success' && env.UPLOAD_FIRMWARE == 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: OpenWrt_firmware_${{ env.PROFILE_ID }}_${{ env.FILE_DATE }}
+        path: openwrt/bin/targets
+        if-no-files-found: error
+        retention-days: 30
+        compression-level: 0
+
+    - name: 准备 Release 附件
+      id: release-assets
+      if: >-
+        steps.compile.outputs.status == 'success' &&
+        steps.manifest.outputs.status == 'success' &&
+        steps.config-record.outputs.status == 'success' &&
+        env.UPLOAD_RELEASE == 'true'
+      run: |
+        set -Eeuo pipefail
+        scripts/prepare-release.sh           "$GITHUB_WORKSPACE/openwrt"           "$GITHUB_WORKSPACE/config-record"           "$GITHUB_WORKSPACE/release-bundle"
+        echo "status=success" >> "$GITHUB_OUTPUT"
+
+    - name: 上传 Release 交接包
+      if: steps.release-assets.outputs.status == 'success'
+      uses: actions/upload-artifact@v7
+      with:
+        name: OpenWrt_NG_release_bundle_${{ github.run_id }}
+        path: release-bundle
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+
+  release:
+    name: 发布 OpenWrt 固件
+    needs: build
+    if: needs.build.result == 'success' && needs.build.outputs.release_ready == 'success'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+    - name: 下载 Release 交接包
+      uses: actions/download-artifact@v8
+      with:
+        name: OpenWrt_NG_release_bundle_${{ github.run_id }}
+        path: release-bundle
+
+    - name: 校验 Release 交接包
+      run: |
+        set -Eeuo pipefail
+        [ -s release-bundle/release.txt ] || {
+          echo "ERROR: release.txt 缺失" >&2
+          exit 1
+        }
+        mapfile -t assets < <(find release-bundle/assets -maxdepth 1 -type f -print | sort)
+        [ "${#assets[@]}" -gt 0 ] || {
+          echo "ERROR: Release 没有附件" >&2
+          exit 1
+        }
+
+        empty_assets=()
+        for asset in "${assets[@]}"; do
+          [ -s "$asset" ] || empty_assets+=("$asset")
+        done
+
+        if [ "${#empty_assets[@]}" -gt 0 ]; then
+          echo "ERROR: Release 存在 0 字节附件，拒绝创建半成品 Release：" >&2
+          printf '  - %s\n' "${empty_assets[@]}" >&2
+          exit 1
+        fi
+
+        find release-bundle/assets -maxdepth 1 -type f -printf '  - %f (%s bytes)\n' | sort
+
+    - name: 发布固件到 Release
+      id: release-upload
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -Eeuo pipefail
+
+        release_tag="$(date +'%Y.%m.%d-%H%M')-${GITHUB_RUN_NUMBER}"
+        mapfile -t assets < <(find release-bundle/assets -maxdepth 1 -type f -print | sort)
+
+        cleanup_failed_release() {
+          local status="$?"
+          if [ "$status" -ne 0 ]; then
+            echo "Release 发布失败，清理未完成的草稿/标签：$release_tag" >&2
+
+            release_id="$(
+              gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+                --jq ".[] | select(.tag_name == \"$release_tag\") | .id" \
+                2>/dev/null | head -n1 || true
+            )"
+
+            if [ -n "$release_id" ]; then
+              gh api -X DELETE \
+                "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+                --silent || true
+            fi
+
+            gh api -X DELETE \
+              "repos/$GITHUB_REPOSITORY/git/refs/tags/$release_tag" \
+              --silent || true
+          fi
+          exit "$status"
+        }
+        trap cleanup_failed_release EXIT
+
+        gh release create "$release_tag" \
+          --repo "$GITHUB_REPOSITORY" \
+          --target "$GITHUB_SHA" \
+          --title "$release_tag" \
+          --notes-file release-bundle/release.txt \
+          --draft
+
+        for asset in "${assets[@]}"; do
+          uploaded=false
+
+          for attempt in 1 2 3; do
+            echo "上传附件：$(basename "$asset")（第 $attempt/3 次）"
+
+            if gh release upload "$release_tag" "$asset" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber; then
+              uploaded=true
+              break
+            fi
+
+            sleep "$((attempt * 3))"
+          done
+
+          [ "$uploaded" = true ] || {
+            echo "ERROR: Release 附件上传连续失败：$asset" >&2
+            exit 1
+          }
+        done
+
+        gh release edit "$release_tag" \
+          --repo "$GITHUB_REPOSITORY" \
+          --draft=false
+
+        trap - EXIT
+
+        echo "发布完成：$release_tag"
+        echo "status=success" >> "$GITHUB_OUTPUT"
+
+    - name: 清理旧 Releases
+      if: steps.release-upload.outputs.status == 'success' && !cancelled()
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -Eeuo pipefail
+
+        mapfile -t releases < <(
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100"             --jq '.[] | [.created_at, .id, .tag_name] | @tsv' |
+          sort -r
+        )
+
+        index=0
+        for row in "${releases[@]}"; do
+          index=$((index + 1))
+          [ "$index" -le 10 ] && continue
+
+          release_id="$(printf '%s\n' "$row" | cut -f2)"
+          tag_name="$(printf '%s\n' "$row" | cut -f3-)"
+
+          echo "删除旧 Release：$tag_name"
+          gh api -X DELETE             "repos/${GITHUB_REPOSITORY}/releases/$release_id"             --silent
+          gh api -X DELETE             "repos/${GITHUB_REPOSITORY}/git/refs/tags/$tag_name"             --silent || true
+        done
+
+  cleanup:
+    name: 清理旧 Workflow 运行记录
+    needs: [build, release]
+    if: always() && !cancelled()
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      actions: write
+
+    steps:
+    - name: 清理旧 Workflow 运行记录
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -Eeuo pipefail
+        cutoff_epoch="$(date -u -d '30 days ago' +%s)"
+
+        gh api --paginate           "repos/${GITHUB_REPOSITORY}/actions/workflows?per_page=100"           --jq '.workflows[].id' |
+        while read -r workflow_id; do
+          [ -n "$workflow_id" ] || continue
+
+          mapfile -t runs < <(
+            gh api --paginate               "repos/${GITHUB_REPOSITORY}/actions/workflows/$workflow_id/runs?per_page=100"               --jq '.workflow_runs[] | [.id, .created_at] | @tsv'
+          )
+
+          index=0
+          for row in "${runs[@]}"; do
+            index=$((index + 1))
+            [ "$index" -le 10 ] && continue
+
+            run_id="$(printf '%s\n' "$row" | cut -f1)"
+            created_at="$(printf '%s\n' "$row" | cut -f2)"
+            created_epoch="$(date -u -d "$created_at" +%s)"
+
+            [ "$created_epoch" -lt "$cutoff_epoch" ] || continue
+
+            echo "删除 Workflow run：$run_id（$created_at）"
+            gh api -X DELETE               "repos/${GITHUB_REPOSITORY}/actions/runs/$run_id"               --silent
+          done
+        done
