@@ -207,7 +207,8 @@ https://...workers.dev/api/v1/health
 4. 点击仓库与 Profile，确认可以读取标准 `profiles/*` 文件。
 5. 做一次无害编辑，预览差异后创建 Pull Request；确认默认分支没有被直接修改。
 6. 不勾 Release，触发一次 Builder；确认页面能自动关联 Run、持续更新 Job 状态并最终显示 Artifact / Summary。
-7. 验证通过后关闭测试 PR、清理临时分支，再在自己的模板实例启用 Pages Control Plane 入口。
+7. 再测试一次“新建 Profile”：服务端预览应只生成标准 6 文件，创建 PR 后确认默认分支仍未直接变化。
+8. 验证通过后关闭测试 PR、清理临时分支，再在自己的模板实例启用 Pages Control Plane 入口。
 
 这套验证覆盖当前 V2.0A / V2.0B / V2.0C 的核心链路。首次测试建议关闭 Release，避免测试仓库留下无意义发布物。
 
@@ -294,7 +295,48 @@ Artifact 链接使用 GitHub 自身的登录态，不把 GitHub access token 暴
 
 同一 Profile 已经存在活动构建时，Control Plane 返回 `409 build_already_active`，不会再次排队。
 
-### 10. 在自己的模板实例中启用 GitHub Pages V2 入口
+### 10. V2.0D：直接新建标准 Profile
+
+V2.0D 在控制面中补齐 Profile Wizard 到仓库写入之间的缺口。用户填写与 Wizard 一致的结构化字段：
+
+- Profile ID / 显示名称。
+- 源码仓库、分支 / Tag、Adapter。
+- OpenWrt `.config`。
+- 自动追新、Release、Artifact、构建空间、流式日志开关。
+- Manifest 必选软件包与额外 Git 上游监控。
+
+安全边界：
+
+```text
+浏览器提交结构化字段
+        ↓
+服务端校验并生成固定 6 个文件
+        ↓
+预览（不写 GitHub）
+        ↓
+用户确认
+        ↓
+服务端重新生成相同标准文件
+        ↓
+检查 profiles/<id> 当前不存在
+        ↓
+原子 commit → 新分支 → Pull Request
+```
+
+服务端只会生成：
+
+```text
+profiles/<id>/.config
+profiles/<id>/profile.env
+profiles/<id>/diy-part1.sh
+profiles/<id>/diy-part2.sh
+profiles/<id>/required-packages.txt
+profiles/<id>/watch-sources.txt
+```
+
+浏览器不能通过该接口提交任意仓库路径；如果目标 Profile 已经存在，返回 `409 profile_already_exists`，不会覆盖。预览时 `.config` 会发送到用户自己的 Control Plane 做服务端校验，但不会写入 GitHub。
+
+### 11. 在自己的模板实例中启用 GitHub Pages V2 入口
 
 **公共模板仓库的 `main` 应继续保持默认关闭，不应提交模板维护者自己的 workers.dev 地址或 GitHub App slug。**
 
