@@ -52,6 +52,10 @@ async function loadProfiles(fullName) {
 
 async function init() {
   showError();
+  const publicConfig = await request("/api/v1/config");
+  const installLink = $("install-app");
+  installLink.href = publicConfig.githubAppInstallUrl;
+
   const session = await request("/api/v1/session");
 
   if (!session.authenticated) {
@@ -99,6 +103,9 @@ async function init() {
 
   if (!data.repositories.length) {
     root.textContent = "当前 GitHub App 安装范围内没有可访问仓库。";
+    installLink.hidden = false;
+  } else {
+    installLink.hidden = false;
   }
 }
 
