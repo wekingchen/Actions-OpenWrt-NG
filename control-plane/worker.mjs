@@ -1,4 +1,5 @@
 import {
+  BuildControlError,
   GitHubAppClient,
   ProfileWriteError,
   githubErrorReason
@@ -471,6 +472,116 @@ export async function handleControlPlaneRequest(
         if (error?.name === "GitHubRequestError") {
           return json(502, {
             error: "github_profile_write_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
+    }
+
+
+    const buildsMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/builds$/
+    );
+    if (request.method === "GET" && buildsMatch) {
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+      const owner = decodeURIComponent(buildsMatch[1]);
+      const repo = decodeURIComponent(buildsMatch[2]);
+      try {
+        const runs = await deps.github.listBuilderRuns(
+          session.accessToken,
+          owner,
+          repo,
+          {
+            profileId: url.searchParams.get("profile") || "",
+            requestId: url.searchParams.get("request_id") || "",
+            limit: url.searchParams.get("limit") || 10
+          }
+        );
+        return json(200, { owner, repo, runs });
+      } catch (error) {
+        if (error instanceof BuildControlError) {
+          return json(error.status, { error: error.code });
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_build_status_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
+    }
+
+    const buildDetailMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/builds\/(\d+)$/
+    );
+    if (request.method === "GET" && buildDetailMatch) {
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+      const owner = decodeURIComponent(buildDetailMatch[1]);
+      const repo = decodeURIComponent(buildDetailMatch[2]);
+      try {
+        const run = await deps.github.getBuilderRun(
+          session.accessToken,
+          owner,
+          repo,
+          buildDetailMatch[3]
+        );
+        return json(200, { owner, repo, run });
+      } catch (error) {
+        if (error instanceof BuildControlError) {
+          return json(error.status, { error: error.code });
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_build_status_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
+    }
+
+    const buildTriggerMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/([^/]+)\/builds$/
+    );
+    if (request.method === "POST" && buildTriggerMatch) {
+      if (!validMutationRequest(request, config.origin)) {
+        return json(403, { error: "csrf_validation_failed" });
+      }
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return json(400, { error: "invalid_json" });
+      }
+
+      const owner = decodeURIComponent(buildTriggerMatch[1]);
+      const repo = decodeURIComponent(buildTriggerMatch[2]);
+      const profileId = decodeURIComponent(buildTriggerMatch[3]);
+      try {
+        const result = await deps.github.triggerBuilder(
+          session.accessToken,
+          owner,
+          repo,
+          profileId,
+          payload
+        );
+        return json(202, result);
+      } catch (error) {
+        if (error instanceof BuildControlError) {
+          const body = { error: error.code };
+          if (error.activeRun) body.activeRun = error.activeRun;
+          return json(error.status, body);
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_builder_dispatch_failed",
             reason: githubErrorReason(error)
           });
         }
