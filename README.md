@@ -60,6 +60,43 @@ UPLOAD_FIRMWARE="true"
 UPLOAD_RELEASE="true"
 ```
 
+## 开发与验证原则
+
+本仓库的 `main` 只保留第三方可复用能力。
+
+特殊设备、特殊 SDK 或厂商源码的兼容验证，应在独立分支进行，例如：
+
+```text
+test/<device-or-sdk>
+experiment/<feature>
+adapter/<source-family>
+```
+
+验证分支可以临时包含具体设备 Profile、专用补丁、测试资产和兼容脚本，但这些内容**不直接合并到 `main`**。
+
+验证完成后，只提炼并回合能够被其他设备复用的能力，例如：
+
+- 新的 Adapter 契约或通用 Adapter 行为。
+- 通用 Preflight / post-feeds Hook。
+- 源码或 feed 快照固定机制。
+- 通用缓存、空间管理、日志心跳和失败诊断。
+- 通用 Manifest 验收、配置留档和上游追溯。
+- 不绑定具体设备的 Release / Artifact 恢复能力。
+
+主干验收标准：
+
+1. 不出现具体路由器、厂商或个人环境名称。
+2. 不包含某一设备独占的二进制资产、配置或补丁。
+3. 新能力至少能用通用 Profile/Adapter 接口解释，而不是依赖 Workflow 中的设备判断。
+4. 特殊设备验证分支完成后可以删除，不影响 `main` 的可用性。
+
+换句话说：
+
+```text
+特殊设备 = 测试用例
+main      = 从测试中提炼出的通用框架
+```
+
 ## Adapter
 
 Adapter 负责把源码准备成可编译的 OpenWrt build root。
