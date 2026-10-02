@@ -1,0 +1,70 @@
+name: Temporary V2 Productization Deploy
+
+on:
+  push:
+    branches:
+      - "feat/v2-control-plane-productization"
+    paths:
+      - ".github/workflows/v2-productization-deploy.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openwrt-ng-control-plane-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: 临时部署 V2 产品化版本
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CONTROL_PLANE_D1_DATABASE_ID: ${{ vars.CONTROL_PLANE_D1_DATABASE_ID }}
+    steps:
+      - name: 检出产品化分支
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: 准备 Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: 校验 Cloudflare 配置
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID CONTROL_PLANE_D1_DATABASE_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "ERROR: 缺少 $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: 安装 Wrangler
+        working-directory: control-plane
+        run: |
+          set -Eeuo pipefail
+          npm install --ignore-scripts --no-audit --no-fund
+
+      - name: 生成部署配置
+        working-directory: control-plane
+        run: |
+          set -Eeuo pipefail
+          jq --arg database_id "$CONTROL_PLANE_D1_DATABASE_ID" '.d1_databases[0].database_id = $database_id' wrangler.jsonc > wrangler.deploy.jsonc
+
+      - name: 应用 D1 Migration
+        working-directory: control-plane
+        run: |
+          set -Eeuo pipefail
+          npx wrangler d1 migrations apply DB --remote --config wrangler.deploy.jsonc
+
+      - name: 部署 Worker
+        working-directory: control-plane
+        run: |
+          set -Eeuo pipefail
+          npx wrangler deploy --config wrangler.deploy.jsonc
