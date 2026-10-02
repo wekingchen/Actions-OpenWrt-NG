@@ -19,6 +19,7 @@ export function validateProfileInput(input) {
     errors.push("Profile ID 只能包含字母、数字、点、下划线和短横线。");
   }
   if (!(input.profileName || "").trim()) errors.push("请填写显示名称。");
+  if (/\r|\n/.test(input.profileName || "")) errors.push("显示名称不能包含换行。");
   if (!(input.sourceRepo || "").trim()) errors.push("请填写源码仓库。");
   if (/\r|\n/.test(input.sourceRepo || "")) errors.push("源码仓库不能包含换行。");
   if (!(input.sourceBranch || "").trim()) errors.push("请填写分支或 Tag。");
@@ -26,6 +27,17 @@ export function validateProfileInput(input) {
   if (!(input.configText || "").trim()) errors.push("请上传或粘贴 .config。");
   if ((input.configText || "").includes("\0")) errors.push(".config 包含非法 NUL 字符。");
 
+  const required = normalizeLines(input.requiredPackages);
+  for (const raw of required ? required.split("\n") : []) {
+    const packageName = raw.split("#", 1)[0].trim();
+    if (!packageName) continue;
+    if (!/^[A-Za-z0-9._+@-]+$/.test(packageName)) {
+      errors.push(`Manifest 包名格式不合法：${packageName}`);
+      break;
+    }
+  }
+
+  const labels = new Set(["source"]);
   const watch = normalizeLines(input.watchSources);
   for (const line of watch ? watch.split("\n") : []) {
     const parts = line.split("|");
@@ -33,10 +45,16 @@ export function validateProfileInput(input) {
       errors.push("额外 Git 上游格式必须是 label|git_url|branch_or_tag。");
       break;
     }
-    if (!/^[A-Za-z0-9._-]+$/.test(parts[0].trim())) {
+    const label = parts[0].trim();
+    if (!/^[A-Za-z0-9._-]+$/.test(label)) {
       errors.push("额外 Git 上游的 label 只能包含字母、数字、点、下划线和短横线。");
       break;
     }
+    if (labels.has(label)) {
+      errors.push(`额外 Git 上游 label 重复或保留：${label}`);
+      break;
+    }
+    labels.add(label);
   }
   return errors;
 }

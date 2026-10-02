@@ -4,6 +4,21 @@ const $ = (id) => document.getElementById(id);
 let generatedFiles = [];
 let activeFile = "";
 
+const sourcePresets = {
+  lean: {
+    repo: "https://github.com/coolsnowwolf/lede",
+    branch: "master"
+  },
+  openwrt: {
+    repo: "https://github.com/openwrt/openwrt",
+    branch: "main"
+  },
+  immortalwrt: {
+    repo: "https://github.com/immortalwrt/immortalwrt",
+    branch: "master"
+  }
+};
+
 function readInput() {
   return {
     profileId: $("profile-id").value,
@@ -103,6 +118,24 @@ function downloadZip() {
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+$("source-preset").addEventListener("change", (event) => {
+  const preset = sourcePresets[event.target.value];
+  if (!preset) return;
+  $("source-repo").value = preset.repo;
+  $("source-branch").value = preset.branch;
+  if (generatedFiles.length) generate();
+});
+
+for (const id of ["source-repo", "source-branch"]) {
+  $(id).addEventListener("input", () => {
+    const match = Object.entries(sourcePresets).find(([, preset]) =>
+      preset.repo === $("source-repo").value.trim() &&
+      preset.branch === $("source-branch").value.trim()
+    );
+    $("source-preset").value = match?.[0] || "custom";
+  });
 }
 
 $("config-file").addEventListener("change", async (event) => {

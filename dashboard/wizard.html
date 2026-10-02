@@ -58,6 +58,17 @@
 
           <div class="form-grid">
             <label class="field">
+              <span>常用源码预设</span>
+              <select id="source-preset">
+                <option value="lean" selected>Lean LEDE · master</option>
+                <option value="openwrt">OpenWrt · main</option>
+                <option value="immortalwrt">ImmortalWrt · master</option>
+                <option value="custom">自定义</option>
+              </select>
+              <small>选择预设会自动填写仓库和分支，之后仍可手动修改。</small>
+            </label>
+
+            <label class="field">
               <span>源码仓库</span>
               <input id="source-repo" name="sourceRepo"
                      value="https://github.com/coolsnowwolf/lede" required autocomplete="off">
