@@ -55,8 +55,13 @@ jobs:
         node --check control-plane/test.mjs
         python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
 
-        if grep -nE '\$\{\{[[:space:]]*secrets\.GITHUB_' .github/workflows/*.yml; then
-          echo "ERROR: GitHub Actions Secret 名称不能以 GITHUB_ 开头" >&2
+        bad_github_secrets="$(
+          grep -nE '\$\{\{[[:space:]]*secrets\.GITHUB_' .github/workflows/*.yml |
+          grep -vE 'secrets\.GITHUB_TOKEN[[:space:]]*\}\}' || true
+        )"
+        if [ -n "$bad_github_secrets" ]; then
+          printf '%s\n' "$bad_github_secrets"
+          echo "ERROR: 自定义 GitHub Actions Secret 名称不能以 GITHUB_ 开头" >&2
           exit 1
         fi
 
