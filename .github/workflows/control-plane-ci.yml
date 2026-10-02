@@ -132,6 +132,10 @@ jobs:
         curl -fsS http://127.0.0.1:8788/style.css -o /tmp/control-plane-style.css
 
         grep -q "OpenWrt NG Control Plane" /tmp/control-plane-index.html
+        grep -q 'class="app-shell"' /tmp/control-plane-index.html
+        grep -q 'class="sidebar"' /tmp/control-plane-index.html
+        grep -q 'class="metrics-grid"' /tmp/control-plane-index.html
+        grep -q 'id="metric-repo-count"' /tmp/control-plane-index.html
         grep -q 'id="create-pr"' /tmp/control-plane-index.html
         grep -q 'id="new-profile-open"' /tmp/control-plane-index.html
         grep -q 'id="new-profile-form"' /tmp/control-plane-index.html
@@ -147,7 +151,11 @@ jobs:
         grep -q 'readNewProfileInput' /tmp/control-plane-app.js
         grep -q '/api/v1/profile-templates/preview' /tmp/control-plane-app.js
         grep -q 'profile_already_exists' /tmp/control-plane-app.js
-        grep -q '.shell' /tmp/control-plane-style.css
+        grep -q 'updateRepositoryOverview' /tmp/control-plane-app.js
+        grep -q 'updateBuildOverview' /tmp/control-plane-app.js
+        grep -q '.app-shell' /tmp/control-plane-style.css
+        grep -q '.content-grid' /tmp/control-plane-style.css
+        grep -q '.hero-chip' /tmp/control-plane-style.css
 
     - name: 构建可选自托管容器
       run: |
