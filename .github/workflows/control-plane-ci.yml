@@ -54,6 +54,12 @@ jobs:
         node --check control-plane/public/app.js
         node --check control-plane/test.mjs
         python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
+
+        if grep -nE '\$\{\{[[:space:]]*secrets\.GITHUB_' .github/workflows/*.yml; then
+          echo "ERROR: GitHub Actions Secret 名称不能以 GITHUB_ 开头" >&2
+          exit 1
+        fi
+
         git diff --check
 
     - name: 运行控制面回归测试
