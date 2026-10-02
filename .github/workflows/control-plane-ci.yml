@@ -60,6 +60,7 @@ jobs:
 
         grep -q 'control_plane_request_id:' .github/workflows/build-openwrt.yml
         grep -q 'cp:{0}' .github/workflows/build-openwrt.yml
+        grep -q 'return_run_details: true' control-plane/lib/github.mjs
 
         bad_github_secrets="$(
           grep -nE '\$\{\{[[:space:]]*secrets\.GITHUB_' .github/workflows/*.yml |
@@ -128,6 +129,8 @@ jobs:
         grep -q 'async function init' /tmp/control-plane-app.js
         grep -q 'preview-change' /tmp/control-plane-app.js
         grep -q 'loadBuildRuns' /tmp/control-plane-app.js
+        grep -q 'pollActiveBuild' /tmp/control-plane-app.js
+        grep -q 'result.runId' /tmp/control-plane-app.js
         grep -q 'build_already_active' /tmp/control-plane-app.js
         grep -q '.shell' /tmp/control-plane-style.css
 
