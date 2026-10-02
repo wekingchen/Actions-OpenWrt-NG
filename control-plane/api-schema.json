@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openwrt-ng.invalid/schema/control-plane-v1.json",
+  "title": "OpenWrt NG Control Plane API v1",
+  "type": "object",
+  "description": "V2 control-plane response shapes. GitHub tokens and secrets are intentionally absent.",
+  "$defs": {
+    "user": {
+      "type": "object",
+      "required": ["login", "avatarUrl"],
+      "additionalProperties": false,
+      "properties": {
+        "login": {"type": "string", "minLength": 1},
+        "avatarUrl": {"type": "string", "format": "uri"}
+      }
+    },
+    "session": {
+      "type": "object",
+      "required": ["authenticated"],
+      "additionalProperties": false,
+      "properties": {
+        "authenticated": {"type": "boolean"},
+        "user": {"$ref": "#/$defs/user"},
+        "expiresAt": {"type": "string", "format": "date-time"}
+      }
+    },
+    "repository": {
+      "type": "object",
+      "required": ["owner", "name", "fullName", "defaultBranch", "private", "permissions"],
+      "additionalProperties": false,
+      "properties": {
+        "owner": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "fullName": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
+        "defaultBranch": {"type": "string", "minLength": 1},
+        "private": {"type": "boolean"},
+        "permissions": {
+          "type": "object",
+          "required": ["contents", "actions"],
+          "additionalProperties": false,
+          "properties": {
+            "contents": {"enum": ["none", "read", "write"]},
+            "actions": {"enum": ["none", "read", "write"]}
+          }
+        }
+      }
+    }
+  }
+}

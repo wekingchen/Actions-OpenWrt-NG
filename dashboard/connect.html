@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Control Plane · OpenWrt NG</title>
+  <meta name="description" content="OpenWrt NG V2 control plane connection">
+  <link rel="stylesheet" href="./assets/style.css">
+</head>
+<body>
+  <div class="page-shell control-shell">
+    <header class="site-header">
+      <div>
+        <p class="eyebrow">OpenWrt NG · V2 Preview</p>
+        <h1>Control Plane</h1>
+        <p class="subtitle">公开 Pages 保持只读；登录、仓库授权与后续写操作由独立同源控制面处理。</p>
+      </div>
+      <div class="header-actions">
+        <a class="button secondary" href="./">返回 Dashboard</a>
+        <a class="button secondary" href="./wizard.html">Profile Wizard</a>
+      </div>
+    </header>
+
+    <main class="control-grid">
+      <section class="control-card">
+        <div class="card-heading">
+          <div>
+            <p class="section-kicker">Connection</p>
+            <h2>GitHub 仓库连接</h2>
+          </div>
+          <span class="status-pill neutral" id="control-state">检查中</span>
+        </div>
+        <p class="control-copy" id="control-detail">正在读取 Control Plane 公共配置…</p>
+        <p class="control-endpoint mono" id="control-endpoint">Control Plane URL：—</p>
+        <div class="card-actions">
+          <a class="button" id="control-action" href="#" rel="noreferrer" hidden>打开控制面</a>
+        </div>
+      </section>
+
+      <section class="control-card">
+        <p class="section-kicker">Security Boundary</p>
+        <h2>V2.0A 权限边界</h2>
+        <ul class="control-list">
+          <li>GitHub App Web Flow + PKCE。</li>
+          <li>GitHub access / refresh token 只保存在服务端。</li>
+          <li>浏览器只持有 HttpOnly Session Cookie。</li>
+          <li>公开 Pages 不调用带权限的 GitHub API。</li>
+          <li>V2.0A 仅申请仓库内容和 Actions 的读取权限。</li>
+        </ul>
+      </section>
+
+      <section class="control-card">
+        <p class="section-kicker">Roadmap</p>
+        <h2>接下来</h2>
+        <ol class="control-list">
+          <li>V2.0A：登录、安装仓库选择、只读 Profile 列表。</li>
+          <li>V2.0B：分支 + PR 方式保存 Profile。</li>
+          <li>V2.0C：从控制面触发 Builder 并显示运行状态。</li>
+        </ol>
+      </section>
+    </main>
+
+    <footer>
+      <span>V2 Control Plane Preview</span>
+      <span>本页面不持有 GitHub 凭据。</span>
+    </footer>
+  </div>
+  <script type="module" src="./assets/connect.js"></script>
+</body>
+</html>

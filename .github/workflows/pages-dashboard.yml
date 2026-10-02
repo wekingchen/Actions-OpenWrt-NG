@@ -50,6 +50,9 @@ jobs:
         node --check dashboard/assets/app.js
         node --check dashboard/assets/wizard-core.js
         node --check dashboard/assets/wizard.js
+        node --check dashboard/assets/control-plane.js
+        node --check dashboard/assets/connect.js
+        node scripts/dashboard/test-control-plane.mjs
         bash scripts/dashboard/test-wizard.sh
         git diff --check
 
