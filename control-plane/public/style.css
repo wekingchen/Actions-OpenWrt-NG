@@ -586,17 +586,84 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 }
 .repo-item:hover::before, .profile-item:hover::before { background: var(--accent); }
 .repo-item strong, .profile-item strong { font-size: 13px; }
-.repo-item span, .profile-item code {
+.list-leading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.list-icon {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--accent-strong) !important;
+  background: var(--accent-soft);
+  font-size: 17px !important;
+  font-weight: 900;
+}
+.repo-icon {
+  color: var(--blue) !important;
+  background: var(--blue-soft);
+}
+.list-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.list-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list-copy small {
+  overflow: hidden;
   color: var(--muted);
-  font-size: 11px;
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
 }
-.profile-item code {
-  padding: 3px 7px;
-  border-radius: 8px;
+.list-action {
+  flex: 0 0 auto;
+  align-self: center;
+  color: var(--accent-strong) !important;
+  font-size: 10px !important;
+  font-weight: 800;
+}
+.repo-capability {
+  flex: 0 0 auto;
+  align-self: center;
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 9px !important;
+  font-weight: 850;
+}
+.repo-capability.ready {
+  color: var(--accent-strong) !important;
+  background: var(--accent-soft);
+}
+.repo-capability.limited {
+  color: var(--amber) !important;
+  background: var(--amber-soft);
+}
+.empty-state {
+  display: grid;
+  place-items: center;
+  gap: 5px;
+  min-height: 130px;
+  padding: 22px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
   background: var(--panel-soft);
-  border: 1px solid var(--border);
+  text-align: center;
 }
+.empty-state strong { font-size: 12px; }
+.empty-state span { color: var(--muted); font-size: 10px; }
 
 .content-grid {
   display: grid;
