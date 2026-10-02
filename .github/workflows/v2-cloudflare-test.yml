@@ -1,0 +1,98 @@
+name: V2 Cloudflare Control Plane Test
+
+on:
+  push:
+    branches:
+      - v2/cloudflare-control-plane
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Workers + D1 全量回归
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+    - name: 检出仓库
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 准备 Node.js 24
+      uses: actions/setup-node@v7
+      with:
+        node-version: "24"
+
+    - name: 安装 Wrangler
+      working-directory: control-plane
+      run: |
+        set -Eeuo pipefail
+        npm install --ignore-scripts --no-audit --no-fund
+
+    - name: V2 与 V1.3 回归
+      run: |
+        set -Eeuo pipefail
+        cd control-plane
+        npm test
+        cd ..
+        node scripts/dashboard/test-control-plane.mjs
+        bash scripts/dashboard/test-wizard.sh
+
+    - name: D1 Migration 与 SQL 验证
+      working-directory: control-plane
+      run: |
+        set -Eeuo pipefail
+        npx wrangler d1 migrations apply DB --local
+        npx wrangler d1 execute DB --local --command           "INSERT INTO oauth_states(state_hash,browser_hash,verifier_cipher,return_to,expires_at) VALUES('test-state','test-browser','test-verifier','/',9999999999999); DELETE FROM oauth_states WHERE state_hash='test-state' RETURNING state_hash;"           >/tmp/d1-test.log
+        grep -q "test-state" /tmp/d1-test.log
+
+    - name: Wrangler Bundle 验证
+      working-directory: control-plane
+      run: |
+        set -Eeuo pipefail
+        npx wrangler deploy --dry-run --outdir .wrangler/dry-run
+
+    - name: Worker 本地运行冒烟
+      working-directory: control-plane
+      run: |
+        set -Eeuo pipefail
+        cat > .dev.vars <<'EOF'
+        GITHUB_APP_CLIENT_ID=Iv1.test
+        GITHUB_APP_CLIENT_SECRET=test-client-secret
+        GITHUB_APP_SLUG=openwrt-ng-test
+        TOKEN_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef
+        EOF
+
+        npx wrangler dev --local --port 8788 >/tmp/wrangler-dev.log 2>&1 &
+        pid=$!
+        trap 'kill "$pid" 2>/dev/null || true; rm -f .dev.vars' EXIT
+
+        for i in $(seq 1 30); do
+          if curl -fsS http://127.0.0.1:8788/api/v1/health >/tmp/health.json 2>/dev/null; then
+            break
+          fi
+          sleep 1
+        done
+
+        jq -e '
+          .ok == true and
+          .runtime == "cloudflare-workers" and
+          .configured == true
+        ' /tmp/health.json >/dev/null
+
+        curl -fsS http://127.0.0.1:8788/ | grep -q "OpenWrt NG Control Plane"
+
+    - name: 构建可选 Docker fallback
+      run: |
+        set -Eeuo pipefail
+        docker build           -f control-plane/Dockerfile           -t openwrt-ng-control-plane:self-hosted-test           .
+
+    - name: 仓库一致性
+      run: |
+        set -Eeuo pipefail
+        python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
+        python3 -m json.tool dashboard/data/control-plane.json >/dev/null
+        git diff --check
