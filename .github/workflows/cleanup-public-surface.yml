@@ -1,0 +1,46 @@
+name: Repository Surface Cleanup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/cleanup-public-surface.yml"
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: 清理旧验证记录
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -Eeuo pipefail
+
+        release_tag="2026.10.02-1048-run3-r5"
+        if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          gh release delete "$release_tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --cleanup-tag \
+            --yes
+          echo "已清理旧验证 Release"
+        fi
+
+        for run_id in \
+          36926093754 \
+          36944746271 \
+          36956203173 \
+          36956690179 \
+          36956893812 \
+          36956925248 \
+          36957280640
+        do
+          gh api -X DELETE \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" \
+            --silent || true
+        done
+
+        echo "旧验证记录清理完成"
