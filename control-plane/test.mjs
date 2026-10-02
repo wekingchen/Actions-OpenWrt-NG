@@ -259,6 +259,132 @@ await assert.rejects(
   }
 );
 
+
+const builderCalls = [];
+const builderFetch = async (url, options = {}) => {
+  const parsed = new URL(String(url));
+  const path = parsed.pathname.replace(/^\/repos\/acme\/router/, "");
+  const method = String(options.method || "GET").toUpperCase();
+  builderCalls.push({ path, method, body: options.body || "" });
+
+  if (method === "GET" && path === "") {
+    return Response.json({ default_branch: "main" });
+  }
+  if (method === "GET" && path === "/commits/main") {
+    return Response.json({ sha: "d".repeat(40) });
+  }
+  if (
+    method === "GET" &&
+    path === "/contents/profiles/default" &&
+    parsed.searchParams.get("ref") === "main"
+  ) {
+    return Response.json([{ type: "file", name: ".config" }]);
+  }
+  if (
+    method === "GET" &&
+    path === "/actions/workflows/build-openwrt.yml/runs"
+  ) {
+    return Response.json({ workflow_runs: [] });
+  }
+  if (
+    method === "POST" &&
+    path === "/actions/workflows/build-openwrt.yml/dispatches"
+  ) {
+    const body = JSON.parse(options.body);
+    assert.equal(body.ref, "main");
+    assert.equal(body.inputs.profile, "default");
+    assert.equal(body.inputs.publish_release, "false");
+    assert.match(body.inputs.control_plane_request_id, /^[0-9a-f]{16}$/);
+    return new Response(null, { status: 204 });
+  }
+  if (method === "GET" && path === "/actions/runs/123") {
+    return Response.json({
+      id: 123,
+      run_number: 9,
+      run_attempt: 1,
+      display_title: "Build · default · cp:abcdef1234567890",
+      status: "completed",
+      conclusion: "success",
+      event: "workflow_dispatch",
+      path: ".github/workflows/build-openwrt.yml",
+      head_branch: "main",
+      head_sha: "d".repeat(40),
+      created_at: "2026-10-02T00:00:00Z",
+      updated_at: "2026-10-02T00:10:00Z",
+      run_started_at: "2026-10-02T00:00:10Z",
+      html_url: "https://github.com/acme/router/actions/runs/123"
+    });
+  }
+  if (method === "GET" && path === "/actions/runs/123/jobs") {
+    return Response.json({
+      jobs: [{
+        id: 1,
+        name: "编译 OpenWrt 固件",
+        status: "completed",
+        conclusion: "success",
+        html_url: "https://github.com/acme/router/actions/runs/123/job/1"
+      }]
+    });
+  }
+  if (method === "GET" && path === "/actions/runs/123/artifacts") {
+    return Response.json({
+      artifacts: [{
+        id: 77,
+        name: "OpenWrt_firmware_default_20261002",
+        size_in_bytes: 12345,
+        expired: false,
+        created_at: "2026-10-02T00:09:00Z",
+        expires_at: "2026-11-01T00:09:00Z"
+      }]
+    });
+  }
+  if (method === "GET" && path === "/releases") {
+    return Response.json([{
+      tag_name: "2026.10.02-0810-9",
+      name: "2026.10.02-0810-9",
+      target_commitish: "d".repeat(40),
+      html_url: "https://github.com/acme/router/releases/tag/2026.10.02-0810-9",
+      published_at: "2026-10-02T00:10:00Z"
+    }]);
+  }
+
+  return Response.json({ message: "unexpected builder request " + path }, { status: 500 });
+};
+
+const builderClient = new GitHubAppClient(
+  {
+    clientId: "Iv1.builder",
+    clientSecret: "builder-secret",
+    redirectUri: "https://example.test/api/v1/auth/callback"
+  },
+  builderFetch
+);
+const dispatched = await builderClient.triggerBuilder(
+  "ghu_builder",
+  "acme",
+  "router",
+  "default",
+  { publishRelease: false }
+);
+assert.equal(dispatched.accepted, true);
+assert.equal(dispatched.ref, "main");
+assert.match(dispatched.requestId, /^[0-9a-f]{16}$/);
+
+const builderDetail = await builderClient.getBuilderRun(
+  "ghu_builder",
+  "acme",
+  "router",
+  123
+);
+assert.equal(builderDetail.conclusion, "success");
+assert.equal(builderDetail.artifacts[0].id, 77);
+assert.equal(
+  builderDetail.artifacts[0].url,
+  "https://github.com/acme/router/actions/runs/123/artifacts/77"
+);
+assert.equal(builderDetail.release.tag, "2026.10.02-0810-9");
+assert.equal(builderDetail.summaryUrl, builderDetail.url);
+
 const calls = [];
 const fakeFetch = async (url, options = {}) => {
   calls.push({ url: String(url), options });
@@ -292,7 +418,8 @@ const fakeFetch = async (url, options = {}) => {
           id: 101,
           permissions: {
             contents: "write",
-            pull_requests: "write"
+            pull_requests: "write",
+            actions: "write"
           }
         }
       ]
@@ -441,6 +568,7 @@ try {
   assert.equal(reposBody.repositories[0].fullName, "acme/router");
   assert.equal(reposBody.repositories[0].permissions.contents, "write");
   assert.equal(reposBody.repositories[0].permissions.pullRequests, "write");
+  assert.equal(reposBody.repositories[0].permissions.actions, "write");
   assert.equal("installationId" in reposBody.repositories[0], false);
   assert.equal("actions" in reposBody.repositories[0].permissions, false);
 
