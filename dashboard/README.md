@@ -8,7 +8,8 @@ OpenWrt NG V1.2 的只读 GitHub Pages Dashboard。
 - 真实 GitHub 数据导出：已完成
 - schema / 敏感信息校验：已完成
 - Pages Artifact 打包：已完成真实验证
-- GitHub Pages 部署：仅允许 main；首次需要在 Settings → Pages 选择 GitHub Actions
+- GitHub Pages 主干部署：已完成真实验证
+- 正式地址：<https://wekingchen.github.io/Actions-OpenWrt-NG/>
 
 ## 目录
 
