@@ -7,110 +7,244 @@
   "$defs": {
     "health": {
       "type": "object",
-      "required": ["ok", "version", "runtime", "configured"],
+      "required": [
+        "ok",
+        "version",
+        "runtime",
+        "configured"
+      ],
       "additionalProperties": false,
       "properties": {
-        "ok": {"const": true},
-        "version": {"const": 1},
-        "runtime": {"enum": ["cloudflare-workers", "self-hosted-node"]},
-        "configured": {"type": "boolean"}
+        "ok": {
+          "const": true
+        },
+        "version": {
+          "const": 1
+        },
+        "runtime": {
+          "enum": [
+            "cloudflare-workers",
+            "self-hosted-node"
+          ]
+        },
+        "configured": {
+          "type": "boolean"
+        }
       }
     },
     "publicConfig": {
       "type": "object",
-      "required": ["configured", "githubAppInstallUrl"],
+      "required": [
+        "configured",
+        "githubAppInstallUrl"
+      ],
       "additionalProperties": false,
       "properties": {
-        "configured": {"type": "boolean"},
-        "githubAppInstallUrl": {"type": "string"}
+        "configured": {
+          "type": "boolean"
+        },
+        "githubAppInstallUrl": {
+          "type": "string"
+        }
       }
     },
     "user": {
       "type": "object",
-      "required": ["login", "avatarUrl"],
+      "required": [
+        "login",
+        "avatarUrl"
+      ],
       "additionalProperties": false,
       "properties": {
-        "login": {"type": "string", "minLength": 1},
-        "avatarUrl": {"type": "string"}
+        "login": {
+          "type": "string",
+          "minLength": 1
+        },
+        "avatarUrl": {
+          "type": "string"
+        }
       }
     },
     "session": {
       "type": "object",
-      "required": ["authenticated"],
+      "required": [
+        "authenticated"
+      ],
       "additionalProperties": false,
       "properties": {
-        "authenticated": {"type": "boolean"},
-        "user": {"$ref": "#/$defs/user"},
-        "expiresAt": {"type": "string", "format": "date-time"}
+        "authenticated": {
+          "type": "boolean"
+        },
+        "user": {
+          "$ref": "#/$defs/user"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       }
     },
     "repository": {
       "type": "object",
-      "required": ["owner", "name", "fullName", "defaultBranch", "private", "permissions"],
+      "required": [
+        "owner",
+        "name",
+        "fullName",
+        "defaultBranch",
+        "private",
+        "permissions"
+      ],
       "additionalProperties": false,
       "properties": {
-        "owner": {"type": "string", "minLength": 1},
-        "name": {"type": "string", "minLength": 1},
-        "fullName": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
-        "defaultBranch": {"type": "string", "minLength": 1},
-        "private": {"type": "boolean"},
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fullName": {
+          "type": "string",
+          "pattern": "^[^/]+/[^/]+$"
+        },
+        "defaultBranch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "private": {
+          "type": "boolean"
+        },
         "permissions": {
           "type": "object",
-          "required": ["contents", "pullRequests"],
+          "required": [
+            "contents",
+            "pullRequests",
+            "actions"
+          ],
           "additionalProperties": false,
           "properties": {
-            "contents": {"enum": ["none", "read", "write"]},
-            "pullRequests": {"enum": ["none", "read", "write"]}
+            "contents": {
+              "enum": [
+                "none",
+                "read",
+                "write"
+              ]
+            },
+            "pullRequests": {
+              "enum": [
+                "none",
+                "read",
+                "write"
+              ]
+            },
+            "actions": {
+              "enum": [
+                "none",
+                "read",
+                "write"
+              ]
+            }
           }
         }
       }
     },
     "profileFile": {
       "type": "object",
-      "required": ["path", "sha", "exists", "content"],
+      "required": [
+        "path",
+        "sha",
+        "exists",
+        "content"
+      ],
       "additionalProperties": false,
       "properties": {
-        "path": {"type": "string", "minLength": 1},
-        "sha": {"type": "string"},
-        "exists": {"type": "boolean"},
-        "content": {"type": "string"}
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha": {
+          "type": "string"
+        },
+        "exists": {
+          "type": "boolean"
+        },
+        "content": {
+          "type": "string"
+        }
       }
     },
     "profile": {
       "type": "object",
-      "required": ["id", "path"],
+      "required": [
+        "id",
+        "path"
+      ],
       "additionalProperties": true,
       "properties": {
         "id": {
           "type": "string",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
         },
-        "path": {"type": "string", "minLength": 1},
-        "sha": {"type": "string"},
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha": {
+          "type": "string"
+        },
         "files": {
           "type": "object",
-          "additionalProperties": {"$ref": "#/$defs/profileFile"}
+          "additionalProperties": {
+            "$ref": "#/$defs/profileFile"
+          }
         }
       }
     },
     "profileDetail": {
       "type": "object",
-      "required": ["owner", "repo", "defaultBranch", "baseRefSha", "profile"],
+      "required": [
+        "owner",
+        "repo",
+        "defaultBranch",
+        "baseRefSha",
+        "profile"
+      ],
       "additionalProperties": false,
       "properties": {
-        "owner": {"type": "string", "minLength": 1},
-        "repo": {"type": "string", "minLength": 1},
-        "defaultBranch": {"type": "string", "minLength": 1},
-        "baseRefSha": {"type": "string", "pattern": "^[0-9a-fA-F]{40}$"},
-        "profile": {"$ref": "#/$defs/profile"}
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "defaultBranch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "baseRefSha": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{40}$"
+        },
+        "profile": {
+          "$ref": "#/$defs/profile"
+        }
       }
     },
     "profileWriteRequest": {
       "type": "object",
-      "required": ["baseRefSha", "files"],
+      "required": [
+        "baseRefSha",
+        "files"
+      ],
       "additionalProperties": false,
       "properties": {
-        "baseRefSha": {"type": "string", "pattern": "^[0-9a-fA-F]{40}$"},
+        "baseRefSha": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{40}$"
+        },
         "files": {
           "type": "object",
           "required": [
@@ -123,42 +257,370 @@
           ],
           "additionalProperties": false,
           "properties": {
-            ".config": {"type": "string"},
-            "profile.env": {"type": "string"},
-            "diy-part1.sh": {"type": "string"},
-            "diy-part2.sh": {"type": "string"},
-            "required-packages.txt": {"type": "string"},
-            "watch-sources.txt": {"type": "string"}
+            ".config": {
+              "type": "string"
+            },
+            "profile.env": {
+              "type": "string"
+            },
+            "diy-part1.sh": {
+              "type": "string"
+            },
+            "diy-part2.sh": {
+              "type": "string"
+            },
+            "required-packages.txt": {
+              "type": "string"
+            },
+            "watch-sources.txt": {
+              "type": "string"
+            }
           }
         }
       }
     },
     "profileWriteResponse": {
       "type": "object",
-      "required": ["branch", "commitSha", "changedFiles", "pullRequest"],
+      "required": [
+        "branch",
+        "commitSha",
+        "changedFiles",
+        "pullRequest"
+      ],
       "additionalProperties": false,
       "properties": {
-        "branch": {"type": "string", "minLength": 1},
-        "commitSha": {"type": "string", "pattern": "^[0-9a-fA-F]{40}$"},
-        "changedFiles": {"type": "array", "items": {"type": "string"}},
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commitSha": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{40}$"
+        },
+        "changedFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "pullRequest": {
           "type": "object",
-          "required": ["number", "url"],
+          "required": [
+            "number",
+            "url"
+          ],
           "additionalProperties": false,
           "properties": {
-            "number": {"type": "integer", "minimum": 1},
-            "url": {"type": "string"}
+            "number": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "url": {
+              "type": "string"
+            }
           }
         }
       }
     },
     "error": {
       "type": "object",
-      "required": ["error"],
+      "required": [
+        "error"
+      ],
       "additionalProperties": false,
       "properties": {
-        "error": {"type": "string", "minLength": 1},
-        "reason": {"type": "string", "minLength": 1}
+        "error": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "buildRun": {
+      "type": "object",
+      "required": [
+        "id",
+        "runNumber",
+        "displayTitle",
+        "status",
+        "conclusion",
+        "event",
+        "headBranch",
+        "headSha",
+        "createdAt",
+        "updatedAt",
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "runNumber": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "displayTitle": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "conclusion": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        },
+        "headBranch": {
+          "type": "string"
+        },
+        "headSha": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      }
+    },
+    "buildTriggerRequest": {
+      "type": "object",
+      "required": [
+        "publishRelease"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "publishRelease": {
+          "type": "boolean"
+        }
+      }
+    },
+    "buildTriggerResponse": {
+      "type": "object",
+      "required": [
+        "accepted",
+        "requestId",
+        "profileId",
+        "publishRelease",
+        "ref"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "const": true
+        },
+        "requestId": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{16}$"
+        },
+        "profileId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "publishRelease": {
+          "type": "boolean"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "buildArtifact": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "sizeBytes",
+        "expired",
+        "createdAt",
+        "expiresAt",
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expired": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "expiresAt": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      }
+    },
+    "buildJob": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "status",
+        "conclusion",
+        "startedAt",
+        "completedAt",
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "conclusion": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "completedAt": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      }
+    },
+    "buildRelease": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tag": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "publishedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tag",
+        "name",
+        "url",
+        "publishedAt"
+      ]
+    },
+    "buildDetail": {
+      "type": "object",
+      "required": [
+        "id",
+        "runNumber",
+        "runAttempt",
+        "displayTitle",
+        "status",
+        "conclusion",
+        "event",
+        "headBranch",
+        "headSha",
+        "createdAt",
+        "updatedAt",
+        "runStartedAt",
+        "url",
+        "summaryUrl",
+        "jobs",
+        "artifacts",
+        "release"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "runNumber": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "runAttempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "displayTitle": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "conclusion": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        },
+        "headBranch": {
+          "type": "string"
+        },
+        "headSha": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "runStartedAt": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "summaryUrl": {
+          "type": "string"
+        },
+        "jobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/buildJob"
+          }
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/buildArtifact"
+          }
+        },
+        "release": {
+          "$ref": "#/$defs/buildRelease"
+        }
       }
     }
   }
