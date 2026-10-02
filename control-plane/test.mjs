@@ -279,6 +279,8 @@ try {
   assert.equal(reposBody.repositories.length, 1);
   assert.equal(reposBody.repositories[0].fullName, "acme/router");
   assert.equal(reposBody.repositories[0].permissions.contents, "read");
+  assert.equal("installationId" in reposBody.repositories[0], false);
+  assert.equal("actions" in reposBody.repositories[0].permissions, false);
 
   const profiles = await fetch(
     base + "/api/v1/repositories/acme/router/profiles",
