@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       apply_github_app_secrets:
-        description: "同步 GitHub App Secret（首次 bootstrap 部署不要勾选）"
+        description: "同步 GitHub App Secret（首次 bootstrap 不勾；已有 Secret 未变更时也无需勾）"
         required: true
         type: boolean
         default: false
@@ -116,7 +116,7 @@ jobs:
           if [ "${{ inputs.apply_github_app_secrets }}" = "true" ]; then
             echo "- 本轮已请求同步 GitHub App Secret。"
           else
-            echo "- 本轮为 bootstrap 模式，不要求 GitHub App Secret。"
-            echo "- 先从 Worker 部署日志 / Cloudflare Dashboard 获取 workers.dev 地址，再创建 GitHub App。"
+            echo "- 本轮未同步 GitHub App Secret；Worker 中已有 Secret 保持不变。"
+            echo "- 如果这是首次 bootstrap 部署，可先获取 workers.dev 地址，再创建 GitHub App。"
           fi
         } >> "$GITHUB_STEP_SUMMARY"
