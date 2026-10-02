@@ -58,6 +58,31 @@ jobs:
           exit 1
         fi
 
+    - name: 检查 GitHub App Secret
+      if: ${{ inputs.apply_github_app_secrets }}
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+
+        for name in GITHUB_APP_CLIENT_ID GITHUB_APP_CLIENT_SECRET GITHUB_APP_SLUG TOKEN_ENCRYPTION_KEY; do
+          if [ -z "${!name:-}" ]; then
+            echo "ERROR: 已要求同步 GitHub App Secret，但缺少 $name" >&2
+            exit 1
+          fi
+        done
+
+        if [ "${#TOKEN_ENCRYPTION_KEY}" -lt 32 ]; then
+          echo "ERROR: TOKEN_ENCRYPTION_KEY 至少需要 32 个字符" >&2
+          exit 1
+        fi
+
+        if [[ ! "$GITHUB_APP_SLUG" =~ ^[A-Za-z0-9-]+$ ]]; then
+          echo "ERROR: GITHUB_APP_SLUG 格式无效" >&2
+          exit 1
+        fi
+
+        echo "GitHub App Secret 基础校验通过。"
+
     - name: 安装 Wrangler
       working-directory: control-plane
       run: |
@@ -89,17 +114,22 @@ jobs:
       run: |
         set -Eeuo pipefail
 
-        for name in GITHUB_APP_CLIENT_ID GITHUB_APP_CLIENT_SECRET GITHUB_APP_SLUG TOKEN_ENCRYPTION_KEY; do
-          if [ -z "${!name:-}" ]; then
-            echo "ERROR: 已要求同步 GitHub App Secret，但缺少 $name" >&2
-            exit 1
-          fi
-        done
+        secret_file="$RUNNER_TEMP/control-plane-secrets.json"
+        trap 'rm -f "$secret_file"' EXIT
 
-        jq -n           --arg client_id "$GITHUB_APP_CLIENT_ID"           --arg client_secret "$GITHUB_APP_CLIENT_SECRET"           --arg slug "$GITHUB_APP_SLUG"           --arg encryption_key "$TOKEN_ENCRYPTION_KEY"           '{GITHUB_APP_CLIENT_ID:$client_id,GITHUB_APP_CLIENT_SECRET:$client_secret,GITHUB_APP_SLUG:$slug,TOKEN_ENCRYPTION_KEY:$encryption_key}'           > "$RUNNER_TEMP/control-plane-secrets.json"
+        jq -n \
+          --arg client_id "$GITHUB_APP_CLIENT_ID" \
+          --arg client_secret "$GITHUB_APP_CLIENT_SECRET" \
+          --arg slug "$GITHUB_APP_SLUG" \
+          --arg encryption_key "$TOKEN_ENCRYPTION_KEY" \
+          '{
+            GITHUB_APP_CLIENT_ID: $client_id,
+            GITHUB_APP_CLIENT_SECRET: $client_secret,
+            GITHUB_APP_SLUG: $slug,
+            TOKEN_ENCRYPTION_KEY: $encryption_key
+          }' > "$secret_file"
 
-        npx wrangler secret bulk "$RUNNER_TEMP/control-plane-secrets.json" --config wrangler.deploy.jsonc
-        rm -f "$RUNNER_TEMP/control-plane-secrets.json"
+        npx wrangler secret bulk "$secret_file" --config wrangler.deploy.jsonc
 
     - name: 部署说明
       if: always()
@@ -114,9 +144,14 @@ jobs:
           fi
           echo
           if [ "${{ inputs.apply_github_app_secrets }}" = "true" ]; then
-            echo "- 本轮已请求同步 GitHub App Secret。"
+            echo "- 本轮已同步 GitHub App Secret。"
+            echo "- GitHub App 推荐最终权限：Metadata read、Contents write、Pull requests write、Actions write。"
+            echo "- 不需要 Administration / Workflows 权限。"
+            echo "- 部署后请访问 /api/v1/health，确认 configured=true，再进行 GitHub 登录。"
           else
             echo "- 本轮未同步 GitHub App Secret；Worker 中已有 Secret 保持不变。"
-            echo "- 如果这是首次 bootstrap 部署，可先获取 workers.dev 地址，再创建 GitHub App。"
+            echo "- 如果这是首次 bootstrap 部署：先获取 workers.dev 地址，再创建 GitHub App，然后补齐四个 Secret 后重新运行并勾选同步。"
           fi
+          echo
+          echo "公共模板的 dashboard/data/control-plane.json 应继续保持 disabled；只有在自己的模板实例完成真实验证后再启用 Pages 入口。"
         } >> "$GITHUB_STEP_SUMMARY"

@@ -10,12 +10,14 @@
   <main class="shell">
     <header>
       <div>
-        <p class="eyebrow">OpenWrt NG · V2.0C</p>
+        <p class="eyebrow">OpenWrt NG · V2</p>
         <h1>Control Plane</h1>
-        <p class="muted">GitHub 登录、Profile 安全编辑，并直接触发 Builder、跟踪运行状态与产物。</p>
+        <p class="muted">登录 GitHub 后管理 Profile、通过 Pull Request 安全保存，并直接触发与跟踪 OpenWrt NG Builder。</p>
       </div>
       <div id="user-box"></div>
     </header>
+
+    <p class="error" id="error" role="alert" aria-live="assertive" hidden></p>
 
     <section class="card" id="login-card">
       <h2>连接 GitHub</h2>
@@ -35,6 +37,7 @@
           <button class="button secondary" id="logout" type="button">退出登录</button>
         </div>
       </div>
+      <p class="muted">仓库能力取决于 GitHub App 当前权限；权限不足时可通过右上角“安装/调整 GitHub App”修正。</p>
       <div id="repositories" class="repo-list"></div>
     </section>
 
@@ -69,7 +72,7 @@
         <h3>变更预览</h3>
         <pre id="diff-preview"></pre>
       </div>
-      <p class="success" id="write-result" hidden></p>
+      <p class="success" id="write-result" aria-live="polite" hidden></p>
     </section>
 
     <section class="card" id="build-card" hidden>
@@ -95,7 +98,7 @@
         <button class="button secondary" id="refresh-builds" type="button">刷新状态</button>
       </div>
 
-      <p class="success" id="build-result" hidden></p>
+      <p class="success" id="build-result" aria-live="polite" hidden></p>
       <div id="build-runs" class="build-list"></div>
 
       <div id="build-detail" class="preview-box" hidden>
@@ -109,7 +112,6 @@
       </div>
     </section>
 
-    <p class="error" id="error" hidden></p>
   </main>
   <script type="module" src="/app.js"></script>
 </body>

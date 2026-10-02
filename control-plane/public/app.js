@@ -38,10 +38,82 @@ const buildState = {
 
 const MAX_BUILD_POLL_ATTEMPTS = 480;
 
+const ERROR_MESSAGES = {
+  control_plane_not_configured:
+    "Control Plane 尚未完成 GitHub App 配置，请先完成部署与 Secret 同步。",
+  authentication_required:
+    "登录状态已失效，请重新使用 GitHub 登录。",
+  csrf_validation_failed:
+    "安全校验失败。请刷新页面后重试，不要从其他站点提交此操作。",
+  invalid_json:
+    "请求内容格式无效，请刷新页面后重试。",
+  invalid_profile_id:
+    "Profile ID 不符合规则，请检查目录名称。",
+  profile_not_found:
+    "该 Profile 不存在、已移动，或当前默认分支中不可用。",
+  repository_changed:
+    "仓库默认分支在编辑期间已经更新。请重新打开 Profile，确认最新内容后再提交。",
+  no_changes:
+    "当前内容与仓库一致，没有需要创建 Pull Request 的变更。",
+  invalid_profile_files:
+    "Profile 文件集合不符合标准结构，已拒绝写入。",
+  profile_file_too_large:
+    "单个 Profile 文件过大，已拒绝提交。",
+  profile_payload_too_large:
+    "本次 Profile 变更总大小过大，已拒绝提交。",
+  github_profile_write_failed:
+    "GitHub 未能完成 Profile 分支 / Pull Request 写入。",
+  github_build_status_failed:
+    "暂时无法从 GitHub 读取 Builder 状态。",
+  github_builder_dispatch_failed:
+    "GitHub 未能启动 Builder，请检查 Actions 权限与 workflow 是否存在。",
+  build_already_active:
+    "这个 Profile 已经有构建在运行，本次不会重复排队。",
+  invalid_build_request:
+    "Builder 请求包含不允许的字段，已拒绝执行。",
+  invalid_publish_release:
+    "Release 开关值无效，请刷新页面后重试。",
+  not_builder_run:
+    "该 Actions Run 不是 OpenWrt NG Builder 运行。",
+  github_oauth_exchange_failed:
+    "GitHub 登录授权交换失败，请重新登录。",
+  github_user_lookup_failed:
+    "GitHub 登录成功，但暂时无法读取用户信息。",
+  internal_error:
+    "Control Plane 发生内部错误，请稍后重试。"
+};
+
+const REASON_MESSAGES = {
+  github_http_401:
+    "GitHub 授权可能已失效，请退出后重新登录。",
+  github_http_403:
+    "GitHub 拒绝了该操作，请检查 GitHub App 是否已授予对应仓库和权限。",
+  github_http_404:
+    "GitHub 未找到目标资源，请确认 App 已安装到该仓库。",
+  github_http_422:
+    "GitHub 拒绝了请求参数，请检查仓库当前状态。",
+  incorrect_client_credentials:
+    "GitHub App Client ID / Client Secret 不正确，请检查 Worker Secret。"
+};
+
+function friendlyError(value = "") {
+  const raw =
+    value && typeof value === "object"
+      ? String(value.message || value.code || "")
+      : String(value || "");
+  if (!raw) return "";
+
+  const [code, reason] = raw.split(" · ", 2);
+  const primary = ERROR_MESSAGES[code] || code;
+  const secondary = reason ? REASON_MESSAGES[reason] || reason : "";
+  return secondary ? primary + " " + secondary : primary;
+}
+
 function showError(message = "") {
   const node = $("error");
-  node.hidden = !message;
-  node.textContent = message;
+  const text = friendlyError(message);
+  node.hidden = !text;
+  node.textContent = text;
 }
 
 function showWriteResult(message = "", url = "") {
@@ -173,11 +245,22 @@ function compactDiff(name, before, after) {
   return lines.join("\n");
 }
 
+function canReadRepo(repo) {
+  return ["read", "write"].includes(repo?.permissions?.contents);
+}
+
 function canWriteRepo(repo) {
   return (
     repo?.permissions?.contents === "write" &&
     repo?.permissions?.pullRequests === "write"
   );
+}
+
+function repositoryCapabilityText(repo) {
+  const read = canReadRepo(repo) ? "Profile 可读取" : "缺少 Contents";
+  const edit = canWriteRepo(repo) ? "可编辑 / PR" : "编辑只读";
+  const build = canRunRepo(repo) ? "Builder 可运行" : "Builder 不可运行";
+  return [read, edit, build].join(" · ");
 }
 
 function canReadActions(repo) {
@@ -640,7 +723,10 @@ async function init() {
       (repo.private ? "Private" : "Public") +
       " · " +
       repo.defaultBranch +
-      " · contents:" +
+      " · " +
+      repositoryCapabilityText(repo);
+    button.title =
+      "contents:" +
       repo.permissions.contents +
       " · pull-requests:" +
       repo.permissions.pullRequests +

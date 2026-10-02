@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   buildControlPlaneUrl,
   containsSensitiveControlPlaneData,
@@ -82,3 +83,29 @@ await assert.rejects(
 );
 
 console.log("Control Plane public-config tests passed.");
+
+
+const publicConfig = JSON.parse(
+  await readFile(
+    new URL("../../dashboard/data/control-plane.json", import.meta.url),
+    "utf8"
+  )
+);
+assert.equal(publicConfig.enabled, false);
+assert.equal(publicConfig.controlPlaneUrl, "");
+assert.equal(containsSensitiveControlPlaneData(publicConfig), false);
+
+const connectHtml = await readFile(
+  new URL("../../dashboard/connect.html", import.meta.url),
+  "utf8"
+);
+assert.match(connectHtml, /当前已完成能力/);
+assert.match(connectHtml, /推荐最终权限/);
+assert.match(connectHtml, /Administration \/ Workflows：不需要/);
+assert.doesNotMatch(connectHtml, /V2 Preview|Roadmap|V2\.0A 权限边界/);
+
+const connectJs = await readFile(
+  new URL("../../dashboard/assets/connect.js", import.meta.url),
+  "utf8"
+);
+assert.match(connectJs, /模板默认关闭/);

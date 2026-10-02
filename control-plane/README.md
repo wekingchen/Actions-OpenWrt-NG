@@ -36,7 +36,8 @@ GitHub App / GitHub API
 - GitHub token 使用 AES-256-GCM 加密后写入 D1。
 - Session 同时具有绝对过期与闲置过期。
 - GitHub user token 临近到期时由 Worker 自动 refresh。
-- V2.0A 只需要 GitHub Repository Metadata read + Contents read。
+- 权限按能力最小化设计：V2.0A 只读需要 Metadata read + Contents read；V2.0B 编辑再增加 Contents write + Pull requests write；V2.0C Builder 再增加 Actions write。
+- 对当前完整 V2 功能的新部署，推荐一次配置最终权限：Metadata read、Contents write、Pull requests write、Actions write；不需要 Administration / Workflows。
 - V2.0B 写入严格限定在 `profiles/<id>/` 的标准文件，默认分支永不由控制面直接修改。
 - V2.0B 使用 Git Database API 原子创建 commit，再创建独立分支与 Pull Request。
 - 所有状态变更请求同时校验精确 Origin 与 `X-OpenWrt-NG-CSRF` 请求头。
@@ -131,10 +132,14 @@ https://openwrt-ng-control-plane.<你的workers子域>.workers.dev
 - Request user authorization during installation：**不要开启**
 - Device Flow：关闭
 - Webhook：关闭
-- Repository permissions：
+- Repository permissions（当前完整 V2 推荐一次配齐）：
   - Metadata：Read-only
-  - Contents：Read-only
-- 安装仓库建议使用 **Only select repositories**
+  - Contents：Read and write
+  - Pull requests：Read and write
+  - Actions：Read and write
+  - Administration：No access
+  - Workflows：No access
+- 安装仓库建议使用 **Only select repositories**，只授权真正需要由控制面管理的仓库
 
 记录：
 
@@ -194,15 +199,17 @@ https://...workers.dev/api/v1/health
 
 ### 7. 真实验证
 
-打开 Worker 首页：
+打开 Worker 首页，建议先用独立测试仓库完成整套验收：
 
 1. 点击“使用 GitHub 登录”。
-2. 登录成功后安装 / 调整 GitHub App。
-3. 只授权目标仓库。
-4. 页面应列出该仓库。
-5. 点击仓库后应读取到 `profiles/*`，例如 `profiles/default`。
+2. 登录成功后安装 / 调整 GitHub App，并只授权目标测试仓库。
+3. 仓库列表应显示 Profile 可读取、可编辑 / PR、Builder 可运行。
+4. 点击仓库与 Profile，确认可以读取标准 `profiles/*` 文件。
+5. 做一次无害编辑，预览差异后创建 Pull Request；确认默认分支没有被直接修改。
+6. 不勾 Release，触发一次 Builder；确认页面能自动关联 Run、持续更新 Job 状态并最终显示 Artifact / Summary。
+7. 验证通过后关闭测试 PR、清理临时分支，再在自己的模板实例启用 Pages Control Plane 入口。
 
-以上五步真实通过后，V2.0A 的端到端链路即验证完成。
+这套验证覆盖当前 V2.0A / V2.0B / V2.0C 的核心链路。首次测试建议关闭 Release，避免测试仓库留下无意义发布物。
 
 ### 8. V2.0B：在线编辑 Profile 并通过 PR 保存
 
@@ -228,16 +235,9 @@ V2.0B 不允许直接写默认分支。编辑流程固定为：
 用户在 GitHub 审核后决定是否合并
 ```
 
-GitHub App 需要把 Repository permissions 调整为：
+如果只部署到 V2.0B，可使用 Metadata read + Contents write + Pull requests write，并保持 Actions No access；当前完整 V2 推荐直接使用前文的最终权限。
 
-- Metadata：Read-only
-- Contents：Read and write
-- Pull requests：Read and write
-- Actions：No access（仅 V2.0B）
-
-进入 V2.0C 后再把 Actions 调整为 **Read and write**。不需要 Administration，也不需要 Workflows 权限
-
-新增权限后，已安装该 App 的账户需要在 GitHub 中批准权限变更后才会生效。为了避免旧 user token 沿用旧权限，批准后建议退出 Control Plane 并重新登录一次。
+如果后续修改 GitHub App 权限，已有安装可能需要重新确认权限变更。修改后建议退出 Control Plane 并重新登录一次，避免旧授权状态造成判断混乱。
 
 V2.0B 只接受以下文件：
 

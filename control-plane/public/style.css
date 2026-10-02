@@ -33,10 +33,11 @@ h2 { margin: 0 0 10px; }
 .repo-list, .profile-list { display: grid; gap: 8px; margin-top: 14px; }
 .repo-item, .profile-item { width: 100%; display: flex; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: inherit; text-align: left; }
 .repo-item, .profile-item { cursor: pointer; font: inherit; }
-.repo-item span, .profile-item code { color: var(--muted); font-size: 12px; }
+.repo-item span, .profile-item code { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 #user-box { display: flex; align-items: center; gap: 8px; }
 #user-box img { border-radius: 50%; }
-.error { padding: 12px; border-radius: 10px; background: rgba(180,35,24,.1); color: #b42318; }
+.error { position: sticky; top: 10px; z-index: 20; margin: 0 0 14px; padding: 12px; border: 1px solid rgba(180,35,24,.2); border-radius: 10px; background: color-mix(in srgb, var(--panel) 86%, #b42318 14%); color: #b42318; box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+.button:focus-visible, .repo-item:focus-visible, .profile-item:focus-visible, .build-item:focus-visible, .file-select:focus-visible, .editor:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 2px; }
 @media (max-width: 620px) {
   header, .heading, .repo-item, .profile-item { align-items: flex-start; flex-direction: column; }
   h1 { font-size: 34px; }
