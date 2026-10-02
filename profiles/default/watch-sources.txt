@@ -1,0 +1,8 @@
+# 可选额外 Git 上游监控。
+# 每行格式：
+# label|git_url|branch_or_tag
+#
+# 示例：
+# packages|https://github.com/openwrt/packages|master
+#
+# SOURCE_REPO / SOURCE_BRANCH 会自动监控，无需重复填写。
