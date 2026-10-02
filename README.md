@@ -4,7 +4,7 @@
 
 项目理念参考 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)：尽量把日常使用保持为“准备一个 `.config`，运行一次 Workflow”。在此基础上，提供更完整的缓存、构建诊断、配置留档、上游追溯、最小权限 Release 和失败恢复能力。
 
-> 当前状态：**V1.2**。Core V1 稳定，V1.1 Workflow Summary 与 V1.2 GitHub Pages Dashboard 均已完成真实验证和主干部署。
+> 当前状态：**V1.3 RC**。Core V1、V1.1 Summary、V1.2 Dashboard 已稳定；V1.3 Profile Wizard 已完成真实 Core 契约验证，等待主干首次 Pages 部署确认。
 
 ## V1 验证状态
 
@@ -211,6 +211,28 @@ Dashboard 展示：
 
 选择一次即可。未启用时 Dashboard workflow 会正常生成 Pages Artifact，但跳过公开部署并在 Summary 给出提示。
 
+## Profile Wizard
+
+V1.3 提供浏览器本地运行的 **Profile Wizard**：
+
+<https://wekingchen.github.io/Actions-OpenWrt-NG/wizard.html>
+
+向导可以：
+
+- 选择常用源码预设，或填写自定义 Git 仓库与分支 / Tag。
+- 上传或粘贴 OpenWrt `.config`。
+- 配置自动追新、Release、固件 Artifact、构建空间和日志策略。
+- 配置 Manifest 必选包与额外 Git 上游。
+- 预览最终 `profile.env` 等文件。
+- 下载标准 `profiles/<id>/` ZIP。
+
+安全边界：
+
+- `.config` 与表单内容只在浏览器本地处理。
+- Wizard 不调用 GitHub API，不持有 Token，也不拥有仓库写权限。
+- 生成 ZIP 已通过真实 `profile.sh validate/export`、Update Checker 和 Manifest 验收器兼容测试。
+- V1.3 只负责生成 Profile；网页直接写仓库、登录 GitHub 与触发构建留给后续 V2 控制面。
+
 ## 构建与诊断
 
 Core 提供：
@@ -372,7 +394,8 @@ scripts/lib/              DIY 可复用函数
 
 ## 创建自己的 Profile
 
-建议复制 `profiles/default/`：
+优先使用 **Profile Wizard** 生成标准 Profile；如果希望手工维护，也可以复制 `profiles/default/`：
+
 
 ```text
 profiles/my-router/

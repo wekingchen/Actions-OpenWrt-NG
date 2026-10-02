@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Profile Wizard · OpenWrt NG</title>
+  <meta name="description" content="Generate an OpenWrt NG Profile locally in your browser">
+  <link rel="stylesheet" href="./assets/style.css">
+</head>
+<body>
+  <div class="page-shell wizard-shell">
+    <header class="site-header wizard-header">
+      <div>
+        <p class="eyebrow">OpenWrt NG · V1.3</p>
+        <h1>Profile Wizard</h1>
+        <p class="subtitle">在浏览器本地生成标准 Profile。你的 .config 不会上传到服务器。</p>
+      </div>
+      <div class="header-actions">
+        <a class="button secondary" href="./">返回 Dashboard</a>
+      </div>
+    </header>
+
+    <main class="wizard-layout">
+      <form class="wizard-form" id="profile-form" novalidate>
+        <section class="wizard-panel">
+          <div class="wizard-step-heading">
+            <span class="step-number">1</span>
+            <div>
+              <p class="section-kicker">Identity</p>
+              <h2>Profile 基本信息</h2>
+            </div>
+          </div>
+
+          <div class="form-grid two-cols">
+            <label class="field">
+              <span>Profile ID</span>
+              <input id="profile-id" name="profileId" value="my-openwrt" required
+                     pattern="[A-Za-z0-9._-]+" autocomplete="off">
+              <small>目录名，只允许字母、数字、点、下划线和短横线。</small>
+            </label>
+
+            <label class="field">
+              <span>显示名称</span>
+              <input id="profile-name" name="profileName" value="My OpenWrt" required autocomplete="off">
+              <small>只用于日志和 Dashboard 展示。</small>
+            </label>
+          </div>
+        </section>
+
+        <section class="wizard-panel">
+          <div class="wizard-step-heading">
+            <span class="step-number">2</span>
+            <div>
+              <p class="section-kicker">Source</p>
+              <h2>OpenWrt 源码</h2>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <label class="field">
+              <span>常用源码预设</span>
+              <select id="source-preset">
+                <option value="lean" selected>Lean LEDE · master</option>
+                <option value="openwrt">OpenWrt · main</option>
+                <option value="immortalwrt">ImmortalWrt · master</option>
+                <option value="custom">自定义</option>
+              </select>
+              <small>选择预设会自动填写仓库和分支，之后仍可手动修改。</small>
+            </label>
+
+            <label class="field">
+              <span>源码仓库</span>
+              <input id="source-repo" name="sourceRepo"
+                     value="https://github.com/coolsnowwolf/lede" required autocomplete="off">
+            </label>
+          </div>
+
+          <div class="form-grid two-cols">
+            <label class="field">
+              <span>分支 / Tag</span>
+              <input id="source-branch" name="sourceBranch" value="master" required autocomplete="off">
+            </label>
+
+            <label class="field">
+              <span>Adapter</span>
+              <select id="adapter" name="adapter">
+                <option value="direct-openwrt" selected>direct-openwrt</option>
+              </select>
+              <small>V1.3 先生成标准源码树 Profile。</small>
+            </label>
+          </div>
+        </section>
+
+        <section class="wizard-panel">
+          <div class="wizard-step-heading">
+            <span class="step-number">3</span>
+            <div>
+              <p class="section-kicker">Config</p>
+              <h2>上传 .config</h2>
+            </div>
+          </div>
+
+          <label class="file-drop" id="config-drop">
+            <input id="config-file" type="file" accept=".config,text/plain">
+            <span class="file-drop-title">选择 .config 文件</span>
+            <span class="file-drop-meta" id="config-file-meta">尚未选择文件</span>
+          </label>
+
+          <div class="config-preview-wrap">
+            <div class="preview-heading">
+              <span>.config 预览</span>
+              <button class="text-button" type="button" id="clear-config">清空</button>
+            </div>
+            <textarea id="config-text" spellcheck="false"
+                      placeholder="也可以直接把 .config 内容粘贴到这里。"></textarea>
+          </div>
+        </section>
+
+        <section class="wizard-panel">
+          <div class="wizard-step-heading">
+            <span class="step-number">4</span>
+            <div>
+              <p class="section-kicker">Behavior</p>
+              <h2>构建行为</h2>
+            </div>
+          </div>
+
+          <div class="toggle-grid">
+            <label class="toggle-row">
+              <span>
+                <strong>自动追新</strong>
+                <small>定期检查源码上游，变化时自动触发 Builder。</small>
+              </span>
+              <input id="auto-update" type="checkbox">
+            </label>
+
+            <label class="toggle-row">
+              <span>
+                <strong>发布 Release</strong>
+                <small>构建成功且产物验收通过后发布 Release。</small>
+              </span>
+              <input id="upload-release" type="checkbox" checked>
+            </label>
+
+            <label class="toggle-row">
+              <span>
+                <strong>上传固件 Artifact</strong>
+                <small>保留本次固件 Artifact。</small>
+              </span>
+              <input id="upload-firmware" type="checkbox" checked>
+            </label>
+
+            <label class="toggle-row">
+              <span>
+                <strong>扩展构建空间</strong>
+                <small>源码或 target 很大时启用；普通 Profile 建议关闭。</small>
+              </span>
+              <input id="maximize-space" type="checkbox">
+            </label>
+
+            <label class="toggle-row">
+              <span>
+                <strong>流式编译日志</strong>
+                <small>实时输出 make 日志；大体量旧 SDK 可关闭。</small>
+              </span>
+              <input id="stream-log" type="checkbox" checked>
+            </label>
+          </div>
+        </section>
+
+        <section class="wizard-panel">
+          <div class="wizard-step-heading">
+            <span class="step-number">5</span>
+            <div>
+              <p class="section-kicker">Validation</p>
+              <h2>可选验收与额外上游</h2>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>必须出现在最终 Manifest 的软件包</span>
+            <textarea id="required-packages" class="compact-textarea" spellcheck="false"
+                      placeholder="每行一个，例如：&#10;luci&#10;curl"></textarea>
+          </label>
+
+          <label class="field">
+            <span>额外 Git 上游监控</span>
+            <textarea id="watch-sources" class="compact-textarea" spellcheck="false"
+                      placeholder="每行：label|git_url|branch_or_tag&#10;例如：packages|https://github.com/openwrt/packages|master"></textarea>
+          </label>
+        </section>
+
+        <section class="wizard-actions-panel">
+          <div>
+            <p class="section-kicker">Generate</p>
+            <h2>生成标准 Profile</h2>
+            <p class="muted">下载 ZIP 后，在仓库根目录解压；然后到 Actions → OpenWrt NG Builder，用这个 Profile ID 开始第一次构建。</p>
+          </div>
+          <div class="wizard-actions">
+            <button class="button secondary" type="button" id="preview-profile">预览文件</button>
+            <button class="button" type="submit">下载 Profile ZIP</button>
+          </div>
+          <p class="form-error" id="form-error" role="alert" hidden></p>
+        </section>
+      </form>
+
+      <aside class="wizard-preview" aria-label="Generated Profile Preview">
+        <div class="sticky-preview">
+          <div class="preview-heading">
+            <div>
+              <p class="section-kicker">Preview</p>
+              <h2>生成结果</h2>
+            </div>
+            <span class="status-pill neutral" id="wizard-state">待生成</span>
+          </div>
+
+          <div class="generated-tree" id="generated-tree">
+            profiles/my-openwrt/<br>
+            ├── profile.env<br>
+            ├── .config<br>
+            ├── diy-part1.sh<br>
+            ├── diy-part2.sh<br>
+            ├── required-packages.txt<br>
+            └── watch-sources.txt
+          </div>
+
+          <div class="preview-tabs" id="preview-tabs"></div>
+          <pre class="generated-code" id="generated-code">填写左侧表单后点击“预览文件”。</pre>
+
+          <div class="privacy-note">
+            <strong>本地处理</strong>
+            <p>.config 与表单内容只在当前浏览器内处理。向导不会调用 GitHub API，也不会上传文件。</p>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer>
+      <span>Profile Wizard · V1.3</span>
+      <span>生成器不拥有仓库写权限。</span>
+    </footer>
+  </div>
+
+  <script type="module" src="./assets/wizard.js"></script>
+</body>
+</html>
