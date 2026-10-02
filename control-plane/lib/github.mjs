@@ -437,7 +437,12 @@ export class GitHubAppClient {
     return runs
       .filter((run) => {
         const title = String(run.display_title || run.name || "");
-        if (profileId && !title.startsWith(`Build · ${profileId}`)) return false;
+        if (profileId) {
+          const prefix = `Build · ${profileId}`;
+          if (title !== prefix && !title.startsWith(prefix + " · ")) {
+            return false;
+          }
+        }
         if (requestId && !title.includes(`cp:${requestId}`)) return false;
         return true;
       })
@@ -462,9 +467,14 @@ export class GitHubAppClient {
       throw new BuildControlError("invalid_profile_id", 400);
     }
     if (
-      payload.publishRelease !== undefined &&
-      typeof payload.publishRelease !== "boolean"
+      !payload ||
+      typeof payload !== "object" ||
+      Array.isArray(payload) ||
+      Object.keys(payload).some((key) => key !== "publishRelease")
     ) {
+      throw new BuildControlError("invalid_build_request", 400);
+    }
+    if (typeof payload.publishRelease !== "boolean") {
       throw new BuildControlError("invalid_publish_release", 400);
     }
 
