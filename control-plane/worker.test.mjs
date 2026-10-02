@@ -185,6 +185,43 @@ assert.deepEqual(await csrfCallback.json(), {
   error: "missing_oauth_browser_binding"
 });
 
+
+const failingStore = new MemoryStore();
+const failingGithub = {
+  ...github,
+  async exchangeCode() {
+    const error = new Error("GitHub request failed");
+    error.githubError = "incorrect_client_credentials";
+    throw error;
+  }
+};
+
+const failingStart = await handleControlPlaneRequest(
+  new Request("https://worker.example/api/v1/auth/start?return_to=/"),
+  configuredEnv,
+  { store: failingStore, github: failingGithub }
+);
+const failingLocation = new URL(failingStart.headers.get("location"));
+const failingState = failingLocation.searchParams.get("state");
+const failingOAuthCookie = failingStart.headers
+  .get("set-cookie")
+  .split(";", 1)[0];
+
+const failingCallback = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/auth/callback?code=test-code&state=" +
+      encodeURIComponent(failingState),
+    { headers: { Cookie: failingOAuthCookie } }
+  ),
+  configuredEnv,
+  { store: failingStore, github: failingGithub }
+);
+assert.equal(failingCallback.status, 502);
+assert.deepEqual(await failingCallback.json(), {
+  error: "github_oauth_exchange_failed",
+  reason: "incorrect_client_credentials"
+});
+
 const start = await handleControlPlaneRequest(
   new Request("https://worker.example/api/v1/auth/start?return_to=/"),
   configuredEnv,
