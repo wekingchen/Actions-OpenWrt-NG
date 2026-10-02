@@ -65,9 +65,13 @@ jobs:
         bash -n "$RUNNER_TEMP/wizard-profile/profiles/test-profile/diy-part2.sh"
 
         cp -a "$RUNNER_TEMP/wizard-profile/profiles/test-profile" profiles/
-        bash scripts/profile.sh test-profile "$RUNNER_TEMP/generated-profile.env"
-        grep -F "PROFILE_ID='test-profile'" "$RUNNER_TEMP/generated-profile.env"
-        grep -F "AUTO_UPDATE='true'" "$RUNNER_TEMP/generated-profile.env"
+        bash scripts/profile.sh validate test-profile
+        : > "$RUNNER_TEMP/generated-profile.env"
+        GITHUB_ENV="$RUNNER_TEMP/generated-profile.env" \
+          bash scripts/profile.sh export test-profile
+        grep -Fx "PROFILE_ID=test-profile" "$RUNNER_TEMP/generated-profile.env"
+        grep -Fx "AUTO_UPDATE=true" "$RUNNER_TEMP/generated-profile.env"
+        grep -Fx "UPLOAD_RELEASE=true" "$RUNNER_TEMP/generated-profile.env"
         rm -rf profiles/test-profile
 
         git diff --check
