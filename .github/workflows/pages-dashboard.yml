@@ -10,6 +10,12 @@ on:
       - "scripts/dashboard/**"
       - "profiles/**"
       - ".github/workflows/pages-dashboard.yml"
+  pull_request:
+    paths:
+      - "dashboard/**"
+      - "scripts/dashboard/**"
+      - "profiles/**"
+      - ".github/workflows/pages-dashboard.yml"
   workflow_run:
     workflows:
       - "OpenWrt NG Builder"
