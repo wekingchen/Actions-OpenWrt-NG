@@ -79,7 +79,7 @@ const ERROR_MESSAGES = {
   repository_head_unavailable:
     "暂时无法读取仓库默认分支的最新提交，请稍后重试。",
   repository_changed:
-    "仓库默认分支在编辑期间已经更新。请重新打开 Profile，确认最新内容后再提交。",
+    "仓库默认分支在操作期间已经更新。请重新加载或重新预览，确认最新状态后再提交。",
   no_changes:
     "当前内容与仓库一致，没有需要创建 Pull Request 的变更。",
   invalid_profile_files:
