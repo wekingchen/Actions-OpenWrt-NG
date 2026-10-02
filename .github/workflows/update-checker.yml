@@ -150,6 +150,47 @@ jobs:
         print("需要检查的 Profile：", [item["profile"] for item in include])
         PY
 
+    - name: 生成检查计划 Summary
+      if: always() && !cancelled()
+      env:
+        HAS_PROFILES: ${{ steps.discover.outputs.has_profiles }}
+        MATRIX_JSON: ${{ steps.discover.outputs.matrix }}
+        REQUESTED_PROFILE: ${{ inputs.profile }}
+      run: |
+        set -Eeuo pipefail
+
+        profiles="$(
+          python3 - <<'PY'
+        import json
+        import os
+
+        raw = os.environ.get("MATRIX_JSON", "")
+        try:
+            data = json.loads(raw)
+        except Exception:
+            print("解析失败")
+            raise SystemExit(0)
+
+        names = [
+            item.get("profile", "")
+            for item in data.get("include", [])
+            if item.get("profile") and item.get("profile") != "__none__"
+        ]
+        print(", ".join(names) if names else "无")
+        PY
+        )"
+
+        {
+          echo "## OpenWrt NG · 更新检查计划"
+          echo
+          echo "| 项目 | 当前值 |"
+          echo "|---|---|"
+          echo "| 触发方式 | $GITHUB_EVENT_NAME |"
+          echo "| 指定 Profile | ${REQUESTED_PROFILE:-全部已启用 Profile} |"
+          echo "| 本轮需要检查 | $profiles |"
+          echo "| 有可检查 Profile | ${HAS_PROFILES:-unknown} |"
+        } >> "$GITHUB_STEP_SUMMARY"
+
   check:
     name: 检查上游 · ${{ matrix.profile }}
     needs: discover
@@ -238,3 +279,21 @@ jobs:
       if: steps.state-cache.outputs.cache-hit == 'true' && inputs.force != true
       run: |
         echo "上游状态没有变化，本轮不触发构建。"
+
+    - name: 生成更新检查 Summary
+      if: always() && !cancelled()
+      env:
+        PROFILE_ID: ${{ matrix.profile }}
+        UPDATE_HASH: ${{ matrix.hash }}
+        STATE_CACHE_HIT: ${{ steps.state-cache.outputs.cache-hit }}
+        FORCE_UPDATE: ${{ inputs.force }}
+      run: |
+        if [ -f scripts/write-summary.sh ]; then
+          bash scripts/write-summary.sh update || true
+        else
+          {
+            echo "## OpenWrt NG · 上游更新检查"
+            echo
+            echo "Summary 渲染器不可用，请查看 Job 日志。"
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
