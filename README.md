@@ -4,6 +4,8 @@
 
 项目理念参考 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)：尽量把日常使用保持为“准备一个 `.config`，运行一次 Workflow”。在此基础上，提供更完整的缓存、构建诊断、配置留档、上游追溯、最小权限 Release 和失败恢复能力。
 
+> 当前状态：**V1 RC**。通用 Core 已完成真实构建验证；最终 V1 验收将同时验证 Update Checker → repository dispatch → Builder → Release 主链。
+
 ## 适用范围
 
 适用于常见 OpenWrt / Lean / ImmortalWrt 类源码树，也允许通过 Adapter 和 Profile Hook 适配非标准源码准备流程。
@@ -271,11 +273,21 @@ luci|https://github.com/openwrt/luci|master
 ## 目录结构
 
 ```text
-.github/workflows/       GitHub Actions
-adapters/                源码准备适配层
-profiles/                构建 Profile
-scripts/                 通用构建工具
-scripts/lib/             DIY 可复用函数
+.github/workflows/
+├── build-openwrt.yml     主构建 / Release / cleanup
+├── update-checker.yml    通用 Git 上游更新检查
+└── release-existing.yml Build 成功后的 Release 恢复
+adapters/                 源码准备适配层
+profiles/
+└── default/
+    ├── profile.env
+    ├── .config
+    ├── diy-part1.sh
+    ├── diy-part2.sh
+    ├── required-packages.txt
+    └── watch-sources.txt
+scripts/                  通用构建与追溯工具
+scripts/lib/              DIY 可复用函数
 ```
 
 ## 创建自己的 Profile
