@@ -9,6 +9,7 @@ export class ControlPlaneStore {
       PRAGMA foreign_keys = ON;
       CREATE TABLE IF NOT EXISTS oauth_states (
         state_hash TEXT PRIMARY KEY,
+        browser_hash TEXT NOT NULL,
         verifier_cipher TEXT NOT NULL,
         return_to TEXT NOT NULL,
         expires_at INTEGER NOT NULL
@@ -43,13 +44,20 @@ export class ControlPlaneStore {
     this.db.prepare("DELETE FROM sessions WHERE session_expires_at <= ?").run(now);
   }
 
-  createOAuthState({ stateHash, verifier, returnTo, expiresAt }) {
+  createOAuthState({
+    stateHash,
+    browserHash,
+    verifier,
+    returnTo,
+    expiresAt
+  }) {
     this.db.prepare(`
       INSERT OR REPLACE INTO oauth_states(
-        state_hash, verifier_cipher, return_to, expires_at
-      ) VALUES (?, ?, ?, ?)
+        state_hash, browser_hash, verifier_cipher, return_to, expires_at
+      ) VALUES (?, ?, ?, ?, ?)
     `).run(
       stateHash,
+      browserHash,
       encryptString(verifier, this.encryptionSecret),
       returnTo,
       expiresAt
@@ -58,7 +66,7 @@ export class ControlPlaneStore {
 
   consumeOAuthState(stateHash, now = Date.now()) {
     const row = this.db.prepare(`
-      SELECT state_hash, verifier_cipher, return_to, expires_at
+      SELECT state_hash, browser_hash, verifier_cipher, return_to, expires_at
       FROM oauth_states
       WHERE state_hash = ?
     `).get(stateHash);
@@ -67,6 +75,7 @@ export class ControlPlaneStore {
 
     if (!row || row.expires_at <= now) return null;
     return {
+      browserHash: row.browser_hash,
       verifier: decryptString(row.verifier_cipher, this.encryptionSecret),
       returnTo: row.return_to,
       expiresAt: row.expires_at
@@ -105,7 +114,7 @@ export class ControlPlaneStore {
     );
   }
 
-  getSession(sessionHash, now = Date.now()) {
+  getSession(sessionHash, now = Date.now(), idleTtlMs = 0) {
     const row = this.db.prepare(`
       SELECT *
       FROM sessions
@@ -113,7 +122,9 @@ export class ControlPlaneStore {
     `).get(sessionHash);
 
     if (!row) return null;
-    if (row.session_expires_at <= now) {
+    const idleExpired =
+      idleTtlMs > 0 && row.last_seen + idleTtlMs <= now;
+    if (row.session_expires_at <= now || idleExpired) {
       this.deleteSession(sessionHash);
       return null;
     }
