@@ -356,7 +356,8 @@ const reposBody = await repos.json();
 assert.equal(reposBody.repositories[0].fullName, "acme/router");
 assert.equal("installationId" in reposBody.repositories[0], false);
 assert.deepEqual(reposBody.repositories[0].permissions, {
-  contents: "read"
+  contents: "write",
+  pullRequests: "write"
 });
 
 const profiles = await handleControlPlaneRequest(
