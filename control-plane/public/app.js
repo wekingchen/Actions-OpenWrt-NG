@@ -395,6 +395,45 @@ function repositoryCapabilityText(repo) {
   return [read, edit, build].join(" · ");
 }
 
+function setMetric(id, value, captionId, caption) {
+  const valueNode = $(id);
+  const captionNode = $(captionId);
+  if (valueNode) valueNode.textContent = value;
+  if (captionNode) captionNode.textContent = caption;
+}
+
+function updateRepositoryOverview(repo) {
+  const capability = canWriteRepo(repo) && canRunRepo(repo)
+    ? "完整"
+    : canReadRepo(repo)
+      ? "受限"
+      : "不可用";
+  setMetric(
+    "metric-capability",
+    capability,
+    "metric-capability-caption",
+    repositoryCapabilityText(repo)
+  );
+}
+
+function updateBuildOverview(run) {
+  if (!run) {
+    setMetric(
+      "metric-build-status",
+      "暂无",
+      "metric-build-caption",
+      "当前 Profile 没有运行记录"
+    );
+    return;
+  }
+  setMetric(
+    "metric-build-status",
+    buildStatusLabel(run),
+    "metric-build-caption",
+    `#${run.runNumber} · ${formatTime(run.updatedAt || run.createdAt)}`
+  );
+}
+
 function canReadActions(repo) {
   return ["read", "write"].includes(repo?.permissions?.actions);
 }
@@ -459,6 +498,7 @@ async function loadBuildDetail(runId) {
   );
   const run = data.run;
   buildState.activeRunId = run.id;
+  updateBuildOverview(run);
 
   $("build-detail").hidden = false;
   $("build-detail-title").textContent =
@@ -626,6 +666,7 @@ async function loadBuildRuns(options = {}) {
   root.replaceChildren();
 
   if (!data.runs.length) {
+    updateBuildOverview(null);
     const empty = document.createElement("p");
     empty.className = "muted";
     empty.textContent = requestId
@@ -665,6 +706,7 @@ async function loadBuildRuns(options = {}) {
   }
 
   const first = data.runs[0];
+  updateBuildOverview(first);
   if (requestId) {
     buildState.activeRunId = first.id;
     await pollActiveBuild();
@@ -785,12 +827,26 @@ async function loadProfiles(repo) {
     `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles`
   );
   $("profile-card").hidden = false;
-  $("profile-title").textContent = repo.fullName + " · Profiles";
+  $("profile-title").textContent = repo.fullName;
+  setMetric(
+    "metric-profile-count",
+    String(data.profiles.length),
+    "metric-profile-caption",
+    data.profiles.length
+      ? `${repo.name} 中可用的标准 Profile`
+      : "当前仓库没有可用 Profile"
+  );
+  updateRepositoryOverview(repo);
+
   const root = $("profiles");
   root.textContent = "";
 
   if (!data.profiles.length) {
-    root.textContent = "仓库中没有 profiles/ 目录或没有可用 Profile。";
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.innerHTML =
+      "<strong>还没有 Profile</strong><span>可以从右上角创建第一套标准构建配置。</span>";
+    root.appendChild(empty);
     return;
   }
 
@@ -798,14 +854,35 @@ async function loadProfiles(repo) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "profile-item";
+
+    const leading = document.createElement("span");
+    leading.className = "list-leading";
+    const icon = document.createElement("span");
+    icon.className = "list-icon";
+    icon.textContent = "◇";
+    const copy = document.createElement("span");
+    copy.className = "list-copy";
     const strong = document.createElement("strong");
     strong.textContent = profile.id;
-    const code = document.createElement("code");
-    code.textContent = profile.path;
-    button.append(strong, code);
-    button.addEventListener("click", () =>
-      openProfile(repo, profile.id).catch((error) => showError(error))
-    );
+    const meta = document.createElement("small");
+    meta.textContent = profile.path;
+    copy.append(strong, meta);
+    leading.append(icon, copy);
+
+    const action = document.createElement("span");
+    action.className = "list-action";
+    action.textContent = "打开 →";
+
+    button.append(leading, action);
+    button.addEventListener("click", () => {
+      for (const item of root.querySelectorAll(".profile-item")) {
+        item.classList.remove("selected");
+        item.removeAttribute("aria-current");
+      }
+      button.classList.add("selected");
+      button.setAttribute("aria-current", "true");
+      openProfile(repo, profile.id).catch((error) => showError(error));
+    });
     root.appendChild(button);
   }
 }
@@ -852,19 +929,46 @@ async function init() {
   const root = $("repositories");
   root.textContent = "";
 
+  setMetric(
+    "metric-repo-count",
+    String(data.repositories.length),
+    "metric-repo-caption",
+    data.repositories.length
+      ? "GitHub App 当前可访问"
+      : "尚未授权任何仓库"
+  );
+
   for (const repo of data.repositories) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "repo-item";
+
+    const leading = document.createElement("span");
+    leading.className = "list-leading";
+    const icon = document.createElement("span");
+    icon.className = "list-icon repo-icon";
+    icon.textContent = "◫";
+    const copy = document.createElement("span");
+    copy.className = "list-copy";
     const title = document.createElement("strong");
     title.textContent = repo.fullName;
-    const meta = document.createElement("span");
+    const meta = document.createElement("small");
     meta.textContent =
       (repo.private ? "Private" : "Public") +
       " · " +
       repo.defaultBranch +
       " · " +
       repositoryCapabilityText(repo);
+    copy.append(title, meta);
+    leading.append(icon, copy);
+
+    const badge = document.createElement("span");
+    badge.className =
+      "repo-capability " +
+      (canWriteRepo(repo) && canRunRepo(repo) ? "ready" : "limited");
+    badge.textContent =
+      canWriteRepo(repo) && canRunRepo(repo) ? "完整能力" : "权限受限";
+
     button.title =
       "contents:" +
       repo.permissions.contents +
@@ -872,17 +976,36 @@ async function init() {
       repo.permissions.pullRequests +
       " · actions:" +
       repo.permissions.actions;
-    button.append(title, meta);
-    button.addEventListener("click", () =>
-      loadProfiles(repo).catch((error) => showError(error))
-    );
+    button.append(leading, badge);
+    button.addEventListener("click", () => {
+      for (const item of root.querySelectorAll(".repo-item")) {
+        item.classList.remove("selected");
+        item.removeAttribute("aria-current");
+      }
+      button.classList.add("selected");
+      button.setAttribute("aria-current", "true");
+      loadProfiles(repo).catch((error) => showError(error));
+    });
     root.appendChild(button);
   }
 
   installLink.hidden = false;
   if (!data.repositories.length) {
-    root.textContent = "当前 GitHub App 安装范围内没有可访问仓库。";
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.innerHTML =
+      "<strong>还没有可访问仓库</strong><span>调整 GitHub App 安装范围后再刷新页面。</span>";
+    root.appendChild(empty);
   }
+}
+
+for (const item of document.querySelectorAll(".sidebar-nav .nav-item")) {
+  item.addEventListener("click", () => {
+    for (const nav of document.querySelectorAll(".sidebar-nav .nav-item")) {
+      nav.classList.remove("active");
+    }
+    item.classList.add("active");
+  });
 }
 
 $("new-profile-open").addEventListener("click", openNewProfileForm);

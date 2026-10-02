@@ -3,236 +3,415 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a9f6e">
   <title>OpenWrt NG Control Plane</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <main class="shell">
-    <header>
-      <div>
-        <p class="eyebrow">OpenWrt NG · V2</p>
-        <h1>Control Plane</h1>
-        <p class="muted">登录 GitHub 后管理 Profile、通过 Pull Request 安全保存，并直接触发与跟踪 OpenWrt NG Builder。</p>
-      </div>
-      <div id="user-box"></div>
-    </header>
-
-    <p class="error" id="error" role="alert" aria-live="assertive" hidden></p>
-
-    <section class="card" id="login-card">
-      <h2>连接 GitHub</h2>
-      <p class="muted">授权信息只由 Control Plane 保存；浏览器不会获得 GitHub access token。</p>
-      <p class="muted" id="setup-status">正在检查 GitHub App 配置…</p>
-      <a class="button" id="login-action" href="/api/v1/auth/start?return_to=/" hidden>使用 GitHub 登录</a>
-    </section>
-
-    <section class="card" id="repo-card" hidden>
-      <div class="heading">
-        <div>
-          <p class="eyebrow">Repositories</p>
-          <h2>已授权仓库</h2>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
         </div>
-        <div class="header-actions">
-          <a class="button secondary" id="install-app" href="#" hidden>安装/调整 GitHub App</a>
-          <button class="button secondary" id="logout" type="button">退出登录</button>
+        <div class="brand-copy">
+          <strong>OpenWrt NG</strong>
+          <small>Control Plane</small>
         </div>
       </div>
-      <p class="muted">仓库能力取决于 GitHub App 当前权限；权限不足时可通过右上角“安装/调整 GitHub App”修正。</p>
-      <div id="repositories" class="repo-list"></div>
-    </section>
 
-    <section class="card" id="profile-card" hidden>
-      <div class="heading">
-        <div>
-          <p class="eyebrow">Profiles</p>
-          <h2 id="profile-title">Profiles</h2>
-        </div>
-        <button class="button secondary" id="new-profile-open" type="button">新建 Profile</button>
+      <nav class="sidebar-nav" aria-label="主导航">
+        <a class="nav-item active" href="#overview">
+          <span class="nav-icon" aria-hidden="true">⌂</span>
+          <span>概览</span>
+        </a>
+        <a class="nav-item" href="#repo-card">
+          <span class="nav-icon" aria-hidden="true">◫</span>
+          <span>仓库</span>
+        </a>
+        <a class="nav-item" href="#profile-card">
+          <span class="nav-icon" aria-hidden="true">◇</span>
+          <span>Profiles</span>
+        </a>
+        <a class="nav-item" href="#build-card">
+          <span class="nav-icon" aria-hidden="true">▶</span>
+          <span>Builder</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+
+      <div class="sidebar-info">
+        <div class="sidebar-orb" aria-hidden="true"></div>
+        <p>安全地构建、管理并交付你的 OpenWrt 固件。</p>
+        <span>V2 Control Plane</span>
       </div>
-      <div id="profiles" class="profile-list"></div>
-    </section>
+    </aside>
 
-    <section class="card" id="new-profile-card" hidden>
-      <div class="heading">
-        <div>
-          <p class="eyebrow">New Profile</p>
-          <h2 id="new-profile-title">新建 Profile</h2>
-          <p class="muted">填写结构化参数后由服务端生成固定的 6 个标准文件；不会接受任意仓库路径，也不会直接修改默认分支。</p>
-        </div>
-        <button class="button secondary" id="new-profile-close" type="button">关闭</button>
-      </div>
-
-      <form id="new-profile-form" class="profile-create-form" novalidate>
-        <div class="form-grid two-cols">
-          <label class="field">
-            <span>Profile ID</span>
-            <input id="new-profile-id" maxlength="64" required autocomplete="off"
-                   pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" value="my-openwrt">
-            <small>目录名；以字母或数字开头，仅允许字母、数字、点、下划线和短横线。</small>
-          </label>
-
-          <label class="field">
-            <span>显示名称</span>
-            <input id="new-profile-name" maxlength="200" required autocomplete="off" value="My OpenWrt">
-            <small>用于 Actions 日志和 Dashboard 展示。</small>
-          </label>
+    <div class="app-main">
+      <header class="topbar">
+        <div class="topbar-title">
+          <p class="eyebrow">OpenWrt NG · Control Plane</p>
+          <h1>构建控制台</h1>
         </div>
 
-        <label class="field">
-          <span>常用源码预设</span>
-          <select id="new-source-preset">
-            <option value="lean" selected>Lean LEDE · master</option>
-            <option value="openwrt">OpenWrt · main</option>
-            <option value="immortalwrt">ImmortalWrt · master</option>
-            <option value="custom">自定义</option>
-          </select>
-        </label>
-
-        <div class="form-grid two-cols">
-          <label class="field">
-            <span>源码仓库</span>
-            <input id="new-source-repo" required autocomplete="off"
-                   value="https://github.com/coolsnowwolf/lede">
-          </label>
-          <label class="field">
-            <span>分支 / Tag</span>
-            <input id="new-source-branch" required autocomplete="off" value="master">
-          </label>
+        <div class="topbar-actions">
+          <div class="connection-badge">
+            <span class="status-dot"></span>
+            <span>Control Plane</span>
+          </div>
+          <div id="user-box" class="user-box"></div>
         </div>
+      </header>
 
-        <label class="field">
-          <span>Adapter</span>
-          <select id="new-adapter">
-            <option value="direct-openwrt" selected>direct-openwrt</option>
-          </select>
-        </label>
+      <main class="workspace">
+        <p class="error" id="error" role="alert" aria-live="assertive" hidden></p>
 
-        <label class="field">
-          <span>OpenWrt .config</span>
-          <input id="new-config-file" type="file" accept=".config,text/plain">
-          <textarea id="new-config-text" class="editor create-config-editor" spellcheck="false"
-                    placeholder="选择 .config 文件，或直接粘贴内容。"></textarea>
-          <small>预览时内容会发送到你自己的 Control Plane 做服务端校验；预览不会写入 GitHub。</small>
-        </label>
+        <section class="hero" id="overview">
+          <div class="hero-copy">
+            <span class="hero-kicker">BUILD · MANAGE · AUTOMATE</span>
+            <h2>让 OpenWrt 构建真正变得可管理。</h2>
+            <p>Profile、Pull Request、Builder、Artifact 与 Release 都在同一个控制面完成。</p>
+          </div>
+          <div class="hero-visual" aria-hidden="true">
+            <div class="signal signal-a"></div>
+            <div class="signal signal-b"></div>
+            <div class="signal signal-c"></div>
+            <div class="hero-chip">NG</div>
+          </div>
+        </section>
 
-        <div class="toggle-grid">
-          <label class="check-row compact-check">
-            <input id="new-auto-update" type="checkbox">
-            <span><strong>自动追新</strong><small>上游变化时自动触发 Builder。</small></span>
-          </label>
-          <label class="check-row compact-check">
-            <input id="new-upload-release" type="checkbox" checked>
-            <span><strong>发布 Release</strong><small>构建成功后允许发布。</small></span>
-          </label>
-          <label class="check-row compact-check">
-            <input id="new-upload-firmware" type="checkbox" checked>
-            <span><strong>上传固件 Artifact</strong><small>保留固件产物。</small></span>
-          </label>
-          <label class="check-row compact-check">
-            <input id="new-maximize-space" type="checkbox">
-            <span><strong>扩展构建空间</strong><small>大型源码需要时开启。</small></span>
-          </label>
-          <label class="check-row compact-check">
-            <input id="new-stream-log" type="checkbox" checked>
-            <span><strong>流式编译日志</strong><small>实时输出 make 日志。</small></span>
-          </label>
-        </div>
+        <section class="metrics-grid" aria-label="系统概览">
+          <article class="metric-card">
+            <div class="metric-icon mint">◫</div>
+            <div>
+              <span class="metric-label">已授权仓库</span>
+              <strong class="metric-value" id="metric-repo-count">—</strong>
+              <small id="metric-repo-caption">等待 GitHub 连接</small>
+            </div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-icon blue">◇</div>
+            <div>
+              <span class="metric-label">Profiles</span>
+              <strong class="metric-value" id="metric-profile-count">—</strong>
+              <small id="metric-profile-caption">选择仓库后统计</small>
+            </div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-icon violet">↗</div>
+            <div>
+              <span class="metric-label">最近构建</span>
+              <strong class="metric-value metric-value-text" id="metric-build-status">—</strong>
+              <small id="metric-build-caption">暂无运行状态</small>
+            </div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-icon amber">✓</div>
+            <div>
+              <span class="metric-label">仓库能力</span>
+              <strong class="metric-value metric-value-text" id="metric-capability">—</strong>
+              <small id="metric-capability-caption">读取权限后展示</small>
+            </div>
+          </article>
+        </section>
 
-        <div class="form-grid two-cols">
-          <label class="field">
-            <span>Manifest 必选软件包</span>
-            <textarea id="new-required-packages" class="compact-input" spellcheck="false"
-                      placeholder="每行一个，例如：&#10;luci&#10;curl"></textarea>
-          </label>
-          <label class="field">
-            <span>额外 Git 上游监控</span>
-            <textarea id="new-watch-sources" class="compact-input" spellcheck="false"
-                      placeholder="label|git_url|branch_or_tag"></textarea>
-          </label>
-        </div>
+        <section class="login-panel" id="login-card">
+          <div class="login-visual">
+            <div class="login-logo">
+              <div class="brand-mark large" aria-hidden="true">
+                <span></span><span></span><span></span><span></span>
+              </div>
+            </div>
+          </div>
+          <div class="login-content">
+            <p class="eyebrow">Secure Connection</p>
+            <h2>连接你的 GitHub</h2>
+            <p class="muted">授权信息仅保存在 Control Plane 服务端；浏览器不会获得 GitHub access token。</p>
+            <p class="setup-status" id="setup-status">正在检查 GitHub App 配置…</p>
+            <a class="button primary large-button" id="login-action" href="/api/v1/auth/start?return_to=/" hidden>
+              使用 GitHub 登录
+            </a>
+          </div>
+        </section>
 
-        <div class="editor-actions">
-          <button class="button secondary" id="new-profile-preview" type="button">预览标准文件</button>
-          <button class="button" id="new-profile-create" type="submit" disabled>创建分支并发起 PR</button>
-        </div>
-      </form>
+        <section class="panel" id="repo-card" hidden>
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Repositories</p>
+              <h2>已授权仓库</h2>
+              <p class="panel-description">选择一个仓库进入 Profile 与 Builder 工作区。</p>
+            </div>
+            <div class="header-actions">
+              <a class="button ghost" id="install-app" href="#" hidden>调整 GitHub App</a>
+              <button class="button ghost" id="logout" type="button">退出登录</button>
+            </div>
+          </div>
+          <div id="repositories" class="repo-list"></div>
+        </section>
 
-      <div id="new-profile-preview-card" class="preview-box" hidden>
-        <div class="heading">
-          <h3>标准 Profile 预览</h3>
-          <select id="new-profile-preview-file" class="file-select preview-file-select"></select>
-        </div>
-        <pre id="new-profile-preview-content"></pre>
-      </div>
-      <p class="success" id="new-profile-result" aria-live="polite" hidden></p>
-    </section>
+        <section class="content-grid">
+          <div class="content-primary">
+            <section class="panel" id="profile-card" hidden>
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Profiles</p>
+                  <h2 id="profile-title">构建配置</h2>
+                  <p class="panel-description">选择已有 Profile，或创建一套新的标准配置。</p>
+                </div>
+                <button class="button primary" id="new-profile-open" type="button">
+                  <span class="button-plus">＋</span> 新建 Profile
+                </button>
+              </div>
+              <div id="profiles" class="profile-list"></div>
+            </section>
 
-    <section class="card" id="editor-card" hidden>
-      <div class="heading">
-        <div>
-          <p class="eyebrow">Profile Editor</p>
-          <h2 id="editor-title">编辑 Profile</h2>
-          <p class="muted" id="editor-meta"></p>
-        </div>
-        <span class="permission-pill" id="write-permission"></span>
-      </div>
+            <section class="panel create-panel" id="new-profile-card" hidden>
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">New Profile</p>
+                  <h2 id="new-profile-title">新建 Profile</h2>
+                  <p class="panel-description">服务端生成固定 6 个标准文件，并通过独立分支 + Pull Request 安全写入。</p>
+                </div>
+                <button class="icon-button" id="new-profile-close" type="button" aria-label="关闭">×</button>
+              </div>
 
-      <label class="field-label" for="file-select">文件</label>
-      <select id="file-select" class="file-select"></select>
+              <form id="new-profile-form" class="profile-create-form" novalidate>
+                <div class="form-section">
+                  <div class="form-section-title">
+                    <span>01</span>
+                    <div><strong>基础信息</strong><small>定义 Profile 的身份与源码来源</small></div>
+                  </div>
+                  <div class="form-grid two-cols">
+                    <label class="field">
+                      <span>Profile ID</span>
+                      <input id="new-profile-id" maxlength="64" required autocomplete="off"
+                             pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" value="my-openwrt">
+                      <small>作为 profiles/&lt;id&gt;/ 的目录名</small>
+                    </label>
+                    <label class="field">
+                      <span>显示名称</span>
+                      <input id="new-profile-name" maxlength="200" required autocomplete="off" value="My OpenWrt">
+                      <small>用于 Dashboard 与 Actions 展示</small>
+                    </label>
+                  </div>
 
-      <label class="field-label" for="editor-content">内容</label>
-      <textarea id="editor-content" class="editor" spellcheck="false"></textarea>
+                  <label class="field">
+                    <span>常用源码预设</span>
+                    <select id="new-source-preset">
+                      <option value="lean" selected>Lean LEDE · master</option>
+                      <option value="openwrt">OpenWrt · main</option>
+                      <option value="immortalwrt">ImmortalWrt · master</option>
+                      <option value="custom">自定义</option>
+                    </select>
+                  </label>
 
-      <div class="editor-actions">
-        <button class="button secondary" id="preview-change" type="button">预览变更</button>
-        <button class="button" id="create-pr" type="button" disabled>创建分支并发起 PR</button>
-      </div>
+                  <div class="form-grid two-cols">
+                    <label class="field">
+                      <span>源码仓库</span>
+                      <input id="new-source-repo" required autocomplete="off"
+                             value="https://github.com/coolsnowwolf/lede">
+                    </label>
+                    <label class="field">
+                      <span>分支 / Tag</span>
+                      <input id="new-source-branch" required autocomplete="off" value="master">
+                    </label>
+                  </div>
 
-      <div id="preview-card" class="preview-box" hidden>
-        <h3>变更预览</h3>
-        <pre id="diff-preview"></pre>
-      </div>
-      <p class="success" id="write-result" aria-live="polite" hidden></p>
-    </section>
+                  <label class="field">
+                    <span>Adapter</span>
+                    <select id="new-adapter">
+                      <option value="direct-openwrt" selected>direct-openwrt</option>
+                    </select>
+                  </label>
+                </div>
 
-    <section class="card" id="build-card" hidden>
-      <div class="heading">
-        <div>
-          <p class="eyebrow">Builder</p>
-          <h2 id="build-title">构建 Profile</h2>
-          <p class="muted" id="build-meta"></p>
-        </div>
-        <span class="permission-pill" id="actions-permission"></span>
-      </div>
+                <div class="form-section">
+                  <div class="form-section-title">
+                    <span>02</span>
+                    <div><strong>构建配置</strong><small>上传或粘贴 OpenWrt .config</small></div>
+                  </div>
+                  <label class="field">
+                    <span>OpenWrt .config</span>
+                    <div class="file-drop">
+                      <input id="new-config-file" type="file" accept=".config,text/plain">
+                      <div class="file-drop-copy">
+                        <strong>选择 .config 文件</strong>
+                        <span>或直接在下方编辑器粘贴内容</span>
+                      </div>
+                    </div>
+                    <textarea id="new-config-text" class="editor create-config-editor" spellcheck="false"
+                              placeholder="CONFIG_TARGET_..."></textarea>
+                    <small>预览时仅发送到你自己的 Control Plane 校验，不会写入 GitHub。</small>
+                  </label>
+                </div>
 
-      <label class="check-row">
-        <input id="publish-release" type="checkbox">
-        <span>
-          <strong>构建成功后允许发布 Release</strong>
-          <small>默认关闭；仍受 Profile 的 UPLOAD_RELEASE 控制。</small>
-        </span>
-      </label>
+                <div class="form-section">
+                  <div class="form-section-title">
+                    <span>03</span>
+                    <div><strong>自动化策略</strong><small>控制追新、发布与构建行为</small></div>
+                  </div>
+                  <div class="toggle-grid">
+                    <label class="check-row compact-check">
+                      <input id="new-auto-update" type="checkbox">
+                      <span><strong>自动追新</strong><small>自动检测上游变化</small></span>
+                    </label>
+                    <label class="check-row compact-check">
+                      <input id="new-upload-release" type="checkbox" checked>
+                      <span><strong>发布 Release</strong><small>成功后允许发布</small></span>
+                    </label>
+                    <label class="check-row compact-check">
+                      <input id="new-upload-firmware" type="checkbox" checked>
+                      <span><strong>固件 Artifact</strong><small>保留构建产物</small></span>
+                    </label>
+                    <label class="check-row compact-check">
+                      <input id="new-maximize-space" type="checkbox">
+                      <span><strong>扩展构建空间</strong><small>大型源码时开启</small></span>
+                    </label>
+                    <label class="check-row compact-check">
+                      <input id="new-stream-log" type="checkbox" checked>
+                      <span><strong>流式日志</strong><small>实时输出 make 日志</small></span>
+                    </label>
+                  </div>
+                </div>
 
-      <div class="editor-actions">
-        <button class="button" id="trigger-build" type="button">开始构建</button>
-        <button class="button secondary" id="refresh-builds" type="button">刷新状态</button>
-      </div>
+                <div class="form-section">
+                  <div class="form-section-title">
+                    <span>04</span>
+                    <div><strong>高级校验</strong><small>可选的 Manifest 与额外上游监控</small></div>
+                  </div>
+                  <div class="form-grid two-cols">
+                    <label class="field">
+                      <span>Manifest 必选软件包</span>
+                      <textarea id="new-required-packages" class="compact-input" spellcheck="false"
+                                placeholder="luci&#10;curl"></textarea>
+                    </label>
+                    <label class="field">
+                      <span>额外 Git 上游监控</span>
+                      <textarea id="new-watch-sources" class="compact-input" spellcheck="false"
+                                placeholder="label|git_url|branch_or_tag"></textarea>
+                    </label>
+                  </div>
+                </div>
 
-      <p class="success" id="build-result" aria-live="polite" hidden></p>
-      <div id="build-runs" class="build-list"></div>
+                <div class="form-actions">
+                  <button class="button ghost" id="new-profile-preview" type="button">预览标准文件</button>
+                  <button class="button primary" id="new-profile-create" type="submit" disabled>创建分支并发起 PR</button>
+                </div>
+              </form>
 
-      <div id="build-detail" class="preview-box" hidden>
-        <div class="heading">
-          <h3 id="build-detail-title">运行详情</h3>
-          <a class="button secondary" id="build-summary-link" href="#" target="_blank" rel="noreferrer">打开 Actions / Summary</a>
-        </div>
-        <div id="build-jobs" class="build-sublist"></div>
-        <div id="build-artifacts" class="build-sublist"></div>
-        <div id="build-release" class="build-sublist"></div>
-      </div>
-    </section>
+              <div id="new-profile-preview-card" class="preview-box" hidden>
+                <div class="preview-header">
+                  <div>
+                    <span class="preview-kicker">Generated files</span>
+                    <h3>标准 Profile 预览</h3>
+                  </div>
+                  <select id="new-profile-preview-file" class="file-select preview-file-select"></select>
+                </div>
+                <pre id="new-profile-preview-content"></pre>
+              </div>
+              <p class="success" id="new-profile-result" aria-live="polite" hidden></p>
+            </section>
 
-  </main>
+            <section class="panel" id="editor-card" hidden>
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Profile Editor</p>
+                  <h2 id="editor-title">编辑 Profile</h2>
+                  <p class="panel-description" id="editor-meta"></p>
+                </div>
+                <span class="permission-pill" id="write-permission"></span>
+              </div>
+
+              <div class="editor-toolbar">
+                <label class="field compact-field" for="file-select">
+                  <span>当前文件</span>
+                  <select id="file-select" class="file-select"></select>
+                </label>
+              </div>
+
+              <div class="code-shell">
+                <div class="code-shell-top">
+                  <span class="code-dot red"></span>
+                  <span class="code-dot amber"></span>
+                  <span class="code-dot green"></span>
+                  <span class="code-label">Profile configuration</span>
+                </div>
+                <textarea id="editor-content" class="editor" spellcheck="false"></textarea>
+              </div>
+
+              <div class="form-actions">
+                <button class="button ghost" id="preview-change" type="button">预览变更</button>
+                <button class="button primary" id="create-pr" type="button" disabled>创建分支并发起 PR</button>
+              </div>
+
+              <div id="preview-card" class="preview-box" hidden>
+                <div class="preview-header">
+                  <div>
+                    <span class="preview-kicker">Diff</span>
+                    <h3>变更预览</h3>
+                  </div>
+                </div>
+                <pre id="diff-preview"></pre>
+              </div>
+              <p class="success" id="write-result" aria-live="polite" hidden></p>
+            </section>
+          </div>
+
+          <aside class="content-secondary">
+            <section class="panel build-panel" id="build-card" hidden>
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Builder</p>
+                  <h2 id="build-title">构建 Profile</h2>
+                  <p class="panel-description" id="build-meta"></p>
+                </div>
+                <span class="permission-pill" id="actions-permission"></span>
+              </div>
+
+              <label class="check-row release-check">
+                <input id="publish-release" type="checkbox">
+                <span>
+                  <strong>发布 Release</strong>
+                  <small>默认关闭；仍受 Profile 配置控制</small>
+                </span>
+              </label>
+
+              <div class="form-actions">
+                <button class="button primary" id="trigger-build" type="button">开始构建</button>
+                <button class="button ghost" id="refresh-builds" type="button">刷新</button>
+              </div>
+
+              <p class="success" id="build-result" aria-live="polite" hidden></p>
+              <div id="build-runs" class="build-list"></div>
+
+              <div id="build-detail" class="build-detail" hidden>
+                <div class="preview-header">
+                  <div>
+                    <span class="preview-kicker">Run details</span>
+                    <h3 id="build-detail-title">运行详情</h3>
+                  </div>
+                  <a class="text-link" id="build-summary-link" href="#" target="_blank" rel="noreferrer">打开 Summary ↗</a>
+                </div>
+                <div id="build-jobs" class="build-sublist"></div>
+                <div id="build-artifacts" class="build-sublist"></div>
+                <div id="build-release" class="build-sublist"></div>
+              </div>
+            </section>
+
+            <section class="side-note">
+              <span class="side-note-icon">↗</span>
+              <div>
+                <strong>安全写入</strong>
+                <p>Profile 的创建与修改只会生成独立分支和 Pull Request，默认分支不会被直接修改。</p>
+              </div>
+            </section>
+          </aside>
+        </section>
+      </main>
+    </div>
+  </div>
+
   <script type="module" src="/app.js"></script>
 </body>
 </html>
