@@ -34,6 +34,29 @@ assert.equal(consumedState.browserHash, hashOpaque("browser"));
 assert.equal(store.consumeOAuthState(hashOpaque("state")), null);
 
 
+
+const receiverSensitiveClient = new GitHubAppClient(
+  {
+    clientId: "Iv1.receiver",
+    clientSecret: "receiver-secret",
+    redirectUri: "https://example.test/api/v1/auth/callback"
+  },
+  function receiverSensitiveFetch(_url, _options = {}) {
+    if (this !== undefined) {
+      throw new TypeError("Illegal invocation");
+    }
+    return Response.json({
+      access_token: "ghu_receiver_access",
+      token_type: "bearer"
+    });
+  }
+);
+const receiverToken = await receiverSensitiveClient.exchangeCode(
+  "code",
+  "verifier"
+);
+assert.equal(receiverToken.accessToken, "ghu_receiver_access");
+
 const oauthErrorClient = new GitHubAppClient(
   {
     clientId: "Iv1.bad",
