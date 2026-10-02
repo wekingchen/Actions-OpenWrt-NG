@@ -52,6 +52,24 @@ jobs:
         node --check dashboard/assets/wizard-core.js
         node --check dashboard/assets/wizard.js
         node scripts/dashboard/test-wizard.mjs
+
+        rm -rf "$RUNNER_TEMP/wizard-profile"
+        mkdir -p "$RUNNER_TEMP/wizard-profile"
+        unzip -q /tmp/openwrt-ng-profile-test.zip -d "$RUNNER_TEMP/wizard-profile"
+        unzip -t /tmp/openwrt-ng-profile-test.zip >/dev/null
+
+        test -x "$RUNNER_TEMP/wizard-profile/profiles/test-profile/diy-part1.sh"
+        test -x "$RUNNER_TEMP/wizard-profile/profiles/test-profile/diy-part2.sh"
+        bash -n "$RUNNER_TEMP/wizard-profile/profiles/test-profile/profile.env"
+        bash -n "$RUNNER_TEMP/wizard-profile/profiles/test-profile/diy-part1.sh"
+        bash -n "$RUNNER_TEMP/wizard-profile/profiles/test-profile/diy-part2.sh"
+
+        cp -a "$RUNNER_TEMP/wizard-profile/profiles/test-profile" profiles/
+        bash scripts/profile.sh test-profile "$RUNNER_TEMP/generated-profile.env"
+        grep -F "PROFILE_ID='test-profile'" "$RUNNER_TEMP/generated-profile.env"
+        grep -F "AUTO_UPDATE='true'" "$RUNNER_TEMP/generated-profile.env"
+        rm -rf profiles/test-profile
+
         git diff --check
 
     - name: 导出 Dashboard 数据
