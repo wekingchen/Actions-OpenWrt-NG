@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { GitHubAppClient } from "./lib/github.mjs";
 import {
   hashOpaque,
+  oauthCookie,
   parseCookies,
   randomToken,
   safeReturnTo,
@@ -46,8 +47,11 @@ export function loadConfigFromEnv() {
     dbPath: process.env.CONTROL_PLANE_DB || "./control-plane.db",
     port: Number(process.env.PORT || 8787),
     apiVersion: process.env.GITHUB_API_VERSION || "2022-11-28",
+    githubAppSlug: requiredEnv("GITHUB_APP_SLUG"),
     sessionTtlMs:
-      Number(process.env.SESSION_TTL_SECONDS || 604800) * 1000
+      Number(process.env.SESSION_TTL_SECONDS || 604800) * 1000,
+    sessionIdleTtlMs:
+      Number(process.env.SESSION_IDLE_TTL_SECONDS || 86400) * 1000
   };
 }
 
@@ -61,12 +65,13 @@ function json(res, status, body) {
   res.end(payload);
 }
 
-function redirect(res, location, cookie = "") {
+function redirect(res, location, cookies = []) {
   const headers = {
     Location: location,
     "Cache-Control": "no-store"
   };
-  if (cookie) headers["Set-Cookie"] = cookie;
+  const list = Array.isArray(cookies) ? cookies.filter(Boolean) : [cookies].filter(Boolean);
+  if (list.length) headers["Set-Cookie"] = list;
   res.writeHead(302, headers);
   res.end();
 }
@@ -92,7 +97,11 @@ export function createControlPlaneHandler({ config, store, github }) {
     const opaque = sessionTokenFromRequest(req);
     if (!opaque) return null;
 
-    let session = store.getSession(hashOpaque(opaque));
+    let session = store.getSession(
+      hashOpaque(opaque),
+      Date.now(),
+      config.sessionIdleTtlMs
+    );
     if (!session) return null;
 
     const refreshSoon =
@@ -114,7 +123,11 @@ export function createControlPlaneHandler({ config, store, github }) {
 
       const token = await github.refreshUserToken(session.refreshToken);
       store.updateSessionTokens(session.sessionHash, token);
-      session = store.getSession(session.sessionHash);
+      session = store.getSession(
+        session.sessionHash,
+        Date.now(),
+        config.sessionIdleTtlMs
+      );
     }
 
     return session;
@@ -133,9 +146,11 @@ export function createControlPlaneHandler({ config, store, github }) {
         store.purgeExpired();
         const state = randomToken(32);
         const verifier = randomToken(48);
+        const browserNonce = randomToken(32);
         const returnTo = safeReturnTo(url.searchParams.get("return_to"));
         store.createOAuthState({
           stateHash: hashOpaque(state),
+          browserHash: hashOpaque(browserNonce),
           verifier,
           returnTo,
           expiresAt: Date.now() + 10 * 60 * 1000
@@ -146,6 +161,10 @@ export function createControlPlaneHandler({ config, store, github }) {
           github.authorizeUrl({
             state,
             codeChallenge: sha256Base64Url(verifier)
+          }),
+          oauthCookie(browserNonce, {
+            secure: config.secureCookie,
+            maxAge: 600
           })
         );
       }
@@ -157,9 +176,25 @@ export function createControlPlaneHandler({ config, store, github }) {
           return json(res, 400, { error: "missing_oauth_parameters" });
         }
 
+        const browserNonce = parseCookies(req.headers.cookie || "").ong_oauth || "";
+        if (!browserNonce) {
+          return json(res, 400, { error: "missing_oauth_browser_binding" });
+        }
+
         const pending = store.consumeOAuthState(hashOpaque(state));
         if (!pending) {
+          res.setHeader("Set-Cookie", oauthCookie("", {
+            secure: config.secureCookie,
+            maxAge: 0
+          }));
           return json(res, 400, { error: "invalid_or_expired_state" });
+        }
+        if (pending.browserHash !== hashOpaque(browserNonce)) {
+          res.setHeader("Set-Cookie", oauthCookie("", {
+            secure: config.secureCookie,
+            maxAge: 0
+          }));
+          return json(res, 400, { error: "oauth_browser_binding_mismatch" });
         }
 
         const token = await github.exchangeCode(code, pending.verifier);
@@ -184,11 +219,26 @@ export function createControlPlaneHandler({ config, store, github }) {
         return redirect(
           res,
           pending.returnTo,
-          sessionCookie(opaqueSession, {
-            secure: config.secureCookie,
-            maxAge: Math.floor(config.sessionTtlMs / 1000)
-          })
+          [
+            sessionCookie(opaqueSession, {
+              secure: config.secureCookie,
+              maxAge: Math.floor(config.sessionTtlMs / 1000)
+            }),
+            oauthCookie("", {
+              secure: config.secureCookie,
+              maxAge: 0
+            })
+          ]
         );
+      }
+
+      if (req.method === "GET" && url.pathname === "/api/v1/config") {
+        return json(res, 200, {
+          githubAppInstallUrl:
+            "https://github.com/apps/" +
+            encodeURIComponent(config.githubAppSlug) +
+            "/installations/new"
+        });
       }
 
       if (req.method === "GET" && url.pathname === "/api/v1/session") {
@@ -290,6 +340,7 @@ export function createApplication(config, options = {}) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  process.umask(0o077);
   const config = loadConfigFromEnv();
   const app = createApplication(config);
   const server = createServer(app.handler);
