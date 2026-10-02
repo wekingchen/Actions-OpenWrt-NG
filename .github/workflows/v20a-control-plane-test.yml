@@ -1,0 +1,47 @@
+name: V2.0A Control Plane Test
+
+on:
+  push:
+    branches:
+      - v2/control-plane-auth
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: V2.0A 授权边界回归
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+
+    steps:
+    - name: 检出仓库
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 静态检查
+      run: |
+        set -Eeuo pipefail
+        node --check dashboard/assets/app.js
+        node --check dashboard/assets/wizard-core.js
+        node --check dashboard/assets/wizard.js
+        node --check dashboard/assets/control-plane.js
+        node --check dashboard/assets/connect.js
+        node scripts/dashboard/test-control-plane.mjs
+        bash scripts/dashboard/test-wizard.sh
+        python3 -m json.tool dashboard/data/control-plane.json >/dev/null
+        python3 -m json.tool control-plane/api-schema.json >/dev/null
+        git diff --check
+
+    - name: 安全边界断言
+      run: |
+        set -Eeuo pipefail
+        test "$(jq -r '.enabled' dashboard/data/control-plane.json)" = "false"
+        ! grep -RniE '(access_token|refresh_token|client_secret|private_key|github_pat_|ghu_|ghr_|ghs_|ghp_)'           dashboard/data dashboard/connect.html dashboard/assets/connect.js || {
+            echo "ERROR: 公开 Pages 文件包含疑似凭据字段" >&2
+            exit 1
+          }
+        grep -q 'Same-Origin BFF' control-plane/README.md
+        grep -q 'HttpOnly' control-plane/README.md
