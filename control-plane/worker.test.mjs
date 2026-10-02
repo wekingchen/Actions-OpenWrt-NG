@@ -85,15 +85,13 @@ const github = {
   async listRepositories(token) {
     assert.equal(token, "ghu_worker_access");
     return [{
-      installationId: 101,
       owner: "acme",
       name: "router",
       fullName: "acme/router",
       defaultBranch: "main",
       private: false,
       permissions: {
-        contents: "read",
-        actions: "none"
+        contents: "read"
       }
     }];
   },
@@ -284,6 +282,10 @@ const repos = await handleControlPlaneRequest(
 );
 const reposBody = await repos.json();
 assert.equal(reposBody.repositories[0].fullName, "acme/router");
+assert.equal("installationId" in reposBody.repositories[0], false);
+assert.deepEqual(reposBody.repositories[0].permissions, {
+  contents: "read"
+});
 
 const profiles = await handleControlPlaneRequest(
   new Request(

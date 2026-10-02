@@ -139,7 +139,12 @@ export function createControlPlaneHandler({ config, store, github }) {
 
     try {
       if (req.method === "GET" && url.pathname === "/api/v1/health") {
-        return json(res, 200, { ok: true, version: 1 });
+        return json(res, 200, {
+          ok: true,
+          version: 1,
+          runtime: "self-hosted-node",
+          configured: true
+        });
       }
 
       if (req.method === "GET" && url.pathname === "/api/v1/auth/start") {
@@ -234,6 +239,7 @@ export function createControlPlaneHandler({ config, store, github }) {
 
       if (req.method === "GET" && url.pathname === "/api/v1/config") {
         return json(res, 200, {
+          configured: true,
           githubAppInstallUrl:
             "https://github.com/apps/" +
             encodeURIComponent(config.githubAppSlug) +

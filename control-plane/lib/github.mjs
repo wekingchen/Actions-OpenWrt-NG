@@ -162,15 +162,13 @@ export class GitHubAppClient {
 
         for (const repo of items) {
           repos.set(repo.full_name, {
-            installationId: installation.id,
             owner: repo.owner?.login || "",
             name: repo.name || "",
             fullName: repo.full_name || "",
             defaultBranch: repo.default_branch || "main",
             private: Boolean(repo.private),
             permissions: {
-              contents: installation.permissions?.contents || "none",
-              actions: installation.permissions?.actions || "none"
+              contents: installation.permissions?.contents || "none"
             }
           });
         }

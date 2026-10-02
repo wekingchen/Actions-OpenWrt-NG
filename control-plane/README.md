@@ -118,7 +118,7 @@ https://openwrt-ng-control-plane.<你的workers子域>.workers.dev
 使用刚才真实的 workers.dev 地址：
 
 - Homepage URL：`https://...workers.dev`
-- Callback URL：`https://...workers.dev/api/v1/auth/callback`
+- Redirect URI（GitHub UI；即 OAuth callback）：`https://...workers.dev/api/v1/auth/callback`
 - Setup URL：`https://...workers.dev/`
 - Expire user authorization tokens：开启
 - Request user authorization during installation：**不要开启**
@@ -195,11 +195,13 @@ https://...workers.dev/api/v1/health
 4. 页面应列出该仓库。
 5. 点击仓库后应读取到 `profiles/*`，例如 `profiles/default`。
 
-只有这五步真实通过后，才启用公开 Pages 入口。
+以上五步真实通过后，V2.0A 的端到端链路即验证完成。
 
-### 8. 启用 GitHub Pages V2 入口
+### 8. 在自己的模板实例中启用 GitHub Pages V2 入口
 
-修改：
+**公共模板仓库的 `main` 应继续保持默认关闭，不应提交模板维护者自己的 workers.dev 地址或 GitHub App slug。**
+
+使用本模板创建自己的仓库后，在该仓库完成 Control Plane 部署与真实验证，再修改：
 
 `dashboard/data/control-plane.json`
 
@@ -215,6 +217,19 @@ https://...workers.dev/api/v1/health
 ```
 
 这个文件只允许公开信息。严禁放入 Client Secret、GitHub token 或 TOKEN_ENCRYPTION_KEY。
+
+模板仓库默认值应保持：
+
+```json
+{
+  "version": 1,
+  "enabled": false,
+  "controlPlaneUrl": "",
+  "githubAppSlug": ""
+}
+```
+
+这样从模板创建的新仓库不会误连到模板维护者的 Control Plane。
 
 ## Bootstrap 模式
 

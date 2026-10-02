@@ -54,6 +54,7 @@ jobs:
         node --check control-plane/public/app.js
         node --check control-plane/test.mjs
         python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
+        python3 -m json.tool control-plane/api-schema.json >/dev/null
 
         bad_github_secrets="$(
           grep -nE '\$\{\{[[:space:]]*secrets\.GITHUB_' .github/workflows/*.yml |
