@@ -24,13 +24,13 @@ const store = new ControlPlaneStore(":memory:", secret);
 store.createOAuthState({
   stateHash: hashOpaque("state"),
   verifier: "verifier",
+  browserHash: hashOpaque("browser"),
   returnTo: "/",
   expiresAt: Date.now() + 60_000
 });
-assert.equal(
-  store.consumeOAuthState(hashOpaque("state")).verifier,
-  "verifier"
-);
+const consumedState = store.consumeOAuthState(hashOpaque("state"));
+assert.equal(consumedState.verifier, "verifier");
+assert.equal(consumedState.browserHash, hashOpaque("browser"));
 assert.equal(store.consumeOAuthState(hashOpaque("state")), null);
 
 const calls = [];
@@ -101,6 +101,8 @@ const config = {
   clientSecret: "client-secret",
   encryptionSecret: secret,
   sessionTtlMs: 3600_000,
+  sessionIdleTtlMs: 900_000,
+  githubAppSlug: "openwrt-ng-test",
   apiVersion: "2022-11-28"
 };
 
@@ -125,6 +127,28 @@ try {
   assert.equal(health.status, 200);
   assert.deepEqual(await health.json(), { ok: true, version: 1 });
 
+  const publicConfig = await fetch(base + "/api/v1/config");
+  assert.deepEqual(await publicConfig.json(), {
+    githubAppInstallUrl:
+      "https://github.com/apps/openwrt-ng-test/installations/new"
+  });
+
+  const csrfStart = await fetch(base + "/api/v1/auth/start?return_to=/", {
+    redirect: "manual"
+  });
+  const csrfAuthorize = new URL(csrfStart.headers.get("location"));
+  const csrfState = csrfAuthorize.searchParams.get("state");
+  const csrfCallback = await fetch(
+    base +
+      "/api/v1/auth/callback?code=test-code&state=" +
+      encodeURIComponent(csrfState),
+    { redirect: "manual" }
+  );
+  assert.equal(csrfCallback.status, 400);
+  assert.deepEqual(await csrfCallback.json(), {
+    error: "missing_oauth_browser_binding"
+  });
+
   const start = await fetch(base + "/api/v1/auth/start?return_to=/", {
     redirect: "manual"
   });
@@ -134,20 +158,36 @@ try {
   assert.equal(authorize.searchParams.get("code_challenge_method"), "S256");
   const state = authorize.searchParams.get("state");
   assert.ok(state);
+  const oauthSetCookie = start.headers.get("set-cookie");
+  assert.match(oauthSetCookie, /ong_oauth=/);
+  assert.match(oauthSetCookie, /HttpOnly/);
+  const oauthCookie = oauthSetCookie.split(";", 1)[0];
 
   const callback = await fetch(
     base +
       "/api/v1/auth/callback?code=test-code&state=" +
       encodeURIComponent(state),
-    { redirect: "manual" }
+    {
+      redirect: "manual",
+      headers: { Cookie: oauthCookie }
+    }
   );
   assert.equal(callback.status, 302);
   assert.equal(callback.headers.get("location"), "/");
-  const setCookie = callback.headers.get("set-cookie");
-  assert.match(setCookie, /ong_session=/);
-  assert.match(setCookie, /HttpOnly/);
-  assert.doesNotMatch(setCookie, /ghu_test_access|ghr_test_refresh/);
-  const cookie = setCookie.split(";", 1)[0];
+  const setCookies =
+    typeof callback.headers.getSetCookie === "function"
+      ? callback.headers.getSetCookie()
+      : [callback.headers.get("set-cookie")].filter(Boolean);
+  const sessionSetCookie = setCookies.find((value) =>
+    value.startsWith("ong_session=")
+  );
+  assert.ok(sessionSetCookie);
+  assert.match(sessionSetCookie, /HttpOnly/);
+  assert.doesNotMatch(
+    setCookies.join("\n"),
+    /ghu_test_access|ghr_test_refresh/
+  );
+  const cookie = sessionSetCookie.split(";", 1)[0];
 
   const session = await fetch(base + "/api/v1/session", {
     headers: { Cookie: cookie }
@@ -185,6 +225,24 @@ try {
     headers: { Cookie: cookie }
   });
   assert.deepEqual(await afterLogout.json(), { authenticated: false });
+
+  const idleStore = new ControlPlaneStore(":memory:", secret);
+  idleStore.createSession({
+    sessionHash: hashOpaque("idle"),
+    userLogin: "idle-user",
+    avatarUrl: "",
+    accessToken: "ghu_idle",
+    refreshToken: "",
+    githubExpiresAt: 0,
+    refreshExpiresAt: 0,
+    sessionExpiresAt: Date.now() + 60_000,
+    now: Date.now() - 10_000
+  });
+  assert.equal(
+    idleStore.getSession(hashOpaque("idle"), Date.now(), 5_000),
+    null
+  );
+  idleStore.close();
 
   assert.ok(
     calls.some((call) =>
