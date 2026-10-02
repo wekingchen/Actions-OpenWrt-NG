@@ -474,7 +474,7 @@ def main() -> int:
             "releases_url": f"{repo.get('html_url')}/releases",
             "default_branch": repo.get("default_branch"),
             "is_template": repo.get("is_template", False),
-            "version": "V1.2 Preview",
+            "version": "V1.2",
         },
         "latest_build": latest_build,
         "profiles": profiles,
