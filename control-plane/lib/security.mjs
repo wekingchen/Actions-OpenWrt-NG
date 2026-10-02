@@ -93,16 +93,35 @@ export function parseCookies(header = "") {
   return result;
 }
 
-export function sessionCookie(value, options = {}) {
+export function opaqueCookie(name, value, options = {}) {
+  if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+    throw new Error("Invalid cookie name");
+  }
   const parts = [
-    "ong_session=" + encodeURIComponent(value),
-    "Path=/",
+    name + "=" + encodeURIComponent(value),
+    "Path=" + (options.path || "/"),
     "HttpOnly",
-    "SameSite=Lax"
+    "SameSite=" + (options.sameSite || "Lax")
   ];
   if (options.secure !== false) parts.push("Secure");
   if (Number.isFinite(options.maxAge)) {
     parts.push("Max-Age=" + Math.max(0, Math.floor(options.maxAge)));
   }
   return parts.join("; ");
+}
+
+export function sessionCookie(value, options = {}) {
+  return opaqueCookie("ong_session", value, {
+    ...options,
+    path: "/",
+    sameSite: "Lax"
+  });
+}
+
+export function oauthCookie(value, options = {}) {
+  return opaqueCookie("ong_oauth", value, {
+    ...options,
+    path: "/api/v1/auth",
+    sameSite: "Lax"
+  });
 }
