@@ -256,9 +256,9 @@ V2.0B 在此基础上增加在线 Profile 编辑，保存固定走“预览 → 
 
 V2.0C 继续增加 Builder 控制能力：浏览器只能请求固定的 OpenWrt NG Builder，服务端固定使用仓库默认分支并生成请求标识；页面展示 queued / running / completed、Jobs、Artifacts、Release 与 Actions Summary 入口。该链路已在独立 Test 仓完成真实 Actions 调度验证：Run 与 request ID 精确对应，成功完成编译、Manifest 校验、配置留档、固件 Artifact 上传与 Summary 生成；测试时关闭了 Release，因此没有留下测试发布物。
 
-项目提供 **Deploy V2 Control Plane** 手动 Workflow：第一次可以无 GitHub App Secret bootstrap 部署，拿到 workers.dev URL 后再创建 GitHub App并同步 Secret。Node.js + SQLite + Docker 仅保留为可选自托管方式。
+项目提供 **Deploy V2 Control Plane** 手动 Workflow：第一次可以无 GitHub App Secret bootstrap 部署，拿到 workers.dev URL 后再创建 GitHub App 并同步 Secret。当前完整 V2 推荐 GitHub App 一次配置 Metadata read、Contents write、Pull requests write、Actions write；不需要 Administration / Workflows。Node.js + SQLite + Docker 仅保留为可选自托管方式。
 
-作为公共模板，`dashboard/data/control-plane.json` 在本仓库 `main` 中**刻意保持 `enabled=false` 且不绑定维护者个人 Worker / GitHub App**。使用者从模板创建自己的仓库后，完成自己的 Control Plane 部署与真实验证，再在自己的仓库中启用入口。详细步骤见 `control-plane/README.md`。
+作为公共模板，`dashboard/data/control-plane.json` 在本仓库 `main` 中**刻意保持 `enabled=false` 且不绑定维护者个人 Worker / GitHub App**。使用者从模板创建自己的仓库后，完成自己的 Control Plane 部署与真实验证，再在自己的仓库中启用入口。Pages 的 Control Plane 页面会明确显示“模板默认关闭”，并提供当前完整能力、最终权限与启用顺序。详细步骤见 `control-plane/README.md`。
 
 ## 构建与诊断
 
