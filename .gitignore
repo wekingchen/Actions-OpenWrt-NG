@@ -7,3 +7,6 @@ config-record/
 release-bundle/
 build.log
 build-failure.log
+control-plane/*.db
+control-plane/*.db-*
+control-plane/.env
