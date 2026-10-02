@@ -36,6 +36,27 @@ const buildState = {
   activeRunId: 0
 };
 
+const createState = {
+  repo: null,
+  previewFiles: [],
+  previewValid: false
+};
+
+const SOURCE_PRESETS = Object.freeze({
+  lean: {
+    repo: "https://github.com/coolsnowwolf/lede",
+    branch: "master"
+  },
+  openwrt: {
+    repo: "https://github.com/openwrt/openwrt",
+    branch: "main"
+  },
+  immortalwrt: {
+    repo: "https://github.com/immortalwrt/immortalwrt",
+    branch: "master"
+  }
+});
+
 const MAX_BUILD_POLL_ATTEMPTS = 480;
 
 const ERROR_MESSAGES = {
@@ -51,6 +72,12 @@ const ERROR_MESSAGES = {
     "Profile ID 不符合规则，请检查目录名称。",
   profile_not_found:
     "该 Profile 不存在、已移动，或当前默认分支中不可用。",
+  profile_already_exists:
+    "这个 Profile ID 已经存在，请换一个 ID，或直接编辑已有 Profile。",
+  invalid_profile_template:
+    "新 Profile 参数没有通过服务端校验。",
+  repository_head_unavailable:
+    "暂时无法读取仓库默认分支的最新提交，请稍后重试。",
   repository_changed:
     "仓库默认分支在编辑期间已经更新。请重新打开 Profile，确认最新内容后再提交。",
   no_changes:
@@ -106,7 +133,15 @@ function friendlyError(value = "") {
   const [code, reason] = raw.split(" · ", 2);
   const primary = ERROR_MESSAGES[code] || code;
   const secondary = reason ? REASON_MESSAGES[reason] || reason : "";
-  return secondary ? primary + " " + secondary : primary;
+  const validationErrors =
+    value &&
+    typeof value === "object" &&
+    Array.isArray(value.body?.validationErrors)
+      ? value.body.validationErrors.filter(Boolean)
+      : [];
+  const validation =
+    validationErrors.length > 0 ? " " + validationErrors.join(" ") : "";
+  return (secondary ? primary + " " + secondary : primary) + validation;
 }
 
 function showError(message = "") {
@@ -137,6 +172,23 @@ function showBuildResult(message = "") {
   const node = $("build-result");
   node.hidden = !message;
   node.textContent = message;
+}
+
+function showNewProfileResult(message = "", url = "") {
+  const node = $("new-profile-result");
+  node.hidden = !message;
+  node.replaceChildren();
+  if (!message) return;
+  node.append(document.createTextNode(message));
+  if (url) {
+    node.append(document.createTextNode(" "));
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.textContent = "打开 Pull Request";
+    node.append(link);
+  }
 }
 
 async function request(path, options = {}) {
@@ -170,6 +222,86 @@ async function request(path, options = {}) {
     throw error;
   }
   return body;
+}
+
+function readNewProfileInput() {
+  return {
+    profileId: $("new-profile-id").value.trim(),
+    profileName: $("new-profile-name").value.trim(),
+    sourceRepo: $("new-source-repo").value.trim(),
+    sourceBranch: $("new-source-branch").value.trim(),
+    adapter: $("new-adapter").value,
+    configText: $("new-config-text").value,
+    autoUpdate: $("new-auto-update").checked,
+    uploadRelease: $("new-upload-release").checked,
+    uploadFirmware: $("new-upload-firmware").checked,
+    maximizeSpace: $("new-maximize-space").checked,
+    streamLog: $("new-stream-log").checked,
+    requiredPackages: $("new-required-packages").value,
+    watchSources: $("new-watch-sources").value
+  };
+}
+
+function invalidateNewProfilePreview() {
+  createState.previewFiles = [];
+  createState.previewValid = false;
+  $("new-profile-create").disabled = true;
+  $("new-profile-preview-card").hidden = true;
+  showNewProfileResult();
+}
+
+function renderNewProfilePreview() {
+  const select = $("new-profile-preview-file");
+  select.replaceChildren();
+  for (const file of createState.previewFiles) {
+    const option = document.createElement("option");
+    option.value = file.path;
+    option.textContent = file.path.split("/").pop();
+    select.appendChild(option);
+  }
+  const selected =
+    createState.previewFiles.find((file) => file.path === select.value) ||
+    createState.previewFiles[0];
+  $("new-profile-preview-content").textContent = selected?.content || "";
+  $("new-profile-preview-card").hidden = !selected;
+}
+
+function resetNewProfileForm() {
+  $("new-profile-form").reset();
+  $("new-profile-id").value = "my-openwrt";
+  $("new-profile-name").value = "My OpenWrt";
+  $("new-source-preset").value = "lean";
+  $("new-source-repo").value = SOURCE_PRESETS.lean.repo;
+  $("new-source-branch").value = SOURCE_PRESETS.lean.branch;
+  $("new-adapter").value = "direct-openwrt";
+  $("new-upload-release").checked = true;
+  $("new-upload-firmware").checked = true;
+  $("new-stream-log").checked = true;
+  $("new-config-file").value = "";
+  $("new-config-text").value = "";
+  $("new-required-packages").value = "";
+  $("new-watch-sources").value = "";
+  invalidateNewProfilePreview();
+}
+
+function openNewProfileForm() {
+  const repo = createState.repo;
+  if (!repo || !canWriteRepo(repo)) {
+    showError(
+      "新建 Profile 需要 Contents 与 Pull requests 写权限，请先调整 GitHub App。"
+    );
+    return;
+  }
+  showError();
+  resetNewProfileForm();
+  $("editor-card").hidden = true;
+  $("build-card").hidden = true;
+  $("new-profile-card").hidden = false;
+  $("new-profile-title").textContent = repo.fullName + " · 新建 Profile";
+  $("new-profile-card").scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
 }
 
 function saveCurrentEditorFile() {
@@ -527,7 +659,7 @@ async function loadBuildRuns(options = {}) {
 
     button.append(left, status);
     button.addEventListener("click", () =>
-      loadBuildDetail(run.id).catch((error) => showError(error.message))
+      loadBuildDetail(run.id).catch((error) => showError(error))
     );
     root.appendChild(button);
   }
@@ -639,8 +771,14 @@ async function openProfile(repo, profileId) {
 async function loadProfiles(repo) {
   showError();
   clearBuildPolling();
+  createState.repo = repo;
   $("editor-card").hidden = true;
   $("build-card").hidden = true;
+  $("new-profile-card").hidden = true;
+  $("new-profile-open").disabled = !canWriteRepo(repo);
+  $("new-profile-open").title = canWriteRepo(repo)
+    ? "在此仓库通过 Pull Request 新建标准 Profile"
+    : "需要 Contents 与 Pull requests 写权限";
   const data = await request(
     `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles`
   );
@@ -664,7 +802,7 @@ async function loadProfiles(repo) {
     code.textContent = profile.path;
     button.append(strong, code);
     button.addEventListener("click", () =>
-      openProfile(repo, profile.id).catch((error) => showError(error.message))
+      openProfile(repo, profile.id).catch((error) => showError(error))
     );
     root.appendChild(button);
   }
@@ -734,7 +872,7 @@ async function init() {
       repo.permissions.actions;
     button.append(title, meta);
     button.addEventListener("click", () =>
-      loadProfiles(repo).catch((error) => showError(error.message))
+      loadProfiles(repo).catch((error) => showError(error))
     );
     root.appendChild(button);
   }
@@ -744,6 +882,133 @@ async function init() {
     root.textContent = "当前 GitHub App 安装范围内没有可访问仓库。";
   }
 }
+
+$("new-profile-open").addEventListener("click", openNewProfileForm);
+
+$("new-profile-close").addEventListener("click", () => {
+  $("new-profile-card").hidden = true;
+  invalidateNewProfilePreview();
+});
+
+$("new-source-preset").addEventListener("change", () => {
+  const preset = SOURCE_PRESETS[$("new-source-preset").value];
+  if (preset) {
+    $("new-source-repo").value = preset.repo;
+    $("new-source-branch").value = preset.branch;
+  }
+  invalidateNewProfilePreview();
+});
+
+for (const id of ["new-source-repo", "new-source-branch"]) {
+  $(id).addEventListener("input", () => {
+    const currentRepo = $("new-source-repo").value.trim();
+    const currentBranch = $("new-source-branch").value.trim();
+    const match = Object.entries(SOURCE_PRESETS).find(([, preset]) =>
+      preset.repo === currentRepo && preset.branch === currentBranch
+    );
+    $("new-source-preset").value = match?.[0] || "custom";
+  });
+}
+
+$("new-config-file").addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) {
+    showError(".config 不能超过 2 MiB。");
+    event.target.value = "";
+    return;
+  }
+  $("new-config-text").value = await file.text();
+  invalidateNewProfilePreview();
+});
+
+for (const id of [
+  "new-profile-id",
+  "new-profile-name",
+  "new-source-repo",
+  "new-source-branch",
+  "new-adapter",
+  "new-config-text",
+  "new-auto-update",
+  "new-upload-release",
+  "new-upload-firmware",
+  "new-maximize-space",
+  "new-stream-log",
+  "new-required-packages",
+  "new-watch-sources"
+]) {
+  $(id).addEventListener("input", invalidateNewProfilePreview);
+  $(id).addEventListener("change", invalidateNewProfilePreview);
+}
+
+$("new-profile-preview-file").addEventListener("change", () => {
+  const selected = createState.previewFiles.find(
+    (file) => file.path === $("new-profile-preview-file").value
+  );
+  $("new-profile-preview-content").textContent = selected?.content || "";
+});
+
+$("new-profile-preview").addEventListener("click", async () => {
+  showError();
+  showNewProfileResult();
+  const button = $("new-profile-preview");
+  button.disabled = true;
+  button.textContent = "正在校验…";
+  try {
+    const data = await request("/api/v1/profile-templates/preview", {
+      method: "POST",
+      body: JSON.stringify(readNewProfileInput())
+    });
+    createState.previewFiles = data.files || [];
+    createState.previewValid = createState.previewFiles.length === 6;
+    renderNewProfilePreview();
+    $("new-profile-create").disabled =
+      !createState.previewValid || !canWriteRepo(createState.repo);
+  } catch (error) {
+    invalidateNewProfilePreview();
+    showError(error);
+  } finally {
+    button.disabled = false;
+    button.textContent = "预览标准文件";
+  }
+});
+
+$("new-profile-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!createState.repo || !canWriteRepo(createState.repo)) return;
+  if (!createState.previewValid) {
+    showError("内容已经变化，请重新预览标准文件后再创建 Pull Request。");
+    return;
+  }
+
+  const button = $("new-profile-create");
+  button.disabled = true;
+  button.textContent = "正在创建…";
+  showError();
+  showNewProfileResult();
+
+  try {
+    const repo = createState.repo;
+    const result = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles`,
+      {
+        method: "POST",
+        body: JSON.stringify(readNewProfileInput())
+      }
+    );
+    showNewProfileResult(
+      `已为 Profile ${result.profileId} 创建独立分支；默认分支未被直接修改。`,
+      result.pullRequest.url
+    );
+    createState.previewValid = false;
+    $("new-profile-preview-card").hidden = true;
+  } catch (error) {
+    showError(error);
+    button.disabled = false;
+  } finally {
+    button.textContent = "创建分支并发起 PR";
+  }
+});
 
 $("file-select").addEventListener("change", () => {
   saveCurrentEditorFile();
@@ -806,7 +1071,7 @@ $("create-pr").addEventListener("click", async () => {
     editorState.previewValid = false;
     $("preview-card").hidden = true;
   } catch (error) {
-    showError(error.message);
+    showError(error);
     button.disabled = false;
   } finally {
     button.textContent = "创建分支并发起 PR";
@@ -857,7 +1122,7 @@ $("trigger-build").addEventListener("click", async () => {
       );
       await loadBuildDetail(run.id);
     } else {
-      showError(error.message);
+      showError(error);
     }
   } finally {
     button.textContent = "开始构建";
@@ -869,7 +1134,7 @@ $("refresh-builds").addEventListener("click", () => {
   clearBuildPolling();
   buildState.requestId = "";
   buildState.pollAttempts = 0;
-  loadBuildRuns().catch((error) => showError(error.message));
+  loadBuildRuns().catch((error) => showError(error));
 });
 
 $("logout").addEventListener("click", async () => {
@@ -878,4 +1143,4 @@ $("logout").addEventListener("click", async () => {
   location.reload();
 });
 
-init().catch((error) => showError(error.message));
+init().catch((error) => showError(error));
