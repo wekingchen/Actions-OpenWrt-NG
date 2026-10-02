@@ -10,6 +10,60 @@ import {
 } from "./lib/security.mjs";
 import { ControlPlaneStore } from "./lib/store.mjs";
 import { createControlPlaneHandler } from "./server.mjs";
+import {
+  buildProfileTemplateFiles,
+  profileFilesObject
+} from "./lib/profile-template.mjs";
+import { buildProfileFiles as buildWizardProfileFiles } from "../dashboard/assets/wizard-core.js";
+
+const templateInput = {
+  profileId: "new-profile",
+  profileName: "New Profile O'Reilly",
+  sourceRepo: "https://github.com/openwrt/openwrt",
+  sourceBranch: "main",
+  adapter: "direct-openwrt",
+  configText: "CONFIG_TARGET_x86=y\nCONFIG_TARGET_x86_64=y\n",
+  autoUpdate: false,
+  uploadRelease: true,
+  uploadFirmware: true,
+  maximizeSpace: false,
+  streamLog: true,
+  requiredPackages: "curl\nluci\n",
+  watchSources: "packages|https://github.com/openwrt/packages|master"
+};
+
+const controlPlaneTemplateFiles = buildProfileTemplateFiles(templateInput);
+const wizardTemplateFiles = buildWizardProfileFiles(templateInput);
+assert.deepEqual(controlPlaneTemplateFiles, wizardTemplateFiles);
+assert.equal(controlPlaneTemplateFiles.length, 6);
+assert.deepEqual(
+  Object.keys(profileFilesObject(controlPlaneTemplateFiles)).sort(),
+  [
+    ".config",
+    "diy-part1.sh",
+    "diy-part2.sh",
+    "profile.env",
+    "required-packages.txt",
+    "watch-sources.txt"
+  ].sort()
+);
+
+assert.throws(
+  () =>
+    buildProfileTemplateFiles({
+      ...templateInput,
+      unexpectedPath: ".github/workflows/pwn.yml"
+    }),
+  /不允许的字段/
+);
+assert.throws(
+  () =>
+    buildProfileTemplateFiles({
+      ...templateInput,
+      configText: "not a kconfig\n"
+    }),
+  /OpenWrt\/Kconfig/
+);
 
 const secret = "0123456789abcdef0123456789abcdef";
 const encrypted = encryptString("ghu_example", secret);
@@ -146,6 +200,20 @@ const profileFetch = async (url, options = {}) => {
   }
   if (
     method === "GET" &&
+    path === "/contents/profiles/new-profile" &&
+    parsed.searchParams.get("ref") === "main"
+  ) {
+    return Response.json({ message: "Not Found" }, { status: 404 });
+  }
+  if (
+    method === "GET" &&
+    path === "/contents/profiles/exists-profile" &&
+    parsed.searchParams.get("ref") === "main"
+  ) {
+    return Response.json([{ type: "file", name: ".config" }]);
+  }
+  if (
+    method === "GET" &&
     path.startsWith("/contents/profiles/default/") &&
     parsed.searchParams.get("ref") === "main"
   ) {
@@ -228,6 +296,54 @@ const createdProfilePr = await profileClient.createProfilePullRequest(
 );
 assert.equal(createdProfilePr.pullRequest.number, 17);
 assert.deepEqual(createdProfilePr.changedFiles, [".config"]);
+const createdNewProfilePr = await profileClient.createNewProfilePullRequest(
+  "ghu_profile",
+  "acme",
+  "router",
+  "new-profile",
+  profileFilesObject(controlPlaneTemplateFiles)
+);
+assert.equal(createdNewProfilePr.action, "create");
+assert.equal(createdNewProfilePr.changedFiles.length, 6);
+assert.equal(createdNewProfilePr.pullRequest.number, 17);
+
+const createTreeCall = [...profileCalls].reverse().find(
+  (call) => call.method === "POST" && call.path === "/git/trees"
+);
+assert.ok(createTreeCall);
+const createTreeBody = JSON.parse(createTreeCall.body);
+assert.deepEqual(
+  createTreeBody.tree.map((entry) => entry.path).sort(),
+  controlPlaneTemplateFiles.map((file) => file.path).sort()
+);
+assert.equal(
+  createTreeBody.tree.find((entry) =>
+    entry.path.endsWith("/diy-part1.sh")
+  ).mode,
+  "100755"
+);
+
+await assert.rejects(
+  () =>
+    profileClient.createNewProfilePullRequest(
+      "ghu_profile",
+      "acme",
+      "router",
+      "exists-profile",
+      profileFilesObject(
+        buildProfileTemplateFiles({
+          ...templateInput,
+          profileId: "exists-profile"
+        })
+      )
+    ),
+  (error) => {
+    assert.equal(error.code, "profile_already_exists");
+    assert.equal(error.status, 409);
+    return true;
+  }
+);
+
 assert.match(createdProfilePr.branch, /^openwrt-ng\/profile-default-/);
 assert.ok(
   profileCalls.some((call) =>
