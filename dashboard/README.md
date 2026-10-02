@@ -39,3 +39,15 @@ Dashboard 不参与 Core 的编译、追新或 Release 决策。
 ## Pages 首次启用
 
 正式合入 main 后，需要在仓库 Settings → Pages 中把 Build and deployment Source 设置为 **GitHub Actions**。这是仓库级一次性设置，Dashboard Workflow 不使用额外 PAT 自动修改 Pages 配置。
+
+## Profile Wizard
+
+V1.3 新增 `wizard.html`。
+
+- 浏览器本地读取 / 粘贴 `.config`
+- 生成标准 `profiles/<id>/` 六文件结构
+- 客户端生成 ZIP，不上传配置
+- 生成器回归测试：`scripts/dashboard/test-wizard.mjs`
+- Core 集成测试：`scripts/dashboard/test-wizard.sh`
+
+正式地址：<https://wekingchen.github.io/Actions-OpenWrt-NG/wizard.html>
