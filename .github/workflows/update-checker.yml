@@ -1,0 +1,230 @@
+name: OpenWrt NG Update Checker
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "仅检查指定 Profile；留空则检查所有启用 AUTO_UPDATE 的 Profile"
+        required: false
+        default: ""
+        type: string
+      force:
+        description: "忽略已记录状态并强制触发一次构建"
+        required: true
+        default: false
+        type: boolean
+  schedule:
+    - cron: "17 */12 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openwrt-ng-update-checker
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    name: 解析需要检查的 Profile
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.discover.outputs.matrix }}
+      has_profiles: ${{ steps.discover.outputs.has_profiles }}
+
+    steps:
+    - name: 检出仓库
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 静态检查更新脚本
+      run: |
+        set -Eeuo pipefail
+        bash -n scripts/resolve-update-state.sh
+        git diff --check
+
+    - name: 解析 Profile 与上游状态
+      id: discover
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        REQUESTED_PROFILE: ${{ inputs.profile }}
+      run: |
+        set -Eeuo pipefail
+
+        rows="$RUNNER_TEMP/openwrt-ng-update-matrix.tsv"
+        : > "$rows"
+
+        requested="${REQUESTED_PROFILE:-}"
+        requested_found=false
+
+        for profile_file in profiles/*/profile.env; do
+          [ -f "$profile_file" ] || continue
+
+          profile_id="$(basename "$(dirname "$profile_file")")"
+          [[ "$profile_id" =~ ^[A-Za-z0-9._-]+$ ]] || {
+            echo "ERROR: 非法 Profile 目录名：$profile_id" >&2
+            exit 1
+          }
+
+          unset AUTO_UPDATE SOURCE_REPO SOURCE_BRANCH WATCH_SOURCES_FILE
+
+          # shellcheck disable=SC1090
+          source "$profile_file"
+
+          auto_update="${AUTO_UPDATE:-false}"
+          [[ "$auto_update" = true || "$auto_update" = false ]] || {
+            echo "ERROR: $profile_id AUTO_UPDATE 必须为 true/false" >&2
+            exit 1
+          }
+
+          include=false
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$requested" ]; then
+            if [ "$profile_id" = "$requested" ]; then
+              requested_found=true
+              include=true
+            fi
+          elif [ "$auto_update" = "true" ]; then
+            include=true
+          fi
+
+          [ "$include" = "true" ] || continue
+
+          state_file="$RUNNER_TEMP/update-state-$profile_id.txt"
+          digest="$(bash scripts/resolve-update-state.sh "$profile_id" "$state_file" | tail -n1)"
+
+          [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || {
+            echo "ERROR: $profile_id 上游状态指纹无效：$digest" >&2
+            exit 1
+          }
+
+          printf '%s\t%s\n' "$profile_id" "$digest" >> "$rows"
+        done
+
+        if [ "$EVENT_NAME" = "workflow_dispatch" ] &&
+           [ -n "$requested" ] &&
+           [ "$requested_found" != "true" ]; then
+          echo "ERROR: 未找到指定 Profile：$requested" >&2
+          exit 1
+        fi
+
+        python3 - "$rows" "$GITHUB_OUTPUT" <<'PY'
+        import json
+        import sys
+        from pathlib import Path
+
+        rows_path = Path(sys.argv[1])
+        output_path = Path(sys.argv[2])
+
+        include = []
+        for raw in rows_path.read_text().splitlines():
+            if not raw.strip():
+                continue
+            profile, digest = raw.split("\t", 1)
+            include.append({
+                "profile": profile,
+                "hash": digest,
+            })
+
+        if include:
+            matrix = {"include": include}
+            has_profiles = "true"
+        else:
+            # 保持 strategy.matrix 始终为合法非空对象；
+            # job 通过 has_profiles=false 整体跳过。
+            matrix = {
+                "include": [{
+                    "profile": "__none__",
+                    "hash": "none",
+                }]
+            }
+            has_profiles = "false"
+
+        with output_path.open("a") as f:
+            f.write("matrix=" + json.dumps(matrix, separators=(",", ":")) + "\n")
+            f.write("has_profiles=" + has_profiles + "\n")
+
+        print("需要检查的 Profile：", [item["profile"] for item in include])
+        PY
+
+  check:
+    name: 检查上游 · ${{ matrix.profile }}
+    needs: discover
+    if: needs.discover.outputs.has_profiles == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+
+    steps:
+    - name: 检出仓库
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 重新确认上游状态
+      env:
+        PROFILE_ID: ${{ matrix.profile }}
+        EXPECTED_HASH: ${{ matrix.hash }}
+      run: |
+        set -Eeuo pipefail
+
+        state_dir=".update-state/$PROFILE_ID"
+        state_file="$state_dir/state.txt"
+        mkdir -p "$state_dir"
+
+        actual="$(
+          bash scripts/resolve-update-state.sh "$PROFILE_ID" "$state_file" |
+            tail -n1
+        )"
+
+        [ "$actual" = "$EXPECTED_HASH" ] || {
+          echo "ERROR: discover/check 之间上游状态发生变化" >&2
+          echo "expected=$EXPECTED_HASH" >&2
+          echo "actual=$actual" >&2
+          exit 1
+        }
+
+        echo "上游状态："
+        cat "$state_file"
+
+    - name: 查询该状态是否已经处理
+      id: state-cache
+      uses: actions/cache/restore@v6
+      with:
+        path: .update-state/${{ matrix.profile }}
+        key: openwrt-ng-upstream-${{ matrix.profile }}-${{ matrix.hash }}
+
+    - name: 触发对应 Profile 构建
+      if: steps.state-cache.outputs.cache-hit != 'true' || inputs.force == true
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PROFILE_ID: ${{ matrix.profile }}
+      run: |
+        set -Eeuo pipefail
+
+        gh api -X POST \
+          "repos/$GITHUB_REPOSITORY/dispatches" \
+          -f event_type=source-code-update \
+          -f "client_payload[profile]=$PROFILE_ID" \
+          --silent
+
+        echo "已触发 Profile：$PROFILE_ID"
+
+    - name: 记录已处理上游状态
+      if: steps.state-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: .update-state/${{ matrix.profile }}
+        key: openwrt-ng-upstream-${{ matrix.profile }}-${{ matrix.hash }}
+
+    - name: 状态未变化
+      if: steps.state-cache.outputs.cache-hit == 'true' && inputs.force != true
+      run: |
+        echo "上游状态没有变化，本轮不触发构建。"
