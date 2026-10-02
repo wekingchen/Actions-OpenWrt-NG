@@ -863,7 +863,7 @@ export class GitHubAppClient {
     const safeRepo = encodeSegment(repo);
     const safeProfile = encodeSegment(profileId);
     const profilePath =
-      `/repos/${safeOwner}/${safeRepo}/contents/profiles/${safeProfile}?ref=${encodeSegment(state.defaultBranch)}`;
+      `/repos/${safeOwner}/${safeRepo}/contents/profiles/${safeProfile}?ref=${encodeSegment(state.baseRefSha)}`;
 
     try {
       await this.api(profilePath, token);
@@ -871,6 +871,11 @@ export class GitHubAppClient {
     } catch (error) {
       if (error instanceof ProfileWriteError) throw error;
       if (error?.httpStatus !== 404) throw error;
+    }
+
+    const latest = await this.repositoryState(token, owner, repo);
+    if (latest.baseRefSha !== state.baseRefSha) {
+      throw new ProfileWriteError("repository_changed", 409);
     }
 
     return this.createProfileFilesPullRequest(
