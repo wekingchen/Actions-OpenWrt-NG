@@ -161,6 +161,66 @@ const github = {
       }
     };
   },
+  async listBuilderRuns(token, owner, repo, options = {}) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    if (options.requestId) {
+      assert.equal(options.requestId, "abcdef1234567890");
+    }
+    return [{
+      id: 123,
+      runNumber: 9,
+      displayTitle: "Build · default · cp:abcdef1234567890",
+      status: "completed",
+      conclusion: "success",
+      event: "workflow_dispatch",
+      headBranch: "main",
+      headSha: "d".repeat(40),
+      createdAt: "2026-10-02T00:00:00Z",
+      updatedAt: "2026-10-02T00:10:00Z",
+      url: "https://github.com/acme/router/actions/runs/123"
+    }];
+  },
+  async triggerBuilder(token, owner, repo, profileId, payload) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(profileId, "default");
+    assert.equal(payload.publishRelease, false);
+    return {
+      accepted: true,
+      requestId: "abcdef1234567890",
+      profileId: "default",
+      publishRelease: false,
+      ref: "main"
+    };
+  },
+  async getBuilderRun(token, owner, repo, runId) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(String(runId), "123");
+    return {
+      id: 123,
+      runNumber: 9,
+      runAttempt: 1,
+      displayTitle: "Build · default · cp:abcdef1234567890",
+      status: "completed",
+      conclusion: "success",
+      event: "workflow_dispatch",
+      headBranch: "main",
+      headSha: "d".repeat(40),
+      createdAt: "2026-10-02T00:00:00Z",
+      updatedAt: "2026-10-02T00:10:00Z",
+      runStartedAt: "2026-10-02T00:00:10Z",
+      url: "https://github.com/acme/router/actions/runs/123",
+      summaryUrl: "https://github.com/acme/router/actions/runs/123",
+      jobs: [],
+      artifacts: [],
+      release: null
+    };
+  },
   async createProfilePullRequest(token, owner, repo, profileId, payload) {
     assert.equal(token, "ghu_worker_access");
     assert.equal(owner, "acme");
