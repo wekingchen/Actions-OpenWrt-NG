@@ -58,6 +58,7 @@ jobs:
           exit 1
         }
 
+        echo "SOURCE_RUN_ID=$SOURCE_RUN_ID" >> "$GITHUB_ENV"
         echo "SOURCE_HEAD_SHA=$source_head_sha" >> "$GITHUB_ENV"
         echo "SOURCE_RUN_NUMBER=$source_run_number" >> "$GITHUB_ENV"
 
@@ -164,6 +165,7 @@ jobs:
           --notes-file release-bundle/release.txt
 
         echo "发布完成：$release_tag"
+        echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
         echo "status=success" >> "$GITHUB_OUTPUT"
 
     - name: 清理旧 Releases
@@ -196,3 +198,28 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/git/refs/tags/$tag_name" \
             --silent || true
         done
+
+    - name: 生成恢复发布 Summary
+      if: always() && !cancelled()
+      env:
+        RELEASE_TAG: ${{ steps.release-upload.outputs.tag }}
+        RECOVERY_OUTCOME: ${{ steps.release-upload.outcome }}
+      run: |
+        set -Eeuo pipefail
+
+        {
+          echo "## OpenWrt NG · Release 恢复"
+          echo
+          echo "| 项目 | 当前值 |"
+          echo "|---|---|"
+          echo "| 来源 Run | #${SOURCE_RUN_NUMBER:-unknown} · ${SOURCE_RUN_ID:-unknown} |"
+          echo "| 来源 Commit | ${SOURCE_HEAD_SHA:0:12} |"
+          echo "| 恢复发布状态 | ${RECOVERY_OUTCOME:-unknown} |"
+          echo "| Release Tag | ${RELEASE_TAG:-未生成} |"
+          echo
+          if [ -n "${RELEASE_TAG:-}" ] && [ "${RECOVERY_OUTCOME:-}" = "success" ]; then
+            echo "[打开 Release](https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG) · [查看本次运行](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+          else
+            echo "[查看本次运行](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
