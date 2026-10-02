@@ -4,7 +4,7 @@
 
 项目理念参考 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)：尽量把日常使用保持为“准备一个 `.config`，运行一次 Workflow”。在此基础上，提供更完整的缓存、构建诊断、配置留档、上游追溯、最小权限 Release 和失败恢复能力。
 
-> 当前稳定基础为 **V1.3**；**V2.0A / V2.0B Control Plane 均已完成真实端到端验证**。V2.0C 正在开发“从控制面触发 Builder → 跟踪 Run / Job → 查看 Artifact / Release / Summary”。
+> 当前稳定基础为 **V1.3**；**V2.0A / V2.0B / V2.0C Control Plane 的核心链路均已完成真实端到端验证**。V2.0C 已验证“从控制面触发 Builder → 精确关联 Run → 自动跟踪 Run / Job → 查看 Artifact / Summary”；Release 展示逻辑已由回归测试覆盖，本次真实验收因明确关闭发布而未生成测试 Release。
 
 ## V1 验证状态
 
@@ -254,7 +254,7 @@ GitHub App
 
 V2.0B 在此基础上增加在线 Profile 编辑，保存固定走“预览 → 基线 SHA 冲突检查 → 原子 commit → 新分支 → Pull Request”，不直接写 `main`。写入范围只允许标准 `profiles/<id>/` 文件，并为状态变更请求增加同源 Origin + CSRF 请求头校验。该链路已在独立测试仓库完成真实写入验证，确认默认分支在创建 PR 前后保持不变。
 
-V2.0C 继续增加 Builder 控制能力：浏览器只能请求固定的 OpenWrt NG Builder，服务端固定使用仓库默认分支并生成请求标识；页面展示 queued / running / completed、Jobs、Artifacts、Release 与 Actions Summary 入口。真正的 Actions 调度在独立 Test 仓验证通过前不会作为公共模板正式能力。
+V2.0C 继续增加 Builder 控制能力：浏览器只能请求固定的 OpenWrt NG Builder，服务端固定使用仓库默认分支并生成请求标识；页面展示 queued / running / completed、Jobs、Artifacts、Release 与 Actions Summary 入口。该链路已在独立 Test 仓完成真实 Actions 调度验证：Run 与 request ID 精确对应，成功完成编译、Manifest 校验、配置留档、固件 Artifact 上传与 Summary 生成；测试时关闭了 Release，因此没有留下测试发布物。
 
 项目提供 **Deploy V2 Control Plane** 手动 Workflow：第一次可以无 GitHub App Secret bootstrap 部署，拿到 workers.dev URL 后再创建 GitHub App并同步 Secret。Node.js + SQLite + Docker 仅保留为可选自托管方式。
 
