@@ -336,7 +336,7 @@ profiles/<id>/required-packages.txt
 profiles/<id>/watch-sources.txt
 ```
 
-浏览器不能通过该接口提交任意仓库路径；如果目标 Profile 已经存在，返回 `409 profile_already_exists`，不会覆盖。预览时 `.config` 会发送到用户自己的 Control Plane 做服务端校验，但不会写入 GitHub。
+浏览器不能通过该接口提交任意仓库路径；如果目标 Profile 已经存在，返回 `409 profile_already_exists`，不会覆盖。创建前还会再次确认默认分支 head 与检查时的基线 SHA 一致；如果期间仓库发生变化，返回 `409 repository_changed`，不会基于旧 head 静默创建。预览时 `.config` 会发送到用户自己的 Control Plane 做服务端校验，但不会写入 GitHub。
 
 ### 11. 在自己的模板实例中启用 GitHub Pages V2 入口
 
