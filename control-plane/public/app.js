@@ -104,9 +104,7 @@ async function init() {
       " · " +
       repo.defaultBranch +
       " · contents:" +
-      repo.permissions.contents +
-      " · actions:" +
-      repo.permissions.actions;
+      repo.permissions.contents;
     button.append(title, meta);
     button.addEventListener("click", () =>
       loadProfiles(repo.fullName).catch((error) => showError(error.message))
