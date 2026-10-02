@@ -201,14 +201,14 @@ const profileFetch = async (url, options = {}) => {
   if (
     method === "GET" &&
     path === "/contents/profiles/new-profile" &&
-    parsed.searchParams.get("ref") === "main"
+    parsed.searchParams.get("ref") === profileBaseSha
   ) {
     return Response.json({ message: "Not Found" }, { status: 404 });
   }
   if (
     method === "GET" &&
     path === "/contents/profiles/exists-profile" &&
-    parsed.searchParams.get("ref") === "main"
+    parsed.searchParams.get("ref") === profileBaseSha
   ) {
     return Response.json([{ type: "file", name: ".config" }]);
   }
@@ -343,6 +343,67 @@ await assert.rejects(
     return true;
   }
 );
+
+
+let concurrentHeadCalls = 0;
+let concurrentWriteCalls = 0;
+const concurrentClient = new GitHubAppClient(
+  {
+    clientId: "Iv1.concurrent",
+    clientSecret: "concurrent-secret",
+    redirectUri: "https://example.test/api/v1/auth/callback"
+  },
+  async (url, options = {}) => {
+    const parsed = new URL(String(url));
+    const path = parsed.pathname.replace(/^\/repos\/acme\/router/, "");
+    const method = String(options.method || "GET").toUpperCase();
+
+    if (method === "GET" && path === "") {
+      return Response.json({ default_branch: "main" });
+    }
+    if (method === "GET" && path === "/commits/main") {
+      concurrentHeadCalls += 1;
+      return Response.json({
+        sha:
+          concurrentHeadCalls === 1
+            ? "1".repeat(40)
+            : "2".repeat(40)
+      });
+    }
+    if (
+      method === "GET" &&
+      path === "/contents/profiles/race-profile" &&
+      parsed.searchParams.get("ref") === "1".repeat(40)
+    ) {
+      return Response.json({ message: "Not Found" }, { status: 404 });
+    }
+
+    if (method !== "GET") concurrentWriteCalls += 1;
+    return Response.json({ message: "unexpected concurrent request" }, { status: 500 });
+  }
+);
+
+await assert.rejects(
+  () =>
+    concurrentClient.createNewProfilePullRequest(
+      "ghu_profile",
+      "acme",
+      "router",
+      "race-profile",
+      profileFilesObject(
+        buildProfileTemplateFiles({
+          ...templateInput,
+          profileId: "race-profile"
+        })
+      )
+    ),
+  (error) => {
+    assert.equal(error.code, "repository_changed");
+    assert.equal(error.status, 409);
+    return true;
+  }
+);
+assert.equal(concurrentWriteCalls, 0);
 
 assert.match(createdProfilePr.branch, /^openwrt-ng\/profile-default-/);
 assert.ok(
@@ -578,7 +639,7 @@ const fakeFetch = async (url, options = {}) => {
 
   if (
     parsed?.pathname === "/repos/acme/router/contents/profiles/new-profile" &&
-    parsed.searchParams.get("ref") === "main"
+    parsed.searchParams.get("ref") === "d".repeat(40)
   ) {
     return Response.json({ message: "Not Found" }, { status: 404 });
   }
