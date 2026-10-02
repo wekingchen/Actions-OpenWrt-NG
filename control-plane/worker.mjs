@@ -1,4 +1,8 @@
-import { GitHubAppClient, githubErrorReason } from "./lib/github.mjs";
+import {
+  GitHubAppClient,
+  ProfileWriteError,
+  githubErrorReason
+} from "./lib/github.mjs";
 import { D1ControlPlaneStore } from "./lib/d1-store.mjs";
 import {
   hashOpaque,
@@ -98,6 +102,13 @@ function withSecurityHeaders(response) {
 
 function sessionToken(request) {
   return parseCookies(request.headers.get("cookie") || "").ong_session || "";
+}
+
+function validMutationRequest(request, origin) {
+  return (
+    request.headers.get("origin") === origin &&
+    request.headers.get("x-openwrt-ng-csrf") === "1"
+  );
 }
 
 function createDependencies(request, env, config, overrides = {}) {
@@ -347,6 +358,9 @@ export async function handleControlPlaneRequest(
     }
 
     if (request.method === "POST" && url.pathname === "/api/v1/logout") {
+      if (!validMutationRequest(request, config.origin)) {
+        return json(403, { error: "csrf_validation_failed" });
+      }
       const opaque = sessionToken(request);
       if (opaque) await deps.store.deleteSession(hashOpaque(opaque));
       return new Response(null, {
@@ -391,6 +405,77 @@ export async function handleControlPlaneRequest(
         repo
       );
       return json(200, { owner, repo, profiles });
+    }
+
+
+    const profileDetailMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/([^/]+)$/
+    );
+    if (request.method === "GET" && profileDetailMatch) {
+      const session = await authenticatedSession();
+      if (!session) {
+        return json(401, { error: "authentication_required" });
+      }
+      const owner = decodeURIComponent(profileDetailMatch[1]);
+      const repo = decodeURIComponent(profileDetailMatch[2]);
+      const profileId = decodeURIComponent(profileDetailMatch[3]);
+      try {
+        const detail = await deps.github.getProfile(
+          session.accessToken,
+          owner,
+          repo,
+          profileId
+        );
+        return json(200, detail);
+      } catch (error) {
+        if (error instanceof ProfileWriteError) {
+          return json(error.status, { error: error.code });
+        }
+        throw error;
+      }
+    }
+
+    const profileWriteMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/([^/]+)\/pull-request$/
+    );
+    if (request.method === "POST" && profileWriteMatch) {
+      if (!validMutationRequest(request, config.origin)) {
+        return json(403, { error: "csrf_validation_failed" });
+      }
+      const session = await authenticatedSession();
+      if (!session) {
+        return json(401, { error: "authentication_required" });
+      }
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return json(400, { error: "invalid_json" });
+      }
+      const owner = decodeURIComponent(profileWriteMatch[1]);
+      const repo = decodeURIComponent(profileWriteMatch[2]);
+      const profileId = decodeURIComponent(profileWriteMatch[3]);
+      try {
+        const result = await deps.github.createProfilePullRequest(
+          session.accessToken,
+          owner,
+          repo,
+          profileId,
+          payload
+        );
+        return json(201, result);
+      } catch (error) {
+        if (error instanceof ProfileWriteError) {
+          return json(error.status, { error: error.code });
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_profile_write_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
     }
 
     if (env?.ASSETS) {
