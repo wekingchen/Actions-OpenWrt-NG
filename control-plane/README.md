@@ -1,13 +1,10 @@
 # OpenWrt NG Control Plane
 
-V2 控制面采用 **Public Pages + Same-Origin BFF** 两层结构。
+V2 控制面的**默认部署方式是 Cloudflare Workers + D1**。不要求用户自备 VPS、Docker、Caddy 或常驻数据库。
 
-## 为什么不能直接在 GitHub Pages 登录
+自托管 Node.js + SQLite + Docker 仍保留为可选高级方案，但不再是主路线。
 
-GitHub Pages 是公开静态站点，不能安全保存 GitHub App client secret、private key、user access token 或 refresh token。
-V2 因此不把 GitHub 凭据交给浏览器，也不把写权限加入现有 Pages Workflow。
-
-## V2.0A 架构
+## 架构
 
 ```text
 GitHub Pages
@@ -16,145 +13,244 @@ GitHub Pages
         |
         | 打开控制面
         v
-Control Plane Origin
-  UI + Auth Broker + /api/v1/*
-  同源 HttpOnly Session
+Cloudflare Workers
+  静态 UI + Auth Broker + /api/v1/*
+  Same-Origin HttpOnly Session
         |
-        | GitHub App Web Flow + PKCE
+        +---- D1
+        |     OAuth state / Session / 加密后的 GitHub token
+        |
+        +---- Worker Secrets
+        |     GitHub Client Secret / TOKEN_ENCRYPTION_KEY
+        |
         v
-GitHub
+GitHub App / GitHub API
 ```
 
-原则：
+安全原则：
 
-- GitHub App 的授权回调只指向 Control Plane Origin。
-- GitHub user access token / refresh token 只保存在服务端加密存储。
-- 浏览器只持有 Secure + HttpOnly Session Cookie。
-- Pages 不通过 CORS 读取登录 Session，也不持有任何 GitHub Token。
-- V2.0A 只申请读取仓库所需权限；写 Profile 和触发 Workflow 在后续阶段单独扩权。
-- 安装 GitHub App 时应让用户选择目标仓库，不默认要求所有仓库。
+- GitHub Pages 继续保持公开只读，不持有 GitHub Token。
+- GitHub App 使用 Web Application Flow + PKCE。
+- OAuth state 额外绑定发起浏览器的 HttpOnly nonce Cookie，防 Login CSRF。
+- 浏览器只持有随机 Session ID，不接触 GitHub access / refresh token。
+- GitHub token 使用 AES-256-GCM 加密后写入 D1。
+- Session 同时具有绝对过期与闲置过期。
+- GitHub user token 临近到期时由 Worker 自动 refresh。
+- V2.0A 只需要 GitHub Repository Metadata read + Contents read。
 
-## V2.0A GitHub App 最小权限
+## 目录
 
-建议初始权限：
+- `worker.mjs`：Cloudflare Workers 主入口。
+- `lib/d1-store.mjs`：D1 Session / OAuth state 存储。
+- `migrations/`：D1 schema migration。
+- `public/`：与 API 同源部署的控制面静态 UI。
+- `wrangler.jsonc`：Workers / D1 / Assets 配置。
+- `worker.test.mjs`：Worker OAuth / Session / Repository / Profile 回归。
+- `server.mjs` + `lib/store.mjs`：可选自托管兼容实现。
+- `Dockerfile`：可选自托管镜像。
 
-- Repository metadata: read
-- Repository contents: read
+## 推荐部署：GitHub Actions + Cloudflare
 
-V2.0A 不需要：
+不需要本地安装 Wrangler。
 
-- Contents: write
-- Pull requests: write
-- Actions: read / write
-- Administration
-- Secrets
+### 1. Cloudflare 创建 D1
 
-V2.0B 在线保存 Profile 时再评估 `contents: write` / `pull_requests: write`。
-V2.0C 网页触发 Builder 时再评估 Actions/Workflow 相关写能力。
+在 Cloudflare Dashboard 创建数据库：
 
-## API 契约
+```text
+openwrt-ng-control-plane
+```
 
-同源 API 前缀：`/api/v1`
+记录它的 **Database ID**。
 
-- `GET /api/v1/session`：读取当前登录 Session。
-- `GET /api/v1/auth/start?return_to=/...`：开始 GitHub App Web Flow。
-- `GET /api/v1/auth/callback`：GitHub OAuth callback，仅由服务端处理。
-- `POST /api/v1/logout`：注销并销毁 Session。
-- `GET /api/v1/repositories`：列出当前用户与 App 安装共同可访问的仓库。
-- `GET /api/v1/repositories/{owner}/{repo}/profiles`：V2.0A 只读列出 Profile。
+在本仓库 Settings → Secrets and variables → Actions → Variables 新建：
 
-响应不得包含 GitHub access token、refresh token、client secret 或 private key。
+```text
+CONTROL_PLANE_D1_DATABASE_ID=<Database ID>
+```
 
-## Session
+### 2. 创建 Cloudflare API Token
 
-推荐：
+GitHub Actions 中 Wrangler 需要：
 
-- Cookie: Secure, HttpOnly, SameSite=Lax
-- Session ID: 高熵随机值
-- 服务端 Session 有绝对过期时间和闲置过期时间
-- GitHub user token 使用 GitHub 的过期 token
-- logout 时服务端同时清理 Session / token material
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_API_TOKEN`
 
-## 浏览器配置
+把二者保存为仓库 Actions Secrets。
 
-`dashboard/data/control-plane.json` 只包含公开信息：
+第一次由 CI 创建 Worker 时，Token 需要 Workers 产品范围的创建权限；D1 migration 还需要对目标 D1 的编辑权限。Worker 创建后可以再把 Token 收紧为只允许编辑该 Worker，并保留目标 D1 所需权限。
+
+### 3. 第一次 bootstrap 部署
+
+Actions → **Deploy V2 Control Plane** → **Run workflow**
+
+保持：
+
+```text
+同步 GitHub App Secret = false
+```
+
+Workflow 会：
+
+1. 应用 D1 migration。
+2. 部署 Worker + 静态 UI。
+3. 不要求 GitHub App Secret。
+
+完成后，从 Workflow 日志或 Cloudflare Dashboard 获取：
+
+```text
+https://openwrt-ng-control-plane.<你的workers子域>.workers.dev
+```
+
+此时访问 `/api/v1/health` 应返回：
+
+```json
+{
+  "ok": true,
+  "version": 1,
+  "runtime": "cloudflare-workers",
+  "configured": false
+}
+```
+
+### 4. 创建 GitHub App
+
+使用刚才真实的 workers.dev 地址：
+
+- Homepage URL：`https://...workers.dev`
+- Callback URL：`https://...workers.dev/api/v1/auth/callback`
+- Setup URL：`https://...workers.dev/`
+- Expire user authorization tokens：开启
+- Request user authorization during installation：**不要开启**
+- Device Flow：关闭
+- Webhook：关闭
+- Repository permissions：
+  - Metadata：Read-only
+  - Contents：Read-only
+- 安装仓库建议使用 **Only select repositories**
+
+记录：
+
+- Client ID
+- Client Secret
+- App slug
+
+### 5. 配置 GitHub Actions Secrets
+
+仓库 Actions Secrets 新建：
+
+```text
+GITHUB_APP_CLIENT_ID
+GITHUB_APP_CLIENT_SECRET
+GITHUB_APP_SLUG
+TOKEN_ENCRYPTION_KEY
+```
+
+其中 `TOKEN_ENCRYPTION_KEY` 必须是稳定的高熵随机值，至少 32 字符。**以后重新部署也不要随意更换**，否则 D1 中既有加密 token 无法解密。
+
+例如本地生成：
+
+```bash
+openssl rand -hex 32
+```
+
+Client Secret、TOKEN_ENCRYPTION_KEY 不得写进仓库文件或 `dashboard/data/control-plane.json`。
+
+### 6. 第二次部署并同步 Secret
+
+Actions → **Deploy V2 Control Plane** → **Run workflow**
+
+这次勾选：
+
+```text
+同步 GitHub App Secret = true
+```
+
+Workflow 会先部署代码与 D1 migration，再使用 Wrangler Secret API 把四个 GitHub App / 加密 Secret 写入 Worker。
+
+访问：
+
+```text
+https://...workers.dev/api/v1/health
+```
+
+应看到：
+
+```json
+{
+  "ok": true,
+  "version": 1,
+  "runtime": "cloudflare-workers",
+  "configured": true
+}
+```
+
+### 7. 真实验证
+
+打开 Worker 首页：
+
+1. 点击“使用 GitHub 登录”。
+2. 登录成功后安装 / 调整 GitHub App。
+3. 只授权目标仓库。
+4. 页面应列出该仓库。
+5. 点击仓库后应读取到 `profiles/*`，例如 `profiles/default`。
+
+只有这五步真实通过后，才启用公开 Pages 入口。
+
+### 8. 启用 GitHub Pages V2 入口
+
+修改：
+
+`dashboard/data/control-plane.json`
+
+例如：
 
 ```json
 {
   "version": 1,
-  "enabled": false,
-  "controlPlaneUrl": "",
-  "githubAppSlug": ""
+  "enabled": true,
+  "controlPlaneUrl": "https://openwrt-ng-control-plane.example.workers.dev",
+  "githubAppSlug": "your-app-slug"
 }
 ```
 
-这里禁止放任何 Secret 或 Token。
+这个文件只允许公开信息。严禁放入 Client Secret、GitHub token 或 TOKEN_ENCRYPTION_KEY。
 
-V2.0A 在未部署 BFF 时保持 `enabled=false`，因此主干 Pages 不会出现“看似可登录、实际泄漏凭据”的半成品状态。
+## Bootstrap 模式
 
+Worker 可以在没有 GitHub App Secret 时先上线。
 
-## 部署最小步骤
+在此状态：
 
-### 1. 创建 GitHub App
+- 静态 UI 可访问。
+- `/api/v1/health` 正常。
+- `/api/v1/config` 正常。
+- GitHub 登录入口会显示“尚未配置”。
+- 其他需要认证的 API 返回 `503 control_plane_not_configured`。
 
-建议设置：
+这样可以先获得真实 workers.dev URL，再创建 GitHub App，不存在 Callback URL 的初始化死循环。
 
-- Homepage URL：你的 Control Plane HTTPS 地址，例如 `https://control.example.com`
-- Callback URL：`https://control.example.com/api/v1/auth/callback`
-- User access token expiration：保持开启
-- Repository permissions：Metadata read、Contents read
-- 不需要生成 GitHub App private key；V2.0A 只使用 user access token Web Flow
-- 安装范围由用户在 GitHub 安装页选择目标仓库
+## 本地 Wrangler（可选）
 
-GitHub App 创建后记录：
-
-- Client ID
-- Client secret
-- App slug
-
-### 2. 准备环境变量
+需要 Node.js 24。
 
 ```bash
-CONTROL_PLANE_ORIGIN=https://control.example.com
-GITHUB_APP_CLIENT_ID=...
-GITHUB_APP_CLIENT_SECRET=...
-GITHUB_APP_SLUG=...
-TOKEN_ENCRYPTION_KEY=<至少 32 字符的高熵随机值>
-CONTROL_PLANE_DB=/data/control-plane.db
-SESSION_TTL_SECONDS=604800
-SESSION_IDLE_TTL_SECONDS=86400
-PORT=8787
+cd control-plane
+npm install
+npx wrangler d1 migrations apply DB --local
+npx wrangler dev
 ```
 
-生产环境必须使用 HTTPS。只有显式设置：
+本地 Secret 放入 `.dev.vars`，该文件已被 `.gitignore` 排除。
 
-```bash
-CONTROL_PLANE_ALLOW_INSECURE_LOCALHOST=true
-```
+## 自托管 Docker（可选）
 
-时才允许 localhost / 127.0.0.1 使用 HTTP 调试。
+Node.js + SQLite + Docker 版本仍保留用于不希望依赖 Cloudflare 的用户。
 
-### 3. Docker 运行
+它不再是 V2 的默认教程。相关实现：
 
-```bash
-docker build -f control-plane/Dockerfile -t openwrt-ng-control-plane .
-docker run -d \
-  --name openwrt-ng-control-plane \
-  --restart unless-stopped \
-  -p 127.0.0.1:8787:8787 \
-  -v openwrt-ng-control-plane-data:/data \
-  --env-file /path/to/control-plane.env \
-  openwrt-ng-control-plane
-```
+- `server.mjs`
+- `lib/store.mjs`
+- `Dockerfile`
 
-前面再使用 Caddy / Nginx / Cloudflare Tunnel 等提供 HTTPS 反向代理。
-
-### 4. 最后再启用 Pages 入口
-
-只有 Control Plane 已能通过 HTTPS 正常访问后，才修改：
-
-`dashboard/data/control-plane.json`
-
-把 `enabled` 设为 `true` 并填写公开的 `controlPlaneUrl` / `githubAppSlug`。
-
-Client secret、token、数据库和环境文件绝不能进入该 JSON。
+无论使用 Workers 还是 Docker，浏览器侧与 GitHub App 的安全边界保持一致。

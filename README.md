@@ -238,19 +238,23 @@ Profile ID 必须以字母或数字开头，只允许字母、数字、点、下
 
 ## V2 Control Plane
 
-V2 不把 GitHub 登录和写权限直接加入公开 GitHub Pages。架构固定为：
+V2 不把 GitHub 登录和写权限直接加入公开 GitHub Pages。默认运行方式已经改为**无服务器架构**：
 
 ```text
 Public GitHub Pages（只读）
         ↓ 打开
-Control Plane Origin（UI + Auth Broker + API）
+Cloudflare Workers（UI + Auth Broker + API）
+        ↓
+D1 + Worker Secrets
         ↓
 GitHub App
 ```
 
-V2.0A 先实现 GitHub App 登录、安装仓库选择和只读 Profile 访问。GitHub user access token / refresh token 只在服务端保存，公开 Pages 与浏览器脚本都不保存 GitHub Token。
+因此使用 V2 **不需要自备 VPS、Docker 或 Caddy**。V2.0A 已实现 GitHub App 登录、安装仓库选择和只读 Profile 访问；GitHub user access token / refresh token 只在 Worker 侧加密存入 D1，公开 Pages 与浏览器脚本都不保存 GitHub Token。
 
-当前 `dashboard/data/control-plane.json` 默认 `enabled=false`；只有部署独立 Control Plane Origin 后才启用入口。详细安全边界见 `control-plane/README.md`。
+项目提供 **Deploy V2 Control Plane** 手动 Workflow：第一次可以无 GitHub App Secret bootstrap 部署，拿到 workers.dev URL 后再创建 GitHub App并同步 Secret。Node.js + SQLite + Docker 仅保留为可选自托管方式。
+
+当前 `dashboard/data/control-plane.json` 默认 `enabled=false`；只有真实 OAuth / 仓库 / Profile 验证通过后才启用入口。详细步骤见 `control-plane/README.md`。
 
 ## 构建与诊断
 
@@ -394,10 +398,12 @@ luci|https://github.com/openwrt/luci|master
 .github/workflows/
 ├── build-openwrt.yml     主构建 / Release / cleanup
 ├── update-checker.yml    通用 Git 上游更新检查
-├── release-existing.yml Build 成功后的 Release 恢复
-└── pages-dashboard.yml  Dashboard 数据生成与 Pages 部署
+├── release-existing.yml      Build 成功后的 Release 恢复
+├── pages-dashboard.yml       Dashboard 数据生成与 Pages 部署
+├── control-plane-ci.yml      V2 Workers / D1 / 自托管兼容测试
+└── deploy-control-plane.yml  V2 Cloudflare Worker 手动部署
 dashboard/                Dashboard + Profile Wizard + V2 控制面入口静态前端
-control-plane/             V2 Auth Broker / API 契约与安全设计
+control-plane/             V2 Workers + D1 Auth Broker；保留可选自托管实现
 adapters/                 源码准备适配层
 profiles/
 └── default/

@@ -8,19 +8,21 @@ on:
     paths:
       - "control-plane/**"
       - ".github/workflows/control-plane-ci.yml"
+      - ".github/workflows/deploy-control-plane.yml"
   pull_request:
     paths:
       - "control-plane/**"
       - ".github/workflows/control-plane-ci.yml"
+      - ".github/workflows/deploy-control-plane.yml"
 
 permissions:
   contents: read
 
 jobs:
   test:
-    name: Node 24 Auth Broker 测试
+    name: Workers / D1 / 自托管兼容测试
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
     - name: 检出仓库
@@ -33,24 +35,74 @@ jobs:
       with:
         node-version: "24"
 
+    - name: 安装 Wrangler
+      working-directory: control-plane
+      run: |
+        set -Eeuo pipefail
+        npm install --ignore-scripts --no-audit --no-fund
+
     - name: 静态检查
       run: |
         set -Eeuo pipefail
+        node --check control-plane/worker.mjs
+        node --check control-plane/worker.test.mjs
         node --check control-plane/server.mjs
         node --check control-plane/lib/security.mjs
+        node --check control-plane/lib/d1-store.mjs
         node --check control-plane/lib/store.mjs
         node --check control-plane/lib/github.mjs
         node --check control-plane/public/app.js
         node --check control-plane/test.mjs
+        python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
         git diff --check
 
-    - name: 运行服务端回归测试
+    - name: 运行控制面回归测试
+      working-directory: control-plane
       run: |
         set -Eeuo pipefail
-        cd control-plane
         npm test
 
-    - name: 构建容器镜像
+    - name: 验证本地 D1 Migration
+      working-directory: control-plane
       run: |
         set -Eeuo pipefail
-        docker build -f control-plane/Dockerfile -t openwrt-ng-control-plane:test .
+        npx wrangler d1 migrations apply DB --local
+        npx wrangler d1 execute DB --local --command "INSERT INTO oauth_states(state_hash,browser_hash,verifier_cipher,return_to,expires_at) VALUES('ci-state','ci-browser','ci-verifier','/',9999999999999); DELETE FROM oauth_states WHERE state_hash='ci-state' RETURNING state_hash;" >/tmp/d1-smoke.log
+        grep -q "ci-state" /tmp/d1-smoke.log
+
+    - name: 验证 Worker Bundle
+      working-directory: control-plane
+      run: |
+        set -Eeuo pipefail
+        npx wrangler deploy --dry-run --outdir .wrangler/dry-run
+
+    - name: Worker 同源 UI / API 冒烟
+      working-directory: control-plane
+      run: |
+        set -Eeuo pipefail
+
+        cat > .dev.vars <<'EOF'
+        GITHUB_APP_CLIENT_ID=Iv1.test
+        GITHUB_APP_CLIENT_SECRET=test-client-secret
+        GITHUB_APP_SLUG=openwrt-ng-test
+        TOKEN_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef
+        EOF
+
+        npx wrangler dev --local --port 8788 >/tmp/wrangler-dev.log 2>&1 &
+        pid=$!
+        trap 'kill "$pid" 2>/dev/null || true; rm -f .dev.vars' EXIT
+
+        for i in $(seq 1 30); do
+          if curl -fsS http://127.0.0.1:8788/api/v1/health >/tmp/health.json 2>/dev/null; then
+            break
+          fi
+          sleep 1
+        done
+
+        jq -e '.ok == true and .runtime == "cloudflare-workers" and .configured == true' /tmp/health.json >/dev/null
+        curl -fsS http://127.0.0.1:8788/ | grep -q "OpenWrt NG Control Plane"
+
+    - name: 构建可选自托管容器
+      run: |
+        set -Eeuo pipefail
+        docker build -f control-plane/Dockerfile -t openwrt-ng-control-plane:self-hosted-test .

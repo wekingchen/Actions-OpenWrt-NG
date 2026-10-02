@@ -10,3 +10,6 @@ build-failure.log
 control-plane/*.db
 control-plane/*.db-*
 control-plane/.env
+control-plane/.dev.vars
+control-plane/.wrangler/
+control-plane/node_modules/
