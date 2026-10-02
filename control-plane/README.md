@@ -254,6 +254,14 @@ watch-sources.txt
 
 ### 9. V2.0C：触发 Builder 与查看运行状态
 
+V2.0C 核心链路已在独立 Test 仓完成真实端到端验证：
+
+- Control Plane 成功触发固定 Builder。
+- request ID 与实际 Actions Run 精确对应。
+- Run / Job 状态可读取并跟踪。
+- 编译、Manifest 校验、最终配置留档、固件 Artifact 上传与 Workflow Summary 均真实成功。
+- 首轮真实验收明确关闭 Release，因此发布 Job 正常跳过，Test 仓未留下测试 Release；Release 识别/展示逻辑由自动化回归测试覆盖。
+
 V2.0C 在 V2.0B 的权限基础上额外需要：
 
 - Actions：Read and write
