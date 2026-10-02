@@ -244,7 +244,8 @@ luci|https://github.com/openwrt/luci|master
 3. 使用 Actions cache 判断这个状态是否已经处理。
 4. 只有状态变化时才发送 `repository_dispatch`。
 5. **OpenWrt NG Builder** 根据 `client_payload.profile` 构建对应 Profile。
-6. 如果下游构建失败，同一个上游状态不会自动无限重试；可以手动运行 Builder，或在 Update Checker 中勾选 `force` 再触发一次。
+6. 首次启用 `AUTO_UPDATE=true` 时，因为还没有已记录状态，会触发一次基线构建。
+7. 如果下游构建失败，同一个上游状态不会自动无限重试；可以手动运行 Builder，或在 Update Checker 中勾选 `force` 再触发一次。
 
 手动运行 Update Checker 时，可以：
 
