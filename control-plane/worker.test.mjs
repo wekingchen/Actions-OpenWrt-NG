@@ -193,7 +193,9 @@ const github = {
       requestId: "abcdef1234567890",
       profileId: "default",
       publishRelease: false,
-      ref: "main"
+      ref: "main",
+      runId: 0,
+      runUrl: ""
     };
   },
   async getBuilderRun(token, owner, repo, runId) {
