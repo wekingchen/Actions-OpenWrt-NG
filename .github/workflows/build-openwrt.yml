@@ -162,6 +162,19 @@ jobs:
         retention-days: 1
         compression-level: 0
 
+    - name: 生成预检 Summary
+      if: always() && !cancelled()
+      run: |
+        if [ -f scripts/write-summary.sh ]; then
+          bash scripts/write-summary.sh preflight || true
+        else
+          {
+            echo "## OpenWrt NG · 构建预检"
+            echo
+            echo "Summary 渲染器不可用，请查看 Job 日志。"
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
+
   build:
     name: 编译 OpenWrt 固件
     needs: preflight
@@ -422,8 +435,20 @@ jobs:
       id: compile
       run: |
         set -Eeuo pipefail
-        export BUILD_STARTED_AT="$(date +%s)"
+
+        build_started_at="$(date +%s)"
+        echo "BUILD_STARTED_AT=$build_started_at" >> "$GITHUB_ENV"
+        export BUILD_STARTED_AT="$build_started_at"
+
+        set +e
         scripts/compile.sh           "$GITHUB_WORKSPACE/openwrt"           "$GITHUB_WORKSPACE/build.log"           "$GITHUB_WORKSPACE/build-failure.log"
+        compile_status=$?
+        set -e
+
+        build_finished_at="$(date +%s)"
+        echo "BUILD_FINISHED_AT=$build_finished_at" >> "$GITHUB_ENV"
+
+        [ "$compile_status" -eq 0 ] || exit "$compile_status"
         echo "status=success" >> "$GITHUB_OUTPUT"
 
     - name: 保存编译缓存
@@ -515,6 +540,26 @@ jobs:
         if-no-files-found: error
         retention-days: 1
         compression-level: 0
+
+    - name: 生成构建 Summary
+      if: always() && !cancelled()
+      env:
+        DL_CACHE_HIT: ${{ steps.dl-cache.outputs.cache-hit }}
+        BUILD_CACHE_HIT: ${{ steps.build-cache-restore.outputs.cache-hit }}
+        COMPILE_OUTCOME: ${{ steps.compile.outcome }}
+        MANIFEST_OUTCOME: ${{ steps.manifest.outcome }}
+        CONFIG_OUTCOME: ${{ steps.config-record.outcome }}
+        RELEASE_ASSETS_OUTCOME: ${{ steps.release-assets.outcome }}
+      run: |
+        if [ -f scripts/write-summary.sh ]; then
+          bash scripts/write-summary.sh build || true
+        else
+          {
+            echo "## OpenWrt NG · 构建结果"
+            echo
+            echo "Summary 渲染器不可用，请查看 Job 日志。"
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
 
   release:
     name: 发布 OpenWrt 固件
@@ -611,6 +656,7 @@ jobs:
         }
 
         echo "发布完成：$release_tag"
+        echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
         echo "status=success" >> "$GITHUB_OUTPUT"
 
     - name: 清理旧 Releases
@@ -637,6 +683,38 @@ jobs:
           gh api -X DELETE             "repos/${GITHUB_REPOSITORY}/releases/$release_id"             --silent
           gh api -X DELETE             "repos/${GITHUB_REPOSITORY}/git/refs/tags/$tag_name"             --silent || true
         done
+
+    - name: 生成 Release Summary
+      if: always() && !cancelled()
+      env:
+        RELEASE_TAG: ${{ steps.release-upload.outputs.tag }}
+        RELEASE_OUTCOME: ${{ steps.release-upload.outcome }}
+      run: |
+        set -Eeuo pipefail
+
+        asset_count=0
+        asset_bytes=0
+        if [ -d release-bundle/assets ]; then
+          asset_count="$(find release-bundle/assets -maxdepth 1 -type f | wc -l | tr -d ' ')"
+          asset_bytes="$(find release-bundle/assets -maxdepth 1 -type f -printf '%s\n' | awk '{s+=$1} END {print s+0}')"
+        fi
+
+        {
+          echo "## OpenWrt NG · Release"
+          echo
+          echo "| 项目 | 当前值 |"
+          echo "|---|---|"
+          echo "| 发布状态 | ${RELEASE_OUTCOME:-unknown} |"
+          echo "| Release Tag | ${RELEASE_TAG:-未生成} |"
+          echo "| 附件 | $asset_count 个 · $asset_bytes bytes |"
+          echo "| Workflow Run | #$GITHUB_RUN_NUMBER · ${GITHUB_SHA:0:12} |"
+          echo
+          if [ -n "${RELEASE_TAG:-}" ] && [ "${RELEASE_OUTCOME:-}" = "success" ]; then
+            echo "[打开 Release](https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG) · [查看本次运行](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+          else
+            echo "[查看本次运行](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
 
   cleanup:
     name: 清理旧 Workflow 运行记录
