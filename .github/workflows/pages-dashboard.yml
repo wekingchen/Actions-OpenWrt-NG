@@ -51,43 +51,7 @@ jobs:
         node --check dashboard/assets/app.js
         node --check dashboard/assets/wizard-core.js
         node --check dashboard/assets/wizard.js
-        node scripts/dashboard/test-wizard.mjs
-
-        rm -rf "$RUNNER_TEMP/wizard-profile"
-        mkdir -p "$RUNNER_TEMP/wizard-profile"
-        unzip -q /tmp/openwrt-ng-profile-test.zip -d "$RUNNER_TEMP/wizard-profile"
-        unzip -t /tmp/openwrt-ng-profile-test.zip >/dev/null
-
-        test -x "$RUNNER_TEMP/wizard-profile/profiles/test-profile/diy-part1.sh"
-        test -x "$RUNNER_TEMP/wizard-profile/profiles/test-profile/diy-part2.sh"
-        bash -n "$RUNNER_TEMP/wizard-profile/profiles/test-profile/profile.env"
-        bash -n "$RUNNER_TEMP/wizard-profile/profiles/test-profile/diy-part1.sh"
-        bash -n "$RUNNER_TEMP/wizard-profile/profiles/test-profile/diy-part2.sh"
-
-        cp -a "$RUNNER_TEMP/wizard-profile/profiles/test-profile" profiles/
-        bash scripts/profile.sh validate test-profile
-        : > "$RUNNER_TEMP/generated-profile.env"
-        GITHUB_ENV="$RUNNER_TEMP/generated-profile.env" \
-          bash scripts/profile.sh export test-profile
-        grep -Fx "PROFILE_ID=test-profile" "$RUNNER_TEMP/generated-profile.env"
-        grep -Fx "AUTO_UPDATE=true" "$RUNNER_TEMP/generated-profile.env"
-        grep -Fx "UPLOAD_RELEASE=true" "$RUNNER_TEMP/generated-profile.env"
-
-        bash scripts/resolve-update-state.sh \
-          test-profile "$RUNNER_TEMP/update-state.txt" >/dev/null
-        grep -q '^source|' "$RUNNER_TEMP/update-state.txt"
-        grep -q '^packages|' "$RUNNER_TEMP/update-state.txt"
-
-        fake_root="$RUNNER_TEMP/fake-build"
-        mkdir -p "$fake_root/bin/targets/test/generic"
-        printf 'base-files - 1\ncurl - 1\nluci - 1\n' \
-          > "$fake_root/bin/targets/test/generic/test.manifest"
-        bash scripts/validate-manifest.sh \
-          "$fake_root" \
-          "$RUNNER_TEMP/wizard-profile/profiles/test-profile/required-packages.txt" \
-          "$RUNNER_TEMP/manifest-files.txt"
-
-        rm -rf profiles/test-profile
+        bash scripts/dashboard/test-wizard.sh
         git diff --check
 
     - name: 导出 Dashboard 数据

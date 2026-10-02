@@ -34,8 +34,9 @@ if (zip.length < 100) throw new Error("ZIP unexpectedly small");
 if (zip[0] !== 0x50 || zip[1] !== 0x4b || zip[2] !== 0x03 || zip[3] !== 0x04) {
   throw new Error("invalid ZIP local header");
 }
-await writeFile("/tmp/openwrt-ng-profile-test.zip", zip);
-console.log(`Wizard test OK: files=${files.length} zip_bytes=${zip.length}`);
+const output = process.argv[2] || "/tmp/openwrt-ng-profile-test.zip";
+await writeFile(output, zip);
+console.log(`Wizard test OK: files=${files.length} zip_bytes=${zip.length} output=${output}`);
 
 const duplicateLabel = { ...input, watchSources: "source|https://github.com/openwrt/packages|master" };
 let duplicateRejected = false;
