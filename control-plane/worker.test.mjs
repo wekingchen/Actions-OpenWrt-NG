@@ -223,6 +223,31 @@ const github = {
       release: null
     };
   },
+  async createNewProfilePullRequest(token, owner, repo, profileId, files) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(profileId, "new-profile");
+    assert.equal(files[".config"], "CONFIG_TARGET_x86=y\n");
+    assert.match(files["profile.env"], /PROFILE_NAME='New Profile'/);
+    return {
+      branch: "openwrt-ng/profile-new-profile-test",
+      commitSha: "c".repeat(40),
+      changedFiles: [
+        ".config",
+        "profile.env",
+        "diy-part1.sh",
+        "diy-part2.sh",
+        "required-packages.txt",
+        "watch-sources.txt"
+      ],
+      action: "create",
+      pullRequest: {
+        number: 8,
+        url: "https://github.com/acme/router/pull/8"
+      }
+    };
+  },
   async createProfilePullRequest(token, owner, repo, profileId, payload) {
     assert.equal(token, "ghu_worker_access");
     assert.equal(owner, "acme");
@@ -438,6 +463,89 @@ assert.deepEqual((await profiles.json()).profiles, [{
   sha: "abc"
 }]);
 
+
+const templateInput = {
+  profileId: "new-profile",
+  profileName: "New Profile",
+  sourceRepo: "https://github.com/openwrt/openwrt",
+  sourceBranch: "main",
+  adapter: "direct-openwrt",
+  configText: "CONFIG_TARGET_x86=y\n",
+  autoUpdate: false,
+  uploadRelease: true,
+  uploadFirmware: true,
+  maximizeSpace: false,
+  streamLog: true,
+  requiredPackages: "",
+  watchSources: ""
+};
+
+const rejectedTemplatePreview = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/profile-templates/preview",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(templateInput)
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(rejectedTemplatePreview.status, 403);
+
+const templatePreview = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/profile-templates/preview",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(templateInput)
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(templatePreview.status, 200);
+const templatePreviewBody = await templatePreview.json();
+assert.equal(templatePreviewBody.profileId, "new-profile");
+assert.equal(templatePreviewBody.files.length, 6);
+assert.ok(
+  templatePreviewBody.files.every((file) =>
+    file.path.startsWith("profiles/new-profile/")
+  )
+);
+
+const createProfile = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(templateInput)
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(createProfile.status, 201);
+const createProfileBody = await createProfile.json();
+assert.equal(createProfileBody.profileId, "new-profile");
+assert.equal(createProfileBody.action, "create");
+assert.equal(createProfileBody.pullRequest.number, 8);
 
 const detail = await handleControlPlaneRequest(
   new Request(

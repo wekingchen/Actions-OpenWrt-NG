@@ -4,7 +4,7 @@
 
 项目理念参考 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)：尽量把日常使用保持为“准备一个 `.config`，运行一次 Workflow”。在此基础上，提供更完整的缓存、构建诊断、配置留档、上游追溯、最小权限 Release 和失败恢复能力。
 
-> 当前稳定基础为 **V1.3**；**V2.0A / V2.0B / V2.0C Control Plane 的核心链路均已完成真实端到端验证**。V2.0C 已验证“从控制面触发 Builder → 精确关联 Run → 自动跟踪 Run / Job → 查看 Artifact / Summary”；Release 展示逻辑已由回归测试覆盖，本次真实验收因明确关闭发布而未生成测试 Release。
+> 当前稳定基础为 **V1.3**；**V2.0A / V2.0B / V2.0C / V2.0D Control Plane 的核心链路均已完成真实端到端验证**。V2.0D 已验证“在 Control Plane 直接新建标准 Profile → 服务端预览 → 新分支 → Pull Request”，且默认分支未被直接修改。
 
 ## V1 验证状态
 
@@ -234,7 +234,7 @@ Profile ID 必须以字母或数字开头，只允许字母、数字、点、下
 - `.config` 与表单内容只在浏览器本地处理。
 - Wizard 不调用 GitHub API，不持有 Token，也不拥有仓库写权限。
 - 生成 ZIP 已通过真实 `profile.sh validate/export`、Update Checker 和 Manifest 验收器兼容测试。
-- V1.3 只负责生成 Profile；网页直接写仓库、登录 GitHub 与触发构建留给后续 V2 控制面。
+- V1.3 Wizard 本身仍只负责本地生成 Profile；如果已部署 V2 Control Plane，也可以在控制面中直接新建标准 Profile，并通过独立分支 + Pull Request 安全写入仓库。
 
 ## V2 Control Plane
 
@@ -255,6 +255,8 @@ GitHub App
 V2.0B 在此基础上增加在线 Profile 编辑，保存固定走“预览 → 基线 SHA 冲突检查 → 原子 commit → 新分支 → Pull Request”，不直接写 `main`。写入范围只允许标准 `profiles/<id>/` 文件，并为状态变更请求增加同源 Origin + CSRF 请求头校验。该链路已在独立测试仓库完成真实写入验证，确认默认分支在创建 PR 前后保持不变。
 
 V2.0C 继续增加 Builder 控制能力：浏览器只能请求固定的 OpenWrt NG Builder，服务端固定使用仓库默认分支并生成请求标识；页面展示 queued / running / completed、Jobs、Artifacts、Release 与 Actions Summary 入口。该链路已在独立 Test 仓完成真实 Actions 调度验证：Run 与 request ID 精确对应，成功完成编译、Manifest 校验、配置留档、固件 Artifact 上传与 Summary 生成；测试时关闭了 Release，因此没有留下测试发布物。
+
+V2.0D 补齐新建 Profile：用户只提交结构化参数，服务端按与 Profile Wizard 一致的规则生成固定 6 个标准文件。预览不会写 GitHub；确认后仍走原子 commit → 独立分支 → Pull Request。浏览器不能指定任意仓库路径，已有同名 Profile 会被拒绝覆盖。该链路已在独立 Test 仓真实验证：PR 恰好包含 6 个标准文件、只有 1 个 commit，head commit 的唯一父提交为测试前 main；DIY 脚本保持 100755，其余文件保持 100644，创建 PR 前后默认分支 SHA 不变。
 
 项目提供 **Deploy V2 Control Plane** 手动 Workflow：第一次可以无 GitHub App Secret bootstrap 部署，拿到 workers.dev URL 后再创建 GitHub App 并同步 Secret。当前完整 V2 推荐 GitHub App 一次配置 Metadata read、Contents write、Pull requests write、Actions write；不需要 Administration / Workflows。Node.js + SQLite + Docker 仅保留为可选自托管方式。
 
@@ -424,7 +426,7 @@ scripts/lib/              DIY 可复用函数
 
 ## 创建自己的 Profile
 
-优先使用 **Profile Wizard** 生成标准 Profile；如果希望手工维护，也可以复制 `profiles/default/`：
+可以使用 **Profile Wizard** 在浏览器本地生成标准 Profile ZIP；如果已经部署 V2 Control Plane，也可以直接在控制面点击“新建 Profile”，服务端校验后通过独立分支 + Pull Request 写入。若希望手工维护，也可以复制 `profiles/default/`：
 
 ```text
 profiles/my-router/

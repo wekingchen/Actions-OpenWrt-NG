@@ -100,6 +100,7 @@ const connectHtml = await readFile(
   "utf8"
 );
 assert.match(connectHtml, /当前已完成能力/);
+assert.match(connectHtml, /直接新建标准 Profile/);
 assert.match(connectHtml, /推荐最终权限/);
 assert.match(connectHtml, /Administration \/ Workflows：不需要/);
 assert.doesNotMatch(connectHtml, /V2 Preview|Roadmap|V2\.0A 权限边界/);

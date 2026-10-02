@@ -53,6 +53,7 @@ jobs:
         node --check control-plane/lib/d1-store.mjs
         node --check control-plane/lib/store.mjs
         node --check control-plane/lib/github.mjs
+        node --check control-plane/lib/profile-template.mjs
         node --check control-plane/public/app.js
         node --check control-plane/test.mjs
         python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
@@ -66,6 +67,9 @@ jobs:
         grep -q 'role="alert"' control-plane/public/index.html
         grep -q 'TOKEN_ENCRYPTION_KEY 至少需要 32 个字符' .github/workflows/deploy-control-plane.yml
         grep -q 'Administration / Workflows' .github/workflows/deploy-control-plane.yml
+        grep -q 'buildProfileTemplateFiles' control-plane/worker.mjs
+        grep -q 'profile_already_exists' control-plane/lib/github.mjs
+        grep -q 'unexpectedPath' control-plane/test.mjs
 
         bad_github_secrets="$(
           grep -nE '\$\{\{[[:space:]]*secrets\.GITHUB_' .github/workflows/*.yml |
@@ -129,6 +133,9 @@ jobs:
 
         grep -q "OpenWrt NG Control Plane" /tmp/control-plane-index.html
         grep -q 'id="create-pr"' /tmp/control-plane-index.html
+        grep -q 'id="new-profile-open"' /tmp/control-plane-index.html
+        grep -q 'id="new-profile-form"' /tmp/control-plane-index.html
+        grep -q 'id="new-profile-preview"' /tmp/control-plane-index.html
         grep -q 'id="trigger-build"' /tmp/control-plane-index.html
         grep -q 'id="build-runs"' /tmp/control-plane-index.html
         grep -q 'async function init' /tmp/control-plane-app.js
@@ -137,6 +144,9 @@ jobs:
         grep -q 'pollActiveBuild' /tmp/control-plane-app.js
         grep -q 'result.runId' /tmp/control-plane-app.js
         grep -q 'build_already_active' /tmp/control-plane-app.js
+        grep -q 'readNewProfileInput' /tmp/control-plane-app.js
+        grep -q '/api/v1/profile-templates/preview' /tmp/control-plane-app.js
+        grep -q 'profile_already_exists' /tmp/control-plane-app.js
         grep -q '.shell' /tmp/control-plane-style.css
 
     - name: 构建可选自托管容器

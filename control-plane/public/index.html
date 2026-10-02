@@ -42,9 +42,129 @@
     </section>
 
     <section class="card" id="profile-card" hidden>
-      <p class="eyebrow">Profiles</p>
-      <h2 id="profile-title">Profiles</h2>
+      <div class="heading">
+        <div>
+          <p class="eyebrow">Profiles</p>
+          <h2 id="profile-title">Profiles</h2>
+        </div>
+        <button class="button secondary" id="new-profile-open" type="button">新建 Profile</button>
+      </div>
       <div id="profiles" class="profile-list"></div>
+    </section>
+
+    <section class="card" id="new-profile-card" hidden>
+      <div class="heading">
+        <div>
+          <p class="eyebrow">New Profile</p>
+          <h2 id="new-profile-title">新建 Profile</h2>
+          <p class="muted">填写结构化参数后由服务端生成固定的 6 个标准文件；不会接受任意仓库路径，也不会直接修改默认分支。</p>
+        </div>
+        <button class="button secondary" id="new-profile-close" type="button">关闭</button>
+      </div>
+
+      <form id="new-profile-form" class="profile-create-form" novalidate>
+        <div class="form-grid two-cols">
+          <label class="field">
+            <span>Profile ID</span>
+            <input id="new-profile-id" maxlength="64" required autocomplete="off"
+                   pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" value="my-openwrt">
+            <small>目录名；以字母或数字开头，仅允许字母、数字、点、下划线和短横线。</small>
+          </label>
+
+          <label class="field">
+            <span>显示名称</span>
+            <input id="new-profile-name" maxlength="200" required autocomplete="off" value="My OpenWrt">
+            <small>用于 Actions 日志和 Dashboard 展示。</small>
+          </label>
+        </div>
+
+        <label class="field">
+          <span>常用源码预设</span>
+          <select id="new-source-preset">
+            <option value="lean" selected>Lean LEDE · master</option>
+            <option value="openwrt">OpenWrt · main</option>
+            <option value="immortalwrt">ImmortalWrt · master</option>
+            <option value="custom">自定义</option>
+          </select>
+        </label>
+
+        <div class="form-grid two-cols">
+          <label class="field">
+            <span>源码仓库</span>
+            <input id="new-source-repo" required autocomplete="off"
+                   value="https://github.com/coolsnowwolf/lede">
+          </label>
+          <label class="field">
+            <span>分支 / Tag</span>
+            <input id="new-source-branch" required autocomplete="off" value="master">
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Adapter</span>
+          <select id="new-adapter">
+            <option value="direct-openwrt" selected>direct-openwrt</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>OpenWrt .config</span>
+          <input id="new-config-file" type="file" accept=".config,text/plain">
+          <textarea id="new-config-text" class="editor create-config-editor" spellcheck="false"
+                    placeholder="选择 .config 文件，或直接粘贴内容。"></textarea>
+          <small>预览时内容会发送到你自己的 Control Plane 做服务端校验；预览不会写入 GitHub。</small>
+        </label>
+
+        <div class="toggle-grid">
+          <label class="check-row compact-check">
+            <input id="new-auto-update" type="checkbox">
+            <span><strong>自动追新</strong><small>上游变化时自动触发 Builder。</small></span>
+          </label>
+          <label class="check-row compact-check">
+            <input id="new-upload-release" type="checkbox" checked>
+            <span><strong>发布 Release</strong><small>构建成功后允许发布。</small></span>
+          </label>
+          <label class="check-row compact-check">
+            <input id="new-upload-firmware" type="checkbox" checked>
+            <span><strong>上传固件 Artifact</strong><small>保留固件产物。</small></span>
+          </label>
+          <label class="check-row compact-check">
+            <input id="new-maximize-space" type="checkbox">
+            <span><strong>扩展构建空间</strong><small>大型源码需要时开启。</small></span>
+          </label>
+          <label class="check-row compact-check">
+            <input id="new-stream-log" type="checkbox" checked>
+            <span><strong>流式编译日志</strong><small>实时输出 make 日志。</small></span>
+          </label>
+        </div>
+
+        <div class="form-grid two-cols">
+          <label class="field">
+            <span>Manifest 必选软件包</span>
+            <textarea id="new-required-packages" class="compact-input" spellcheck="false"
+                      placeholder="每行一个，例如：&#10;luci&#10;curl"></textarea>
+          </label>
+          <label class="field">
+            <span>额外 Git 上游监控</span>
+            <textarea id="new-watch-sources" class="compact-input" spellcheck="false"
+                      placeholder="label|git_url|branch_or_tag"></textarea>
+          </label>
+        </div>
+
+        <div class="editor-actions">
+          <button class="button secondary" id="new-profile-preview" type="button">预览标准文件</button>
+          <button class="button" id="new-profile-create" type="submit" disabled>创建分支并发起 PR</button>
+        </div>
+      </form>
+
+      <div id="new-profile-preview-card" class="preview-box" hidden>
+        <div class="heading">
+          <h3>标准 Profile 预览</h3>
+          <select id="new-profile-preview-file" class="file-select preview-file-select"></select>
+        </div>
+        <pre id="new-profile-preview-content"></pre>
+      </div>
+      <p class="success" id="new-profile-result" aria-live="polite" hidden></p>
     </section>
 
     <section class="card" id="editor-card" hidden>

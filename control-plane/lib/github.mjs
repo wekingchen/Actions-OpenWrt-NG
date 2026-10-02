@@ -113,6 +113,32 @@ function byteLength(value) {
   return new TextEncoder().encode(String(value)).byteLength;
 }
 
+function validateProfileFilesPayload(submitted) {
+  if (!submitted || typeof submitted !== "object" || Array.isArray(submitted)) {
+    throw new ProfileWriteError("invalid_profile_files", 400);
+  }
+
+  const submittedKeys = Object.keys(submitted);
+  if (
+    submittedKeys.some((name) => !PROFILE_FILES.includes(name)) ||
+    PROFILE_FILES.some((name) => typeof submitted[name] !== "string")
+  ) {
+    throw new ProfileWriteError("invalid_profile_files", 400);
+  }
+
+  let totalBytes = 0;
+  for (const name of PROFILE_FILES) {
+    const size = byteLength(submitted[name]);
+    if (size > MAX_PROFILE_FILE_BYTES) {
+      throw new ProfileWriteError("profile_file_too_large", 413);
+    }
+    totalBytes += size;
+  }
+  if (totalBytes > MAX_PROFILE_TOTAL_BYTES) {
+    throw new ProfileWriteError("profile_payload_too_large", 413);
+  }
+}
+
 function branchSlug(profileId) {
   const slug = String(profileId)
     .replace(/[^A-Za-z0-9_-]+/g, "-")
@@ -630,62 +656,22 @@ export class GitHubAppClient {
     };
   }
 
-  async createProfilePullRequest(
+  async createProfileFilesPullRequest(
     token,
     owner,
     repo,
-    profileId,
-    payload = {}
+    {
+      profileId,
+      state,
+      files,
+      changedFiles,
+      action = "update"
+    }
   ) {
-    if (!PROFILE_ID_RE.test(String(profileId || ""))) {
-      throw new ProfileWriteError("invalid_profile_id", 400);
-    }
-
-    const baseRefSha = String(payload.baseRefSha || "").trim();
-    const submitted = payload.files;
-    if (!/^[0-9a-f]{40}$/i.test(baseRefSha)) {
-      throw new ProfileWriteError("invalid_base_ref", 400);
-    }
-    if (!submitted || typeof submitted !== "object" || Array.isArray(submitted)) {
-      throw new ProfileWriteError("invalid_profile_files", 400);
-    }
-
-    const submittedKeys = Object.keys(submitted);
-    if (
-      submittedKeys.some((name) => !PROFILE_FILES.includes(name)) ||
-      PROFILE_FILES.some((name) => typeof submitted[name] !== "string")
-    ) {
-      throw new ProfileWriteError("invalid_profile_files", 400);
-    }
-
-    let totalBytes = 0;
-    for (const name of PROFILE_FILES) {
-      const size = byteLength(submitted[name]);
-      if (size > MAX_PROFILE_FILE_BYTES) {
-        throw new ProfileWriteError("profile_file_too_large", 413);
-      }
-      totalBytes += size;
-    }
-    if (totalBytes > MAX_PROFILE_TOTAL_BYTES) {
-      throw new ProfileWriteError("profile_payload_too_large", 413);
-    }
-
-    const current = await this.getProfile(token, owner, repo, profileId);
-    if (current.baseRefSha !== baseRefSha) {
-      throw new ProfileWriteError("repository_changed", 409);
-    }
-
-    const changedFiles = PROFILE_FILES.filter((name) => {
-      const before = current.profile.files[name];
-      const after = submitted[name];
-      return before.content !== after && (before.exists || after !== "");
-    });
-    if (!changedFiles.length) {
-      throw new ProfileWriteError("no_changes", 400);
-    }
-
     const safeOwner = encodeSegment(owner);
     const safeRepo = encodeSegment(repo);
+    const baseRefSha = state.baseRefSha;
+
     const baseCommit = await this.api(
       `/repos/${safeOwner}/${safeRepo}/git/commits/${baseRefSha}`,
       token
@@ -702,7 +688,7 @@ export class GitHubAppClient {
         {
           method: "POST",
           body: {
-            content: submitted[name],
+            content: files[name],
             encoding: "utf-8"
           }
         }
@@ -727,13 +713,15 @@ export class GitHubAppClient {
       }
     );
 
+    const actionLabel = action === "create" ? "create" : "update";
     const commit = await this.api(
       `/repos/${safeOwner}/${safeRepo}/git/commits`,
       token,
       {
         method: "POST",
         body: {
-          message: `profile(${profileId}): update via Control Plane`,
+          message:
+            `profile(${profileId}): ${actionLabel} via Control Plane`,
           tree: tree.sha,
           parents: [baseRefSha]
         }
@@ -755,19 +743,28 @@ export class GitHubAppClient {
     );
 
     try {
+      const titleAction = action === "create" ? "create" : "update";
       const pull = await this.api(
         `/repos/${safeOwner}/${safeRepo}/pulls`,
         token,
         {
           method: "POST",
           body: {
-            title: `profile(${profileId}): update via Control Plane`,
+            title:
+              `profile(${profileId}): ${titleAction} via Control Plane`,
             head: branchName,
-            base: current.defaultBranch,
+            base: state.defaultBranch,
             body:
               "由 OpenWrt NG Control Plane 创建。\n\n" +
-              "变更文件：\n" +
-              changedFiles.map((name) => `- \`profiles/${profileId}/${name}\``).join("\n") +
+              (action === "create"
+                ? "新增标准 Profile 文件：\n"
+                : "变更文件：\n") +
+              changedFiles
+                .map(
+                  (name) =>
+                    `- \`profiles/${profileId}/${name}\``
+                )
+                .join("\n") +
               "\n\n默认分支不会被直接修改，请在 GitHub 中审核差异后再决定是否合并。"
           }
         }
@@ -777,6 +774,7 @@ export class GitHubAppClient {
         branch: branchName,
         commitSha: commit.sha,
         changedFiles,
+        action,
         pullRequest: {
           number: pull.number,
           url: pull.html_url || ""
@@ -790,9 +788,108 @@ export class GitHubAppClient {
           { method: "DELETE" }
         );
       } catch (cleanupError) {
-        console.error("Failed to clean up branch after PR creation error", cleanupError);
+        console.error(
+          "Failed to clean up branch after PR creation error",
+          cleanupError
+        );
       }
       throw error;
     }
   }
+
+  async createProfilePullRequest(
+    token,
+    owner,
+    repo,
+    profileId,
+    payload = {}
+  ) {
+    if (!PROFILE_ID_RE.test(String(profileId || ""))) {
+      throw new ProfileWriteError("invalid_profile_id", 400);
+    }
+
+    const baseRefSha = String(payload.baseRefSha || "").trim();
+    const submitted = payload.files;
+    if (!/^[0-9a-f]{40}$/i.test(baseRefSha)) {
+      throw new ProfileWriteError("invalid_base_ref", 400);
+    }
+    validateProfileFilesPayload(submitted);
+
+    const current = await this.getProfile(token, owner, repo, profileId);
+    if (current.baseRefSha !== baseRefSha) {
+      throw new ProfileWriteError("repository_changed", 409);
+    }
+
+    const changedFiles = PROFILE_FILES.filter((name) => {
+      const before = current.profile.files[name];
+      const after = submitted[name];
+      return before.content !== after && (before.exists || after !== "");
+    });
+    if (!changedFiles.length) {
+      throw new ProfileWriteError("no_changes", 400);
+    }
+
+    return this.createProfileFilesPullRequest(
+      token,
+      owner,
+      repo,
+      {
+        profileId,
+        state: {
+          defaultBranch: current.defaultBranch,
+          baseRefSha: current.baseRefSha
+        },
+        files: submitted,
+        changedFiles,
+        action: "update"
+      }
+    );
+  }
+
+  async createNewProfilePullRequest(
+    token,
+    owner,
+    repo,
+    profileId,
+    files
+  ) {
+    if (!PROFILE_ID_RE.test(String(profileId || ""))) {
+      throw new ProfileWriteError("invalid_profile_id", 400);
+    }
+    validateProfileFilesPayload(files);
+
+    const state = await this.repositoryState(token, owner, repo);
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const safeProfile = encodeSegment(profileId);
+    const profilePath =
+      `/repos/${safeOwner}/${safeRepo}/contents/profiles/${safeProfile}?ref=${encodeSegment(state.baseRefSha)}`;
+
+    try {
+      await this.api(profilePath, token);
+      throw new ProfileWriteError("profile_already_exists", 409);
+    } catch (error) {
+      if (error instanceof ProfileWriteError) throw error;
+      if (error?.httpStatus !== 404) throw error;
+    }
+
+    const latest = await this.repositoryState(token, owner, repo);
+    if (latest.baseRefSha !== state.baseRefSha) {
+      throw new ProfileWriteError("repository_changed", 409);
+    }
+
+    return this.createProfileFilesPullRequest(
+      token,
+      owner,
+      repo,
+      {
+        profileId,
+        state,
+        files,
+        changedFiles: [...PROFILE_FILES],
+        action: "create"
+      }
+    );
+  }
+
 }
