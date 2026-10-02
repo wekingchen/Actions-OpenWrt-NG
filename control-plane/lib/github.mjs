@@ -57,7 +57,7 @@ export class GitHubAppClient {
     this.clientSecret = config.clientSecret;
     this.redirectUri = config.redirectUri;
     this.apiVersion = config.apiVersion || "2022-11-28";
-    this.fetchImpl = fetchImpl;
+    this.fetchImpl = (...args) => fetchImpl(...args);
   }
 
   authorizeUrl({ state, codeChallenge }) {
