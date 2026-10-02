@@ -297,6 +297,8 @@ Artifact 链接使用 GitHub 自身的登录态，不把 GitHub access token 暴
 
 ### 10. V2.0D：直接新建标准 Profile
 
+V2.0D 已在独立 Test 仓完成真实端到端验证：通过控制面创建新 Profile 后，默认分支 SHA 保持不变；生成的 Pull Request 恰好包含 6 个标准文件和 1 个 commit；该 commit 的唯一父提交为创建前的 main；DIY 脚本 mode 为 100755，其余文件为 100644；测试 PR 验收后关闭且不合并。
+
 V2.0D 在控制面中补齐 Profile Wizard 到仓库写入之间的缺口。用户填写与 Wizard 一致的结构化字段：
 
 - Profile ID / 显示名称。
