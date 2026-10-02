@@ -506,6 +506,65 @@ const write = await handleControlPlaneRequest(
 assert.equal(write.status, 201);
 assert.equal((await write.json()).pullRequest.number, 7);
 
+const builds = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/builds?profile=default&request_id=abcdef1234567890",
+    { headers: { Cookie: sessionCookie } }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(builds.status, 200);
+assert.equal((await builds.json()).runs[0].id, 123);
+
+const buildDetail = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/builds/123",
+    { headers: { Cookie: sessionCookie } }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(buildDetail.status, 200);
+assert.equal((await buildDetail.json()).run.id, 123);
+
+const rejectedBuild = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/default/builds",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ publishRelease: false })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(rejectedBuild.status, 403);
+
+const build = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/default/builds",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ publishRelease: false })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(build.status, 202);
+assert.equal((await build.json()).requestId, "abcdef1234567890");
+
 const opaque = sessionCookie.split("=", 2)[1];
 assert.ok(store.sessions.has(hashOpaque(decodeURIComponent(opaque))));
 
