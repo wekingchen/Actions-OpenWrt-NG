@@ -501,7 +501,7 @@ export class GitHubAppClient {
     }
 
     const requestId = shortNonce(16);
-    await this.api(
+    const dispatched = await this.api(
       `/repos/${safeOwner}/${safeRepo}/actions/workflows/${BUILDER_WORKFLOW}/dispatches`,
       token,
       {
@@ -510,8 +510,7 @@ export class GitHubAppClient {
           ref: state.defaultBranch,
           inputs: {
             profile: profileId,
-            publish_release:
-              payload.publishRelease === true ? "true" : "false",
+            publish_release: payload.publishRelease === true,
             control_plane_request_id: requestId
           }
         }
@@ -523,7 +522,9 @@ export class GitHubAppClient {
       requestId,
       profileId,
       publishRelease: payload.publishRelease === true,
-      ref: state.defaultBranch
+      ref: state.defaultBranch,
+      runId: Number(dispatched?.workflow_run_id || 0),
+      runUrl: dispatched?.html_url || ""
     };
   }
 
