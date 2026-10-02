@@ -112,6 +112,8 @@ jobs:
 
         jq -e '.ok == true and .runtime == "cloudflare-workers" and .configured == true' /tmp/health.json >/dev/null
         curl -fsS http://127.0.0.1:8788/ | grep -q "OpenWrt NG Control Plane"
+        curl -fsS http://127.0.0.1:8788/app.js | grep -q 'async function init'
+        curl -fsS http://127.0.0.1:8788/style.css | grep -q '.shell'
 
     - name: 构建可选自托管容器
       run: |
