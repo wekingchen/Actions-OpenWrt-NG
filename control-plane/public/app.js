@@ -36,6 +36,8 @@ const buildState = {
   activeRunId: 0
 };
 
+const MAX_BUILD_POLL_ATTEMPTS = 480;
+
 function showError(message = "") {
   const node = $("error");
   node.hidden = !message;
@@ -235,7 +237,7 @@ function statusClass(run) {
 
 async function loadBuildDetail(runId) {
   const repo = buildState.repo;
-  if (!repo || !runId) return;
+  if (!repo || !runId) return null;
 
   const data = await request(
     `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds/${runId}`
@@ -331,14 +333,63 @@ async function loadBuildDetail(runId) {
         : "运行完成后如成功发布，会在这里显示。";
     release.appendChild(empty);
   }
+
+  return run;
+}
+
+function finishBuildPolling(run) {
+  clearBuildPolling();
+  buildState.requestId = "";
+  buildState.activeRunId = 0;
+  buildState.pollAttempts = 0;
+  showBuildResult(
+    `构建 #${run.runNumber} 已完成：${buildStatusLabel(run)}。`
+  );
+}
+
+async function pollActiveBuild() {
+  if (!buildState.activeRunId) return;
+  const run = await loadBuildDetail(buildState.activeRunId);
+  if (!run) return;
+
+  buildState.pollAttempts += 1;
+  showBuildResult(
+    `构建 #${run.runNumber}：${buildStatusLabel(run)}。`
+  );
+
+  if (ACTIVE_BUILD_STATUSES.has(run.status)) {
+    scheduleBuildPoll(15000);
+  } else {
+    finishBuildPolling(run);
+  }
 }
 
 function scheduleBuildPoll(delay = 5000) {
   clearBuildPolling();
-  if (!buildState.requestId || buildState.pollAttempts >= 30) return;
-  buildState.pollTimer = setTimeout(() => {
-    loadBuildRuns({ requestId: buildState.requestId, polling: true })
-      .catch((error) => showError(error.message));
+  if (
+    (!buildState.activeRunId && !buildState.requestId) ||
+    buildState.pollAttempts >= MAX_BUILD_POLL_ATTEMPTS
+  ) {
+    return;
+  }
+
+  buildState.pollTimer = setTimeout(async () => {
+    try {
+      if (buildState.activeRunId) {
+        await pollActiveBuild();
+      } else {
+        await loadBuildRuns({
+          requestId: buildState.requestId,
+          polling: true
+        });
+      }
+    } catch (error) {
+      buildState.pollAttempts += 1;
+      showBuildResult(
+        `状态刷新暂时失败，将继续自动重试：${error.message}`
+      );
+      scheduleBuildPoll(5000);
+    }
   }, delay);
 }
 
@@ -400,18 +451,8 @@ async function loadBuildRuns(options = {}) {
 
   const first = data.runs[0];
   if (requestId) {
-    await loadBuildDetail(first.id);
-    if (ACTIVE_BUILD_STATUSES.has(first.status)) {
-      buildState.pollAttempts += 1;
-      scheduleBuildPoll(5000);
-    } else {
-      clearBuildPolling();
-      buildState.requestId = "";
-      buildState.pollAttempts = 0;
-      showBuildResult(
-        `构建 #${first.runNumber} 已完成：${buildStatusLabel(first)}。`
-      );
-    }
+    buildState.activeRunId = first.id;
+    await pollActiveBuild();
   }
 }
 
@@ -701,11 +742,20 @@ $("trigger-build").addEventListener("click", async () => {
     );
 
     buildState.requestId = result.requestId;
+    buildState.activeRunId = Number(result.runId || 0);
     buildState.pollAttempts = 0;
-    showBuildResult(
-      `已提交 Builder 请求 ${result.requestId}，正在等待 GitHub 建立运行记录…`
-    );
-    await loadBuildRuns({ requestId: result.requestId });
+
+    if (buildState.activeRunId) {
+      showBuildResult(
+        `GitHub 已创建 Run ${buildState.activeRunId}，正在读取运行状态…`
+      );
+      await pollActiveBuild();
+    } else {
+      showBuildResult(
+        `已提交 Builder 请求 ${result.requestId}，正在等待 GitHub 建立运行记录…`
+      );
+      await loadBuildRuns({ requestId: result.requestId });
+    }
   } catch (error) {
     if (error.code === "build_already_active" && error.body?.activeRun) {
       const run = error.body.activeRun;
