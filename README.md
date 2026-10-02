@@ -4,7 +4,37 @@
 
 项目理念参考 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)：尽量把日常使用保持为“准备一个 `.config`，运行一次 Workflow”。在此基础上，提供更完整的缓存、构建诊断、配置留档、上游追溯、最小权限 Release 和失败恢复能力。
 
-> 当前状态：**V1 RC**。通用 Core 已完成真实构建验证；最终 V1 验收将同时验证 Update Checker → repository dispatch → Builder → Release 主链。
+> 当前状态：**V1**。通用 Core 已完成端到端真实构建验证：Update Checker → repository dispatch → Builder → Manifest / Config Record → Release → Cleanup 全链路通过。
+
+## V1 验证状态
+
+V1 已使用默认通用 Profile 完成真实端到端验证：
+
+```text
+OpenWrt NG Update Checker
+        ↓
+repository_dispatch
+        ↓
+OpenWrt NG Builder
+        ↓
+Preflight
+        ↓
+direct-openwrt Adapter
+        ↓
+Feeds / Config / Cache
+        ↓
+Compile
+        ↓
+Manifest Validation
+        ↓
+Config Record
+        ↓
+Release
+        ↓
+Cleanup
+```
+
+以上链路全部通过后才标记为 V1。后续新能力继续遵循“特殊环境在分支验证，只把通用能力收敛到 main”的原则。
 
 ## 适用范围
 
