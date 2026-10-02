@@ -1,12 +1,36 @@
 const GITHUB_API = "https://api.github.com";
 const GITHUB_OAUTH = "https://github.com/login/oauth";
 
+function safeGitHubErrorCode(body) {
+  const code =
+    body && typeof body === "object" && typeof body.error === "string"
+      ? body.error.trim()
+      : "";
+  return /^[a-z0-9_]{1,64}$/.test(code) ? code : "";
+}
+
 function asJsonError(response, body) {
   const detail =
-    body && typeof body === "object" && body.message
-      ? body.message
+    body && typeof body === "object"
+      ? body.message || body.error_description || body.error || response.statusText
       : response.statusText;
-  return new Error(`GitHub request failed: HTTP ${response.status} ${detail}`);
+  const error = new Error(
+    `GitHub request failed: HTTP ${response.status} ${detail || "unknown"}`
+  );
+  error.name = "GitHubRequestError";
+  error.httpStatus = response.status;
+  error.githubError = safeGitHubErrorCode(body);
+  return error;
+}
+
+export function githubErrorReason(error) {
+  const code =
+    error && typeof error.githubError === "string"
+      ? error.githubError
+      : "";
+  return /^[a-z0-9_]{1,64}$/.test(code)
+    ? code
+    : "github_request_failed";
 }
 
 export class GitHubAppClient {
