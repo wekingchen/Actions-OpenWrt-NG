@@ -112,11 +112,15 @@ jobs:
         done
 
         jq -e '.ok == true and .runtime == "cloudflare-workers" and .configured == true' /tmp/health.json >/dev/null
-        curl -fsS http://127.0.0.1:8788/ | grep -q "OpenWrt NG Control Plane"
-        curl -fsS http://127.0.0.1:8788/ | grep -q 'id="create-pr"'
-        curl -fsS http://127.0.0.1:8788/app.js | grep -q 'async function init'
-        curl -fsS http://127.0.0.1:8788/app.js | grep -q 'preview-change'
-        curl -fsS http://127.0.0.1:8788/style.css | grep -q '.shell'
+        curl -fsS http://127.0.0.1:8788/ -o /tmp/control-plane-index.html
+        curl -fsS http://127.0.0.1:8788/app.js -o /tmp/control-plane-app.js
+        curl -fsS http://127.0.0.1:8788/style.css -o /tmp/control-plane-style.css
+
+        grep -q "OpenWrt NG Control Plane" /tmp/control-plane-index.html
+        grep -q 'id="create-pr"' /tmp/control-plane-index.html
+        grep -q 'async function init' /tmp/control-plane-app.js
+        grep -q 'preview-change' /tmp/control-plane-app.js
+        grep -q '.shell' /tmp/control-plane-style.css
 
     - name: 构建可选自托管容器
       run: |
