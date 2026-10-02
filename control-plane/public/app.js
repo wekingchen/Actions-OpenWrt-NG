@@ -54,6 +54,19 @@ async function init() {
   showError();
   const publicConfig = await request("/api/v1/config");
   const installLink = $("install-app");
+  const loginAction = $("login-action");
+  const setupStatus = $("setup-status");
+
+  if (!publicConfig.configured) {
+    loginAction.hidden = true;
+    setupStatus.textContent =
+      "Worker 已上线，但 GitHub App Secret 尚未配置。完成 GitHub App 创建后再启用登录。";
+    $("repo-card").hidden = true;
+    return;
+  }
+
+  setupStatus.hidden = true;
+  loginAction.hidden = false;
   installLink.href = publicConfig.githubAppInstallUrl;
 
   const session = await request("/api/v1/session");
