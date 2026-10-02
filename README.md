@@ -37,8 +37,10 @@ profiles/default/
 2. 用目标 OpenWrt 源码生成 `.config`。
 3. 用它替换 `profiles/default/.config`。
 4. 如果源码仓库或分支不同，修改 `profiles/default/profile.env`。
-5. Actions → **OpenWrt NG Builder** → **Run workflow**。
-6. 构建成功后从 Artifact 或 Release 下载固件。
+5. 第一次先保持 `AUTO_UPDATE=false`，手动验证配置能够成功构建。
+6. Actions → **OpenWrt NG Builder** → **Run workflow**。
+7. 构建成功后从 Artifact 或 Release 下载固件。
+8. 确认稳定后，如果希望自动追新，再把 `AUTO_UPDATE` 改成 `true`。
 
 典型 `profile.env`：
 
@@ -52,7 +54,9 @@ CONFIG_FILE="profiles/default/.config"
 DIY_PART1="profiles/default/diy-part1.sh"
 DIY_PART2="profiles/default/diy-part2.sh"
 REQUIRED_PACKAGES_FILE="profiles/default/required-packages.txt"
+WATCH_SOURCES_FILE="profiles/default/watch-sources.txt"
 
+AUTO_UPDATE="false"
 MAXIMIZE_BUILD_SPACE="false"
 STREAM_BUILD_LOG="true"
 UPLOAD_BIN_DIR="false"
@@ -193,6 +197,57 @@ cleanup
 - 没有成功构建和验收，不创建 Release。
 - 旧 Release 只在新 Release 成功后清理。
 - Workflow 历史由独立最小权限 job 清理。
+
+## 自动检查上游更新
+
+项目提供 **OpenWrt NG Update Checker**。
+
+默认每 12 小时运行一次，但只有 Profile 显式开启：
+
+```bash
+AUTO_UPDATE="true"
+```
+
+才会自动触发构建，因此使用模板后不会默认消耗大量 Actions 时长。
+
+每个启用的 Profile 会自动监控：
+
+```text
+SOURCE_REPO + SOURCE_BRANCH
+```
+
+如果还需要监控额外 Git 上游，在 Profile 中声明：
+
+```bash
+WATCH_SOURCES_FILE="profiles/default/watch-sources.txt"
+```
+
+文件格式：
+
+```text
+label|git_url|branch_or_tag
+```
+
+例如：
+
+```text
+packages|https://github.com/openwrt/packages|master
+luci|https://github.com/openwrt/luci|master
+```
+
+工作机制：
+
+1. 解析主源码和额外 Git 上游的实际 commit。
+2. 计算当前 Profile 的上游状态指纹。
+3. 使用 Actions cache 判断这个状态是否已经处理。
+4. 只有状态变化时才发送 `repository_dispatch`。
+5. **OpenWrt NG Builder** 根据 `client_payload.profile` 构建对应 Profile。
+6. 如果下游构建失败，同一个上游状态不会自动无限重试；可以手动运行 Builder，或在 Update Checker 中勾选 `force` 再触发一次。
+
+手动运行 Update Checker 时，可以：
+
+- 指定某个 Profile，即使它的 `AUTO_UPDATE=false` 也可以检查。
+- 勾选 `force`，忽略已记录状态并强制触发一次构建。
 
 ## Release 失败恢复
 
