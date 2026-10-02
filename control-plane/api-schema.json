@@ -412,7 +412,9 @@
         "requestId",
         "profileId",
         "publishRelease",
-        "ref"
+        "ref",
+        "runId",
+        "runUrl"
       ],
       "additionalProperties": false,
       "properties": {
@@ -433,6 +435,13 @@
         "ref": {
           "type": "string",
           "minLength": 1
+        },
+        "runId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "runUrl": {
+          "type": "string"
         }
       }
     },
