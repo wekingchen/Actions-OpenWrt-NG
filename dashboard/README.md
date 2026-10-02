@@ -1,6 +1,6 @@
 # Dashboard
 
-OpenWrt NG V1.2 的只读 GitHub Pages Dashboard。
+OpenWrt NG V1.3 的 GitHub Pages Dashboard 与 Profile Wizard。
 
 ## 当前状态
 
@@ -9,6 +9,7 @@ OpenWrt NG V1.2 的只读 GitHub Pages Dashboard。
 - schema / 敏感信息校验：已完成
 - Pages Artifact 打包：已完成真实验证
 - GitHub Pages 主干部署：已完成真实验证
+- Profile Wizard 主干部署与 Core 契约测试：已完成真实验证
 - 正式地址：<https://wekingchen.github.io/Actions-OpenWrt-NG/>
 
 ## 目录

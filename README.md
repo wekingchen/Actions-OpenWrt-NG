@@ -4,7 +4,7 @@
 
 项目理念参考 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)：尽量把日常使用保持为“准备一个 `.config`，运行一次 Workflow”。在此基础上，提供更完整的缓存、构建诊断、配置留档、上游追溯、最小权限 Release 和失败恢复能力。
 
-> 当前状态：**V1.3 RC**。Core V1、V1.1 Summary、V1.2 Dashboard 已稳定；V1.3 Profile Wizard 已完成真实 Core 契约验证，等待主干首次 Pages 部署确认。
+> 当前状态：**V1.3**。Core V1、V1.1 Workflow Summary、V1.2 GitHub Pages Dashboard 与 V1.3 Profile Wizard 均已完成真实验证和主干部署。
 
 ## V1 验证状态
 
@@ -377,7 +377,7 @@ luci|https://github.com/openwrt/luci|master
 ├── update-checker.yml    通用 Git 上游更新检查
 ├── release-existing.yml Build 成功后的 Release 恢复
 └── pages-dashboard.yml  Dashboard 数据生成与 Pages 部署
-dashboard/                只读静态 Dashboard
+dashboard/                Dashboard + Profile Wizard 静态前端
 adapters/                 源码准备适配层
 profiles/
 └── default/
@@ -388,14 +388,13 @@ profiles/
     ├── required-packages.txt
     └── watch-sources.txt
 scripts/                  通用构建与追溯工具
-scripts/dashboard/        Dashboard 数据导出与校验
+scripts/dashboard/        Dashboard 数据导出、校验与 Wizard 回归测试
 scripts/lib/              DIY 可复用函数
 ```
 
 ## 创建自己的 Profile
 
 优先使用 **Profile Wizard** 生成标准 Profile；如果希望手工维护，也可以复制 `profiles/default/`：
-
 
 ```text
 profiles/my-router/
