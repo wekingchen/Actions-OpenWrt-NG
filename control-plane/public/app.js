@@ -453,6 +453,13 @@ async function loadBuildRuns(options = {}) {
   if (requestId) {
     buildState.activeRunId = first.id;
     await pollActiveBuild();
+    return;
+  }
+
+  if (ACTIVE_BUILD_STATUSES.has(first.status)) {
+    buildState.activeRunId = first.id;
+    buildState.pollAttempts = 0;
+    await pollActiveBuild();
   }
 }
 
