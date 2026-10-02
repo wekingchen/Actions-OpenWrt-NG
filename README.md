@@ -4,7 +4,7 @@
 
 项目理念参考 [P3TERX/Actions-OpenWrt](https://github.com/P3TERX/Actions-OpenWrt)：尽量把日常使用保持为“准备一个 `.config`，运行一次 Workflow”。在此基础上，提供更完整的缓存、构建诊断、配置留档、上游追溯、最小权限 Release 和失败恢复能力。
 
-> 当前状态：**V1.3**。Core V1、V1.1 Workflow Summary、V1.2 GitHub Pages Dashboard 与 V1.3 Profile Wizard 均已完成真实验证和主干部署。
+> 当前稳定版：**V1.3**。Core V1、V1.1 Workflow Summary、V1.2 GitHub Pages Dashboard 与 V1.3 Profile Wizard 均已完成真实验证和主干部署。V2 Control Plane 正在独立分支开发。
 
 ## V1 验证状态
 
@@ -236,6 +236,22 @@ Profile ID 必须以字母或数字开头，只允许字母、数字、点、下
 - 生成 ZIP 已通过真实 `profile.sh validate/export`、Update Checker 和 Manifest 验收器兼容测试。
 - V1.3 只负责生成 Profile；网页直接写仓库、登录 GitHub 与触发构建留给后续 V2 控制面。
 
+## V2 Control Plane
+
+V2 不把 GitHub 登录和写权限直接加入公开 GitHub Pages。架构固定为：
+
+```text
+Public GitHub Pages（只读）
+        ↓ 打开
+Control Plane Origin（UI + Auth Broker + API）
+        ↓
+GitHub App
+```
+
+V2.0A 先实现 GitHub App 登录、安装仓库选择和只读 Profile 访问。GitHub user access token / refresh token 只在服务端保存，公开 Pages 与浏览器脚本都不保存 GitHub Token。
+
+当前 `dashboard/data/control-plane.json` 默认 `enabled=false`；只有部署独立 Control Plane Origin 后才启用入口。详细安全边界见 `control-plane/README.md`。
+
 ## 构建与诊断
 
 Core 提供：
@@ -380,7 +396,8 @@ luci|https://github.com/openwrt/luci|master
 ├── update-checker.yml    通用 Git 上游更新检查
 ├── release-existing.yml Build 成功后的 Release 恢复
 └── pages-dashboard.yml  Dashboard 数据生成与 Pages 部署
-dashboard/                Dashboard + Profile Wizard 静态前端
+dashboard/                Dashboard + Profile Wizard + V2 控制面入口静态前端
+control-plane/             V2 Auth Broker / API 契约与安全设计
 adapters/                 源码准备适配层
 profiles/
 └── default/
