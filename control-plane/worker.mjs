@@ -14,6 +14,13 @@ function value(env, name) {
   return String(env?.[name] || "").trim();
 }
 
+function positiveSeconds(env, name, fallback) {
+  const parsed = Number(value(env, name) || fallback);
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed * 1000
+    : fallback * 1000;
+}
+
 export function runtimeConfig(request, env) {
   const url = new URL(request.url);
   const clientId = value(env, "GITHUB_APP_CLIENT_ID");
@@ -29,15 +36,21 @@ export function runtimeConfig(request, env) {
     githubAppSlug,
     encryptionSecret,
     apiVersion: value(env, "GITHUB_API_VERSION") || "2022-11-28",
-    sessionTtlMs:
-      Number(value(env, "SESSION_TTL_SECONDS") || 604800) * 1000,
-    sessionIdleTtlMs:
-      Number(value(env, "SESSION_IDLE_TTL_SECONDS") || 86400) * 1000,
+    sessionTtlMs: positiveSeconds(
+      env,
+      "SESSION_TTL_SECONDS",
+      604800
+    ),
+    sessionIdleTtlMs: positiveSeconds(
+      env,
+      "SESSION_IDLE_TTL_SECONDS",
+      86400
+    ),
     configured: Boolean(
       clientId &&
       clientSecret &&
       githubAppSlug &&
-      encryptionSecret &&
+      encryptionSecret.length >= 32 &&
       env?.DB
     )
   };
