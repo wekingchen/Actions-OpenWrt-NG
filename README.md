@@ -165,6 +165,25 @@ trace_file upstream_example_sha256 /path/to/file
 
 这些记录会进入 `build-info.txt`。
 
+## Workflow Summary 可视化
+
+V1.1 开始把 GitHub Actions 的 **Summary** 作为主要状态入口之一。
+
+不需要翻完整日志，就可以直接看到：
+
+- **构建预检**：Profile、源码、Adapter、触发方式、自动追新、空间扩展和 Release 开关。
+- **构建结果**：源码 commit、缓存命中、编译耗时、固件候选数量、配置变化，以及 Compile / Manifest / Config Record / Release Bundle 各阶段状态。
+- **Update Checker**：本轮检查哪些 Profile、上游状态指纹、是否命中历史状态、本轮是否触发构建。
+- **Release**：发布状态、Release Tag、附件数量和直接入口。
+- **Release Existing Build**：原 Build Run、原 commit、恢复发布状态和新 Release 入口。
+
+Summary 只是展示层：
+
+- 不参与编译结果判断。
+- 不改变 Core、Profile 或 Adapter 契约。
+- Summary 生成异常不会把原本成功的构建改成失败。
+- 完整日志、Artifact 和配置留档仍然保留，便于深度排障。
+
 ## 构建与诊断
 
 Core 提供：
