@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - feature/profile-wizard
     paths:
       - "dashboard/**"
       - "scripts/dashboard/**"
@@ -48,6 +49,9 @@ jobs:
           scripts/dashboard/export-data.py \
           scripts/dashboard/validate-data.py
         node --check dashboard/assets/app.js
+        node --check dashboard/assets/wizard-core.js
+        node --check dashboard/assets/wizard.js
+        node scripts/dashboard/test-wizard.mjs
         git diff --check
 
     - name: 导出 Dashboard 数据
