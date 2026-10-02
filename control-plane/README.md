@@ -203,6 +203,8 @@ https://...workers.dev/api/v1/health
 
 ### 8. V2.0B：在线编辑 Profile 并通过 PR 保存
 
+V2.0B 已完成独立测试仓库的真实端到端写入验证：Control Plane 创建的新 commit 以当前默认分支为唯一父提交，PR 只包含预期 Profile 文件变化，创建 PR 前后默认分支 SHA 保持不变。
+
 V2.0B 不允许直接写默认分支。编辑流程固定为：
 
 ```text
