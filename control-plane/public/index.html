@@ -10,9 +10,9 @@
   <main class="shell">
     <header>
       <div>
-        <p class="eyebrow">OpenWrt NG · V2.0B</p>
+        <p class="eyebrow">OpenWrt NG · V2.0C</p>
         <h1>Control Plane</h1>
-        <p class="muted">GitHub 登录、Profile 在线编辑，以及通过新分支 + Pull Request 安全保存。</p>
+        <p class="muted">GitHub 登录、Profile 安全编辑，并直接触发 Builder、跟踪运行状态与产物。</p>
       </div>
       <div id="user-box"></div>
     </header>
@@ -70,6 +70,43 @@
         <pre id="diff-preview"></pre>
       </div>
       <p class="success" id="write-result" hidden></p>
+    </section>
+
+    <section class="card" id="build-card" hidden>
+      <div class="heading">
+        <div>
+          <p class="eyebrow">Builder</p>
+          <h2 id="build-title">构建 Profile</h2>
+          <p class="muted" id="build-meta"></p>
+        </div>
+        <span class="permission-pill" id="actions-permission"></span>
+      </div>
+
+      <label class="check-row">
+        <input id="publish-release" type="checkbox">
+        <span>
+          <strong>构建成功后允许发布 Release</strong>
+          <small>默认关闭；仍受 Profile 的 UPLOAD_RELEASE 控制。</small>
+        </span>
+      </label>
+
+      <div class="editor-actions">
+        <button class="button" id="trigger-build" type="button">开始构建</button>
+        <button class="button secondary" id="refresh-builds" type="button">刷新状态</button>
+      </div>
+
+      <p class="success" id="build-result" hidden></p>
+      <div id="build-runs" class="build-list"></div>
+
+      <div id="build-detail" class="preview-box" hidden>
+        <div class="heading">
+          <h3 id="build-detail-title">运行详情</h3>
+          <a class="button secondary" id="build-summary-link" href="#" target="_blank" rel="noreferrer">打开 Actions / Summary</a>
+        </div>
+        <div id="build-jobs" class="build-sublist"></div>
+        <div id="build-artifacts" class="build-sublist"></div>
+        <div id="build-release" class="build-sublist"></div>
+      </div>
     </section>
 
     <p class="error" id="error" hidden></p>
