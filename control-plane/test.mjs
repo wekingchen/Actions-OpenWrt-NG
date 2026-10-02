@@ -293,7 +293,7 @@ const builderFetch = async (url, options = {}) => {
     const body = JSON.parse(options.body);
     assert.equal(body.ref, "main");
     assert.equal(body.inputs.profile, "default");
-    assert.equal(body.inputs.publish_release, "false");
+    assert.equal(body.inputs.publish_release, false);
     assert.match(body.inputs.control_plane_request_id, /^[0-9a-f]{16}$/);
     return new Response(null, { status: 204 });
   }
@@ -368,6 +368,8 @@ const dispatched = await builderClient.triggerBuilder(
 );
 assert.equal(dispatched.accepted, true);
 assert.equal(dispatched.ref, "main");
+assert.equal(dispatched.runId, 0);
+assert.equal(dispatched.runUrl, "");
 assert.match(dispatched.requestId, /^[0-9a-f]{16}$/);
 
 const builderDetail = await builderClient.getBuilderRun(
