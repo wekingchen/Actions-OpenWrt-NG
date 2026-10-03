@@ -245,7 +245,7 @@ def parse_packageinfo(path: Path, config: dict[str, str]) -> list[dict[str, Any]
     return visible
 
 
-def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], str]:
+def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], str]:
     config_dir = root / "scripts" / "config"
     exporter_source = Path(__file__).with_name("config-studio-kconfig.c")
     object_names = [
@@ -260,9 +260,9 @@ def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], str]:
     ]
 
     if not exporter_source.is_file():
-        return [], f"OpenWrt Kconfig exporter missing: {exporter_source}"
+        return [], {}, f"OpenWrt Kconfig exporter missing: {exporter_source}"
     if not config_dir.is_dir():
-        return [], f"OpenWrt scripts/config missing: {config_dir}"
+        return [], {}, f"OpenWrt scripts/config missing: {config_dir}"
 
     try:
         subprocess.run(
@@ -277,7 +277,7 @@ def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], str]:
         objects = [config_dir / name for name in object_names]
         missing = [str(path) for path in objects if not path.is_file()]
         if missing:
-            return [], "OpenWrt Kconfig objects missing: " + ", ".join(missing)
+            return [], {}, "OpenWrt Kconfig objects missing: " + ", ".join(missing)
 
         with tempfile.TemporaryDirectory(prefix="openwrt-ng-kconfig-") as raw:
             binary = Path(raw) / "config-studio-kconfig"
@@ -301,7 +301,7 @@ def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], str]:
             )
             if compiled.returncode != 0:
                 detail = (compiled.stderr or compiled.stdout).strip()
-                return [], f"OpenWrt Kconfig exporter compile failed: {detail[-1200:]}"
+                return [], {}, f"OpenWrt Kconfig exporter compile failed: {detail[-1200:]}"
 
             env = os.environ.copy()
             env["srctree"] = str(root)
@@ -316,9 +316,10 @@ def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], str]:
             )
             if exported.returncode != 0:
                 detail = (exported.stderr or exported.stdout).strip()
-                return [], f"OpenWrt Kconfig exporter failed: {detail[-1200:]}"
+                return [], {}, f"OpenWrt Kconfig exporter failed: {detail[-1200:]}"
 
         features: list[dict[str, Any]] = []
+        package_states: dict[str, dict[str, Any]] = {}
         seen: set[str] = set()
         for number, raw_line in enumerate(exported.stdout.splitlines(), 1):
             line = raw_line.strip()
@@ -327,7 +328,7 @@ def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], str]:
             try:
                 item = json.loads(line)
             except json.JSONDecodeError as error:
-                return [], f"OpenWrt Kconfig exporter invalid JSON at line {number}: {error}"
+                return [], {}, f"OpenWrt Kconfig exporter invalid JSON at line {number}: {error}"
 
             name = str(item.get("name") or "")
             symbol = str(item.get("symbol") or "")
@@ -349,6 +350,19 @@ def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], str]:
                 if str(value) in {"n", "m", "y"}
             ]
             item["visible"] = bool(item.get("visible"))
+            item["changeable"] = bool(item.get("changeable"))
+
+            if name.startswith("PACKAGE_"):
+                package_states[name.removeprefix("PACKAGE_")] = {
+                    "symbol": symbol,
+                    "value": str(item.get("value") or "n"),
+                    "visible": item["visible"],
+                    "changeable": item["changeable"],
+                    "assignable": item["assignable"],
+                    "menuPath": item["menuPath"],
+                }
+                continue
+
             features.append(item)
 
         features.sort(
@@ -358,12 +372,12 @@ def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], str]:
                 str(item.get("name") or "").casefold(),
             )
         )
-        return features, ""
+        return features, package_states, ""
     except subprocess.CalledProcessError as error:
         detail = (error.stderr or error.stdout or str(error)).strip()
-        return [], f"OpenWrt Kconfig prepare failed: {detail[-1200:]}"
+        return [], {}, f"OpenWrt Kconfig prepare failed: {detail[-1200:]}"
     except Exception as error:
-        return [], f"OpenWrt Kconfig export failed: {type(error).__name__}: {error}"
+        return [], {}, f"OpenWrt Kconfig export failed: {type(error).__name__}: {error}"
 
 
 def command_catalog(args: argparse.Namespace) -> None:
@@ -376,9 +390,32 @@ def command_catalog(args: argparse.Namespace) -> None:
             raise SystemExit(f"required OpenWrt metadata missing: {path}")
 
     config = parse_config_text(read_text(config_path))
-    features, feature_error = kconfig_features(root)
+    features, package_states, feature_error = kconfig_features(root)
     packages = parse_packageinfo(packageinfo, config)
-    categories = sorted({item["category"] for item in packages}, key=str.casefold)
+
+    for package in packages:
+        state = package_states.get(package["name"])
+        if state:
+            package["value"] = state["value"]
+            package["selected"] = state["value"] in {"y", "m"}
+            package["visible"] = state["visible"]
+            package["changeable"] = state["changeable"]
+            package["assignable"] = state["assignable"]
+            package["menuPath"] = state["menuPath"]
+        else:
+            package["visible"] = False
+            package["changeable"] = False
+            package["assignable"] = []
+            package["menuPath"] = []
+
+    categories = sorted(
+        {
+            item["category"]
+            for item in packages
+            if item["visible"] or item["selected"]
+        },
+        key=str.casefold,
+    )
     payload = {
         "version": 1,
         "targets": parse_targetinfo(targetinfo, config),
