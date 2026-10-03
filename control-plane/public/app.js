@@ -35,6 +35,8 @@ const buildState = {
   pollTimer: null,
   pollAttempts: 0,
   hasActiveRuns: false,
+  activeRunId: 0,
+  detailRunId: 0,
   generation: 0
 };
 
@@ -1446,7 +1448,7 @@ function setConfigStudioStatus(title, detail = "") {
   $("config-studio-status-detail").textContent = detail;
 }
 
-function configStudioElapsed(startedAt) {
+function actionElapsed(startedAt) {
   const started = Date.parse(String(startedAt || ""));
   if (!Number.isFinite(started)) return "";
   const seconds = Math.max(0, Math.floor((Date.now() - started) / 1000));
@@ -1476,7 +1478,7 @@ function renderConfigStudioProgress(progress, run, mode = "catalog") {
     resetConfigStudioProgress(mode);
     if (run?.startedAt) {
       $("config-studio-progress-elapsed").textContent =
-        configStudioElapsed(run.startedAt);
+        actionElapsed(run.startedAt);
     }
     return;
   }
@@ -1491,7 +1493,7 @@ function renderConfigStudioProgress(progress, run, mode = "catalog") {
   $("config-studio-progress-count").textContent =
     `已完成 ${progress.completed} / ${progress.total} 步`;
   $("config-studio-progress-elapsed").textContent =
-    configStudioElapsed(run?.startedAt);
+    actionElapsed(run?.startedAt);
 
   const percent = Math.max(
     0,
@@ -1522,6 +1524,110 @@ function renderConfigStudioProgress(progress, run, mode = "catalog") {
     node.textContent = step.name;
     root.appendChild(node);
   }
+}
+
+function renderActionProgressCard(rootId, progress, run, options = {}) {
+  const root = $(rootId);
+  if (!root) return;
+
+  const hasProgress =
+    progress && Array.isArray(progress.steps) && progress.steps.length;
+  if (!hasProgress && !run) {
+    root.hidden = true;
+    root.replaceChildren();
+    return;
+  }
+
+  root.hidden = false;
+  root.replaceChildren();
+
+  const head = document.createElement("div");
+  head.className = "action-progress-head";
+  const copy = document.createElement("div");
+  copy.className = "action-progress-copy";
+  const title = document.createElement("strong");
+  const detail = document.createElement("span");
+
+  if (hasProgress) {
+    title.textContent =
+      progress.failed || progress.current || options.runningTitle || "处理中";
+    if (progress.failed) {
+      detail.textContent =
+        `失败步骤：${progress.currentDetail || progress.failed}。可打开 Actions 查看日志。`;
+    } else if (progress.currentDetail && progress.currentDetail !== progress.current) {
+      detail.textContent = `当前 GitHub 步骤：${progress.currentDetail}`;
+    } else {
+      detail.textContent =
+        options.runningDetail || "进度来自当前 GitHub Actions 的真实步骤。";
+    }
+  } else {
+    title.textContent = options.waitingTitle || "等待 GitHub Runner";
+    detail.textContent =
+      options.waitingDetail || "运行记录建立后会自动显示真实步骤。";
+  }
+  copy.append(title, detail);
+  head.appendChild(copy);
+
+  if (run?.url) {
+    const link = document.createElement("a");
+    link.className = "text-link action-progress-link";
+    link.href = run.url;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.textContent = "Actions ↗";
+    head.appendChild(link);
+  }
+  root.appendChild(head);
+
+  const progressBox = document.createElement("div");
+  progressBox.className = "config-studio-progress";
+  const meta = document.createElement("div");
+  meta.className = "config-studio-progress-meta";
+  const count = document.createElement("strong");
+  const elapsed = document.createElement("span");
+  count.textContent = hasProgress
+    ? `已完成 ${progress.completed} / ${progress.total} 步`
+    : "准备中";
+  elapsed.textContent = actionElapsed(run?.startedAt || run?.runStartedAt);
+  meta.append(count, elapsed);
+
+  const track = document.createElement("div");
+  track.className = "config-studio-progress-track";
+  track.setAttribute("role", "progressbar");
+  track.setAttribute("aria-valuemin", "0");
+  track.setAttribute("aria-valuemax", "100");
+  const percent = hasProgress
+    ? Math.max(0, Math.min(100, Number(progress.percent || 0)))
+    : 0;
+  track.setAttribute("aria-valuenow", String(percent));
+  const bar = document.createElement("span");
+  bar.style.width = percent + "%";
+  track.appendChild(bar);
+
+  const steps = document.createElement("div");
+  steps.className = "config-studio-progress-steps";
+  if (hasProgress) {
+    for (const step of progress.steps) {
+      const node = document.createElement("div");
+      node.className = "config-studio-progress-step";
+      if (
+        step.status === "completed" &&
+        step.conclusion &&
+        !["success", "skipped", "neutral"].includes(step.conclusion)
+      ) {
+        node.classList.add("failed");
+      } else if (step.status === "completed") {
+        node.classList.add("done");
+      } else if (step.status === "in_progress") {
+        node.classList.add("running");
+      }
+      node.textContent = step.name;
+      steps.appendChild(node);
+    }
+  }
+
+  progressBox.append(meta, track, steps);
+  root.appendChild(progressBox);
 }
 
 function setConfigStudioStep(step) {
