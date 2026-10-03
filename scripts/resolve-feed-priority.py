@@ -70,21 +70,28 @@ def active_feeds_file(root: Path) -> Path:
     return explicit if explicit.exists() else root / "feeds.conf.default"
 
 
-def priority_feeds(root: Path) -> list[str]:
+def feed_specs(root: Path) -> list[dict[str, object]]:
     path = active_feeds_file(root)
-    result: list[str] = []
+    result: list[dict[str, object]] = []
     if not path.exists():
         return result
-    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for order, raw in enumerate(
+        path.read_text(encoding="utf-8", errors="replace").splitlines()
+    ):
         line = raw.split("#", 1)[0].strip()
         if not line:
             continue
         match = FEED_RE.match(line)
         if not match:
             continue
-        flags = match.group("flags") or ""
-        if "--force" in flags.split():
-            result.append(match.group("name"))
+        flags = (match.group("flags") or "").split()
+        result.append(
+            {
+                "name": match.group("name"),
+                "force": "--force" in flags,
+                "order": order,
+            }
+        )
     return result
 
 
@@ -148,48 +155,82 @@ def main() -> int:
     args = parser.parse_args()
 
     root = args.build_root.resolve()
-    feeds = priority_feeds(root)
-    feed_order = {name: index for index, name in enumerate(feeds)}
+    specs = feed_specs(root)
+    all_feeds = [str(item["name"]) for item in specs]
+    priority_feeds = [
+        str(item["name"]) for item in specs if bool(item["force"])
+    ]
+    feed_order = {
+        str(item["name"]): index for index, item in enumerate(specs)
+    }
+    force_set = set(priority_feeds)
+
     candidates_by_source: dict[str, list[SourceBlock]] = {}
     blocks_by_feed: dict[str, list[SourceBlock]] = {}
 
-    for feed in feeds:
+    for feed in all_feeds:
         blocks = parse_index(root / "feeds" / f"{feed}.index", feed, feed_order[feed])
         blocks_by_feed[feed] = blocks
         for block in blocks:
             candidates_by_source.setdefault(block.source, []).append(block)
 
-    losers: dict[str, set[str]] = {feed: set() for feed in feeds}
+    losers: dict[str, set[str]] = {feed: set() for feed in all_feeds}
     decisions: list[dict[str, object]] = []
+    priority_collision_count = 0
+    default_shadow_count = 0
 
     for source, candidates in sorted(candidates_by_source.items()):
-        if len(candidates) < 2:
+        priority = [item for item in candidates if item.feed in force_set]
+        if not priority:
             continue
-        candidates.sort(key=lambda item: item.order)
-        winner = choose_winner(candidates)
-        dropped = []
-        for candidate in candidates:
+
+        priority.sort(key=lambda item: item.order)
+        winner = choose_winner(priority)
+        dropped_priority = []
+        dropped_default = []
+
+        for candidate in priority:
             if candidate.feed == winner.feed:
                 continue
             losers[candidate.feed].add(source)
-            dropped.append(
+            dropped_priority.append(
                 {
                     "feed": candidate.feed,
                     "version": candidate.version,
                     "packages": candidate.packages,
                 }
             )
-        decisions.append(
-            {
-                "source": source,
-                "winner": {
-                    "feed": winner.feed,
-                    "version": winner.version,
-                    "packages": winner.packages,
-                },
-                "dropped": dropped,
-            }
-        )
+
+        for candidate in candidates:
+            if candidate.feed in force_set:
+                continue
+            losers[candidate.feed].add(source)
+            dropped_default.append(
+                {
+                    "feed": candidate.feed,
+                    "version": candidate.version,
+                    "packages": candidate.packages,
+                }
+            )
+
+        if dropped_priority:
+            priority_collision_count += 1
+        if dropped_default:
+            default_shadow_count += 1
+
+        if dropped_priority or dropped_default:
+            decisions.append(
+                {
+                    "source": source,
+                    "winner": {
+                        "feed": winner.feed,
+                        "version": winner.version,
+                        "packages": winner.packages,
+                    },
+                    "droppedPriority": dropped_priority,
+                    "droppedDefault": dropped_default,
+                }
+            )
 
     for feed, removed_sources in losers.items():
         if not removed_sources:
@@ -202,8 +243,10 @@ def main() -> int:
         path.write_text("".join(kept), encoding="utf-8")
 
     report = {
-        "priorityFeeds": feeds,
-        "collisionCount": len(decisions),
+        "priorityFeeds": priority_feeds,
+        "priorityCollisionCount": priority_collision_count,
+        "defaultShadowCount": default_shadow_count,
+        "decisionCount": len(decisions),
         "decisions": decisions,
     }
     if args.report:
@@ -214,17 +257,24 @@ def main() -> int:
         )
 
     print("=== 常用 Feed 同名包版本择优 ===")
-    print(f"优先第三方 feeds：{len(feeds)}")
-    print(f"检测到同名 source package：{len(decisions)}")
+    print(f"优先第三方 feeds：{len(priority_feeds)}")
+    print(f"常用源之间版本冲突：{priority_collision_count}")
+    print(f"替换默认/普通 feed 同名 source：{default_shadow_count}")
     for decision in decisions:
         winner = decision["winner"]
         print(
             f"  ✓ {decision['source']}: {winner['feed']} "
             f"{winner['version']}"
         )
-        for dropped in decision["dropped"]:
+        for dropped in decision["droppedPriority"]:
             print(
-                f"      跳过 {dropped['feed']} {dropped['version']}"
+                f"      低版本常用源跳过 {dropped['feed']} "
+                f"{dropped['version']}"
+            )
+        for dropped in decision["droppedDefault"]:
+            print(
+                f"      默认/普通 feed 替换 {dropped['feed']} "
+                f"{dropped['version']}"
             )
     return 0
 
