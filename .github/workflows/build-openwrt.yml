@@ -388,6 +388,18 @@ jobs:
           make defconfig
         )
 
+        if grep -qx 'CONFIG_CCACHE=y' "$RUNNER_TEMP/openwrt-ng-repository.config"; then
+          if ! grep -qx 'CONFIG_CCACHE=y' openwrt/.config; then
+            echo "::error::Profile 请求 CONFIG_CCACHE=y，但 make defconfig 后该选项被禁用。Lean/OpenWrt 需要同时启用 CONFIG_DEVEL=y。"
+            echo "仓库配置："
+            grep -nE '^CONFIG_(DEVEL|CCACHE)(=|$)|^# CONFIG_(DEVEL|CCACHE)'               "$RUNNER_TEMP/openwrt-ng-repository.config" || true
+            echo "最终配置："
+            grep -nE '^CONFIG_(DEVEL|CCACHE)(=|$)|^# CONFIG_(DEVEL|CCACHE)'               openwrt/.config || true
+            exit 1
+          fi
+          echo "ccache 配置验收通过：最终 .config 保留 CONFIG_CCACHE=y"
+        fi
+
     - name: 计算编译缓存指纹
       id: build-cache
       run: |
