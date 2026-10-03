@@ -24,7 +24,8 @@ const editorState = {
   original: {},
   files: {},
   currentFile: ".config",
-  previewValid: false
+  previewValid: false,
+  loadVersion: 0
 };
 
 const buildState = {
@@ -32,13 +33,16 @@ const buildState = {
   requestId: "",
   pollTimer: null,
   pollAttempts: 0,
-  hasActiveRuns: false
+  hasActiveRuns: false,
+  generation: 0
 };
 
 const buildDialogState = {
   repo: null,
   profileId: "",
-  releaseAllowed: false
+  releaseAllowed: false,
+  requestVersion: 0,
+  restoreFocus: null
 };
 
 const createState = {
@@ -49,7 +53,8 @@ const createState = {
 
 const repositoryState = {
   repositories: [],
-  selectedFullName: ""
+  selectedFullName: "",
+  selectionVersion: 0
 };
 
 function currentRepository() {
