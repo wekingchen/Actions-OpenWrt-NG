@@ -400,23 +400,66 @@ def command_result(args: argparse.Namespace) -> None:
             "status": "honored" if same else "adjusted",
         })
 
-    selected_packages = sorted(
+    base = parse_config_text(str(request.get("baseConfig") or ""))
+    base_packages = {
+        key.removeprefix("CONFIG_PACKAGE_")
+        for key, value in base.items()
+        if key.startswith("CONFIG_PACKAGE_") and value in {"y", "m"}
+    }
+    selected_packages = {
         key.removeprefix("CONFIG_PACKAGE_")
         for key, value in final.items()
         if key.startswith("CONFIG_PACKAGE_") and value in {"y", "m"}
-    )
+    }
+    explicitly_enabled = {
+        key.removeprefix("CONFIG_PACKAGE_")
+        for key, value in requested.items()
+        if key.startswith("CONFIG_PACKAGE_") and value in {"y", "m"}
+    }
+    explicitly_disabled = {
+        key.removeprefix("CONFIG_PACKAGE_")
+        for key, value in requested.items()
+        if key.startswith("CONFIG_PACKAGE_") and value == "n"
+    }
+
+    added_packages = sorted(selected_packages - base_packages)
+    removed_packages = sorted(base_packages - selected_packages)
+    package_changes = [
+        {
+            "name": name,
+            "change": "added",
+            "reason": "requested" if name in explicitly_enabled else "dependency",
+        }
+        for name in added_packages
+    ] + [
+        {
+            "name": name,
+            "change": "removed",
+            "reason": "requested" if name in explicitly_disabled else "dependency",
+        }
+        for name in removed_packages
+    ]
+
     payload = {
         "version": 1,
         "requestId": request.get("requestId", ""),
         "finalConfig": final_text,
         "comparison": comparison,
-        "selectedPackages": selected_packages,
+        "selectedPackages": sorted(selected_packages),
+        "packageChanges": package_changes,
         "summary": {
             "requested": len(requested),
             "honored": honored,
             "adjusted": adjusted,
             "finalSymbols": len(final),
             "selectedPackages": len(selected_packages),
+            "packageAdded": len(added_packages),
+            "packageRemoved": len(removed_packages),
+            "packageDependencyAdded": sum(
+                1
+                for item in package_changes
+                if item["change"] == "added" and item["reason"] == "dependency"
+            ),
         },
     }
     Path(args.output).write_text(
