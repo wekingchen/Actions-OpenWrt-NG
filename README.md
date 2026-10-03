@@ -46,6 +46,7 @@ Cleanup
 - 普通源码优先做到只替换 `.config` 即可使用。
 - 特殊源码准备逻辑放在 Adapter。
 - 设备或业务定制逻辑放在 Profile / DIY Hook。
+- Profile 如需覆盖 rootfs `files/`，Core 内部统一使用 `PROFILE_FILES_DIR`；旧 Profile 的 `FILES_DIR` 仍会兼容读取，但不会再导出到 OpenWrt `make` 环境，避免与 OpenWrt 内核构建同名变量冲突。
 - 通用 Core 只负责构建编排、缓存、诊断、验收、留档和发布。
 
 ## 快速开始

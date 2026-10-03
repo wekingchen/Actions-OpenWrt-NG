@@ -356,9 +356,9 @@ jobs:
         cp "$CONFIG_FILE" "$RUNNER_TEMP/openwrt-ng-repository.config"
         cp "$CONFIG_FILE" openwrt/.config
 
-        if [ -n "$FILES_DIR" ] && [ -d "$FILES_DIR" ]; then
+        if [ -n "$PROFILE_FILES_DIR" ] && [ -d "$PROFILE_FILES_DIR" ]; then
           rm -rf openwrt/files
-          cp -a "$FILES_DIR" openwrt/files
+          cp -a "$PROFILE_FILES_DIR" openwrt/files
         fi
 
         if [ -n "$DIY_PART2" ]; then
@@ -385,6 +385,7 @@ jobs:
 
         (
           cd openwrt
+          unset FILES_DIR
           make defconfig
         )
 
@@ -437,6 +438,7 @@ jobs:
       run: |
         set -Eeuo pipefail
         cd openwrt
+        unset FILES_DIR
         make download -j8
         find dl -type f -size -1024c -print -delete || true
 
