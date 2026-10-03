@@ -1041,12 +1041,7 @@ export class GitHubAppClient {
         repo,
         branchName,
         {
-          [`${root}/request.json`]: JSON.stringify(request),
-          [`${root}/status.json`]: JSON.stringify({
-            status: "preparing",
-            mode: "catalog",
-            requestId
-          })
+          [`${root}/request.json`]: JSON.stringify(request)
         },
         `config-studio(${requestId}): start session`
       );
@@ -1104,42 +1099,6 @@ export class GitHubAppClient {
       throw new ConfigStudioError("config_studio_request_invalid", 502);
     }
 
-    const [statusText, catalogText, resultText] = await Promise.all([
-      this.readBranchTextFile(
-        token,
-        owner,
-        repo,
-        branchName,
-        `${root}/status.json`,
-        true
-      ),
-      this.readBranchTextFile(
-        token,
-        owner,
-        repo,
-        branchName,
-        `${root}/catalog.json.gz.b64`,
-        true
-      ),
-      this.readBranchTextFile(
-        token,
-        owner,
-        repo,
-        branchName,
-        `${root}/result.json.gz.b64`,
-        true
-      )
-    ]);
-
-    let status = { status: "preparing", mode: "catalog", requestId };
-    if (statusText) {
-      try {
-        status = JSON.parse(statusText);
-      } catch {
-        throw new ConfigStudioError("config_studio_status_invalid", 502);
-      }
-    }
-
     const safeOwner = encodeSegment(owner);
     const safeRepo = encodeSegment(repo);
     const runsBody = await this.api(
@@ -1152,6 +1111,57 @@ export class GitHubAppClient {
     const run = runs.find((item) =>
       String(item.display_title || item.name || "").includes(`cs:${requestId}`)
     );
+
+    let status = { status: "preparing", mode: "catalog", requestId };
+    let catalog = null;
+    let result = null;
+
+    if (run) {
+      const title = String(run.display_title || run.name || "");
+      const mode = title.includes("Config · resolve ·") ? "resolve" : "catalog";
+      if (run.status !== "completed") {
+        status = {
+          status: mode === "resolve" ? "resolving" : "preparing",
+          mode,
+          requestId
+        };
+      } else if (run.conclusion !== "success") {
+        status = { status: "failed", mode, requestId };
+      } else {
+        const artifactsBody = await this.api(
+          `/repos/${safeOwner}/${safeRepo}/actions/runs/${Number(run.id)}/artifacts?per_page=100`,
+          token
+        );
+        const artifacts = Array.isArray(artifactsBody.artifacts)
+          ? artifactsBody.artifacts
+          : [];
+        const artifact = artifacts.find(
+          (item) =>
+            item.name === `OpenWrt_Config_Studio_${requestId}` &&
+            !item.expired
+        );
+        if (artifact) {
+          const size = Number(artifact.size_in_bytes || 0);
+          if (size > 25 * 1024 * 1024) {
+            throw new ConfigStudioError("config_studio_artifact_too_large", 502);
+          }
+          const zipBytes = await this.apiBytes(
+            `/repos/${safeOwner}/${safeRepo}/actions/artifacts/${Number(artifact.id)}/zip`,
+            token
+          );
+          const parsed = parseConfigStudioArtifact(zipBytes);
+          status = parsed.status;
+          catalog = parsed.catalog;
+          result = parsed.result;
+        } else {
+          status = {
+            status: mode === "resolve" ? "resolving" : "preparing",
+            mode,
+            requestId
+          };
+        }
+      }
+    }
 
     return {
       requestId,
@@ -1170,8 +1180,8 @@ export class GitHubAppClient {
             updatedAt: run.updated_at || ""
           }
         : null,
-      catalog: catalogText ? await decodeGzipBase64Json(catalogText) : null,
-      result: resultText ? await decodeGzipBase64Json(resultText) : null
+      catalog,
+      result
     };
   }
 
@@ -1246,12 +1256,7 @@ export class GitHubAppClient {
       repo,
       branchName,
       {
-        [`${root}/request.json`]: JSON.stringify(request),
-        [`${root}/status.json`]: JSON.stringify({
-          status: "resolving",
-          mode: "resolve",
-          requestId
-        })
+        [`${root}/request.json`]: JSON.stringify(request)
       },
       `config-studio(${requestId}): submit selection`
     );
