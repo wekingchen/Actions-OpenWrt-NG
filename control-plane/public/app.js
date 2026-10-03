@@ -29,11 +29,17 @@ const editorState = {
 
 const buildState = {
   repo: null,
-  profileId: "",
   requestId: "",
   pollTimer: null,
   pollAttempts: 0,
-  activeRunId: 0
+  activeRunId: 0,
+  hasActiveRuns: false
+};
+
+const buildDialogState = {
+  repo: null,
+  profileId: "",
+  releaseAllowed: false
 };
 
 const createState = {
@@ -53,23 +59,6 @@ function currentRepository() {
   ) || null;
 }
 
-function currentProfileId(repo) {
-  if (!repo) return "";
-  if (
-    buildState.repo?.fullName === repo.fullName &&
-    buildState.profileId
-  ) {
-    return buildState.profileId;
-  }
-  if (
-    editorState.repo?.fullName === repo.fullName &&
-    editorState.profileId
-  ) {
-    return editorState.profileId;
-  }
-  return "";
-}
-
 function setActiveNavigation(name) {
   for (const item of document.querySelectorAll(".sidebar-nav .nav-item")) {
     const active = item.dataset.nav === name;
@@ -77,6 +66,16 @@ function setActiveNavigation(name) {
     if (active) item.setAttribute("aria-current", "page");
     else item.removeAttribute("aria-current");
   }
+}
+
+function showControlPlaneView(name) {
+  const grid = $("workspace-grid");
+  const build = $("build-card");
+  const recent = $("recent-build-card");
+
+  grid.hidden = name === "builder";
+  build.hidden = name !== "builder";
+  recent.hidden = name !== "workspace";
 }
 
 function scrollToPanel(node) {
@@ -88,17 +87,6 @@ async function navigateControlPlane(destination) {
   showError();
   const repo = currentRepository();
 
-  if (destination === "workspace") {
-    setActiveNavigation("workspace");
-    if (!repo) {
-      scrollToPanel($("workspace-empty"));
-      return;
-    }
-    $("build-card").hidden = false;
-    scrollToPanel($("profile-card"));
-    return;
-  }
-
   if (!repo) {
     showError("请先从顶栏选择一个仓库。");
     setActiveNavigation("workspace");
@@ -106,55 +94,28 @@ async function navigateControlPlane(destination) {
     return;
   }
 
+  if (destination === "workspace") {
+    showControlPlaneView("workspace");
+    setActiveNavigation("workspace");
+    scrollToPanel($("profile-card"));
+    return;
+  }
+
   if (destination === "profiles") {
-    if (!$("new-profile-card").hidden) {
-      setActiveNavigation("profiles");
-      scrollToPanel($("new-profile-card"));
-      return;
-    }
-
-    const profileId = currentProfileId(repo);
-    if (!profileId) {
-      showError("请先在工作区选择一个 Profile，再进入配置。");
-      setActiveNavigation("workspace");
-      scrollToPanel($("profile-card"));
-      return;
-    }
-
-    const editorReady =
-      !$("editor-card").hidden &&
-      editorState.repo?.fullName === repo.fullName &&
-      editorState.profileId === profileId;
-
-    if (!editorReady) {
-      await openProfile(repo, profileId, {
-        scroll: false,
-        activateNavigation: false
-      });
-    }
+    showControlPlaneView("profiles");
     setActiveNavigation("profiles");
-    scrollToPanel($("editor-card"));
+    if (!$("new-profile-card").hidden) {
+      scrollToPanel($("new-profile-card"));
+    } else if (!$("editor-card").hidden) {
+      scrollToPanel($("editor-card"));
+    } else {
+      scrollToPanel($("profile-card"));
+    }
     return;
   }
 
   if (destination === "builder") {
-    const profileId = currentProfileId(repo);
-    if (!profileId) {
-      showError("请先在工作区选择一个 Profile，再进入构建。");
-      setActiveNavigation("workspace");
-      scrollToPanel($("profile-card"));
-      return;
-    }
-
-    const buildReady =
-      buildState.repo?.fullName === repo.fullName &&
-      buildState.profileId === profileId;
-
-    if (!buildReady) {
-      await setupBuildControl(repo, profileId);
-    } else {
-      $("build-card").hidden = false;
-    }
+    showControlPlaneView("builder");
     setActiveNavigation("builder");
     scrollToPanel($("build-card"));
   }
@@ -423,9 +384,9 @@ function openNewProfileForm() {
   showError();
   resetNewProfileForm();
   $("editor-card").hidden = true;
-  $("build-card").hidden = true;
   $("new-profile-card").hidden = false;
-  $("new-profile-title").textContent = repo.fullName + " · 新建 Profile";
+  $("new-profile-title").textContent = repo.fullName + " · 新建配置";
+  showControlPlaneView("profiles");
   setActiveNavigation("profiles");
   scrollToPanel($("new-profile-card"));
 }
@@ -1227,8 +1188,8 @@ $("new-profile-open").addEventListener("click", openNewProfileForm);
 $("new-profile-close").addEventListener("click", () => {
   $("new-profile-card").hidden = true;
   invalidateNewProfilePreview();
-  if (buildState.repo) $("build-card").hidden = false;
-  setActiveNavigation("workspace");
+  showControlPlaneView("profiles");
+  setActiveNavigation("profiles");
   scrollToPanel($("profile-card"));
 });
 
