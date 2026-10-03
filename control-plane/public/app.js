@@ -74,6 +74,7 @@ function showControlPlaneView(name) {
   const recent = $("recent-build-card");
 
   grid.hidden = name === "builder";
+  grid.classList.toggle("config-only", name === "profiles");
   build.hidden = name !== "builder";
   recent.hidden = name !== "workspace";
 }
