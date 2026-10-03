@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { GitHubAppClient, githubErrorReason } from "./lib/github.mjs";
+import {
+  GitHubAppClient,
+  githubErrorReason,
+  selectConfigStudioRun
+} from "./lib/github.mjs";
 import {
   decryptString,
   encryptString,
@@ -15,6 +19,51 @@ import {
   profileFilesObject
 } from "./lib/profile-template.mjs";
 import { buildProfileFiles as buildWizardProfileFiles } from "../dashboard/assets/wizard-core.js";
+
+const staleCatalogRun = {
+  id: 100,
+  display_title: "Config · catalog · cs:aabbccddeeff0011"
+};
+const oldResolveRun = {
+  id: 101,
+  display_title: "Config · resolve · cs:aabbccddeeff0011"
+};
+const newResolveRun = {
+  id: 102,
+  display_title: "Config · resolve · cs:aabbccddeeff0011"
+};
+const newerCatalogRun = {
+  id: 103,
+  display_title: "Config · catalog · cs:aabbccddeeff0011"
+};
+
+assert.equal(
+  selectConfigStudioRun(
+    [staleCatalogRun],
+    "aabbccddeeff0011",
+    "resolve",
+    100
+  ),
+  undefined
+);
+assert.equal(
+  selectConfigStudioRun(
+    [newResolveRun, oldResolveRun, staleCatalogRun],
+    "aabbccddeeff0011",
+    "resolve",
+    100
+  )?.id,
+  102
+);
+assert.equal(
+  selectConfigStudioRun(
+    [newerCatalogRun, newResolveRun, oldResolveRun],
+    "aabbccddeeff0011",
+    "resolve",
+    101
+  )?.id,
+  102
+);
 
 const templateInput = {
   profileId: "new-profile",
