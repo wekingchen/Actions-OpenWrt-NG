@@ -468,7 +468,7 @@ jobs:
         echo "status=success" >> "$GITHUB_OUTPUT"
 
     - name: 保存编译缓存
-      if: steps.compile.outputs.status == 'success' && steps.build-cache-restore.outputs.cache-hit != 'true'
+      if: ${{ !cancelled() && (steps.compile.outcome == 'success' || steps.compile.outcome == 'failure') && steps.build-cache-restore.outputs.cache-hit != 'true' }}
       uses: actions/cache/save@v6
       with:
         path: |
