@@ -193,13 +193,24 @@ const templateInput = {
   streamLog: true,
   requiredPackages: "curl\nluci\n",
   watchSources: "packages|https://github.com/openwrt/packages|master",
-  extraFeeds: "src-git --force helloworld https://github.com/fw876/helloworld.git"
+  extraFeeds:
+    "src-git --force helloworld https://github.com/fw876/helloworld.git\n" +
+    "src-git --force helloworld https://example.invalid/duplicate.git"
 };
 
 const controlPlaneTemplateFiles = buildProfileTemplateFiles(templateInput);
 const wizardTemplateFiles = buildWizardProfileFiles(templateInput);
 assert.deepEqual(controlPlaneTemplateFiles, wizardTemplateFiles);
 assert.equal(controlPlaneTemplateFiles.length, 7);
+const templateFeeds = controlPlaneTemplateFiles.find(
+  (file) => file.path.endsWith("/feeds.conf")
+)?.text || "";
+assert.equal(
+  (templateFeeds.match(/^src-git(?:-full)?(?:\s+--force)?\s+helloworld\s+/gm) || []).length,
+  1
+);
+assert.match(templateFeeds, /github\.com\/fw876\/helloworld\.git/);
+assert.doesNotMatch(templateFeeds, /example\.invalid\/duplicate\.git/);
 assert.deepEqual(
   Object.keys(profileFilesObject(controlPlaneTemplateFiles)).sort(),
   [
