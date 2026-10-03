@@ -353,11 +353,21 @@ export async function handleControlPlaneRequest(
       const session = await authenticatedSession();
       if (!session) return json(200, { authenticated: false });
 
+      let avatarUrl = session.avatarUrl || "";
+      if (!avatarUrl) {
+        try {
+          const user = await deps.github.getUser(session.accessToken);
+          avatarUrl = user?.avatar_url || "";
+        } catch (error) {
+          console.warn("GitHub avatar refresh failed", error);
+        }
+      }
+
       return json(200, {
         authenticated: true,
         user: {
           login: session.userLogin,
-          avatarUrl: session.avatarUrl
+          avatarUrl
         },
         expiresAt: new Date(session.sessionExpiresAt).toISOString()
       });
