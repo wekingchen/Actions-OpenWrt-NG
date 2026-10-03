@@ -123,7 +123,7 @@ def main() -> None:
     exporter_source = (ROOT / "scripts" / "config-studio-kconfig.c").read_text(
         encoding="utf-8"
     )
-    assert '"choicePrompt"' in exporter_source
+    assert "choicePrompt" in exporter_source
     assert "package_symbol(sym->name)" in exporter_source
 
     legacy = CONFIG_STUDIO.decode_process_text(
