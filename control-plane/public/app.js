@@ -1485,14 +1485,19 @@ function renderConfigStudioPackages() {
 
     const select = document.createElement("select");
     select.setAttribute("aria-label", pkg.name + " 构建方式");
-    for (const [value, label] of [
-      ["n", "不选"],
-      ["y", "编入固件"],
-      ["m", "仅编译模块"]
-    ]) {
+    const packageLabels = {
+      n: "不选",
+      y: "编入固件",
+      m: "仅编译模块"
+    };
+    const assignable =
+      Array.isArray(pkg.assignable) && pkg.assignable.length
+        ? pkg.assignable
+        : ["n", "m", "y"];
+    for (const value of assignable) {
       const option = document.createElement("option");
       option.value = value;
-      option.textContent = label;
+      option.textContent = packageLabels[value] || value;
       select.appendChild(option);
     }
     select.value = configStudioOptionValue(pkg.symbol, pkg.value);
@@ -2610,11 +2615,17 @@ $("config-studio-resolve").addEventListener("click", () => {
 
 $("config-studio-back").addEventListener("click", () => {
   configStudioState.result = null;
+  configStudioState.modifiedValues = new Map();
+  pickConfigStudioTargetSelection(true);
+  configStudioState.baselineTargetId = configStudioState.targetId;
+  configStudioState.baselineSubtargetId = configStudioState.subtargetId;
+  configStudioState.baselineDeviceProfileId =
+    configStudioState.deviceProfileId;
   setConfigStudioStatus(
     "继续调整",
-    "菜单目录已经按上一次 Kconfig 解析结果刷新。"
+    "以上一轮 make defconfig 的真实结果作为新的起点。"
   );
-  renderConfigStudioCatalog(true);
+  renderConfigStudioCatalog(false);
 });
 
 $("config-studio-apply").addEventListener("click", () => {
