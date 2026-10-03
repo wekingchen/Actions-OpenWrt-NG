@@ -44,6 +44,9 @@ assert.match(
   controlPlaneIndexHtml,
   /id="config-studio-progress-track"[^>]*role="progressbar"/
 );
+assert.match(controlPlaneAppJs, /configStudioPackageChildren/);
+assert.match(controlPlaneAppJs, /choicePrompt/);
+assert.match(controlPlaneAppJs, /configOptions/);
 
 const builderProgress = builderProgressFromJobs([
   {
