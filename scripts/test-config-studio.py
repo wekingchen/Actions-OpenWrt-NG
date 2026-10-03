@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -9,6 +10,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOL = ROOT / "scripts" / "config-studio.py"
+
+
+SPEC = importlib.util.spec_from_file_location("config_studio", TOOL)
+assert SPEC and SPEC.loader
+CONFIG_STUDIO = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(CONFIG_STUDIO)
 
 
 def run(*args: str) -> None:
@@ -20,6 +27,12 @@ def run(*args: str) -> None:
 
 
 def main() -> None:
+    legacy = CONFIG_STUDIO.decode_process_text(
+        b'{"prompt":"legacy \xa1 text","symbol":"CONFIG_TEST"}\n'
+    )
+    assert "\ufffd" in legacy
+    assert json.loads(legacy)["symbol"] == "CONFIG_TEST"
+
     with tempfile.TemporaryDirectory() as raw:
         temp = Path(raw)
         build = temp / "openwrt"
