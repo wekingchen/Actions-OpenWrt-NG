@@ -144,11 +144,9 @@ jobs:
         request="$RUNNER_TEMP/config-studio-request.json"
         mkdir -p "$RUNNER_TEMP/config-studio-output"
         python3 scripts/config-studio.py catalog openwrt "$RUNNER_TEMP/config-studio-output/catalog.json"
-        gzip -9 -c "$RUNNER_TEMP/config-studio-output/catalog.json" | base64 -w0 > "$RUNNER_TEMP/config-studio-output/catalog.json.gz.b64"
 
         if [ "$CONFIG_MODE" = "resolve" ]; then
           python3 scripts/config-studio.py result "$request" openwrt/.config "$RUNNER_TEMP/config-studio-output/result.json"
-          gzip -9 -c "$RUNNER_TEMP/config-studio-output/result.json" | base64 -w0 > "$RUNNER_TEMP/config-studio-output/result.json.gz.b64"
           status=resolved
         else
           status=ready
@@ -165,7 +163,7 @@ jobs:
         path: ${{ runner.temp }}/config-studio-output
         if-no-files-found: error
         retention-days: 1
-        compression-level: 0
+        compression-level: 9
 
     - name: 生成 Summary
       if: always()
@@ -180,78 +178,5 @@ jobs:
           echo
           echo '配置依赖由 OpenWrt 自己的 `make defconfig` 解析；浏览器只提交用户明确选择。'
           echo
-          echo '> 安全边界：本 Job 只有 contents:read；外部源码与 feeds 执行期间不持有仓库写权限。'
+          echo '> 本 Workflow 全程只有 contents:read；大型 catalog/result 只通过短期 Artifact 交给 Control Plane，不写入仓库。'
         } >> "$GITHUB_STEP_SUMMARY"
-
-  writeback:
-    name: 写回 Config Studio 会话
-    needs: configure
-    if: always() && !cancelled()
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      REQUEST_ID: ${{ inputs.request_id }}
-      SESSION_BRANCH: ${{ inputs.session_branch }}
-      CONFIG_MODE: ${{ inputs.mode }}
-
-    steps:
-    - name: 校验写回目标
-      run: |
-        set -Eeuo pipefail
-        [[ "$REQUEST_ID" =~ ^[0-9a-f]{16}$ ]] || { echo 'ERROR: invalid request id' >&2; exit 1; }
-        [ "$SESSION_BRANCH" = "openwrt-ng/config-session-$REQUEST_ID" ] || { echo 'ERROR: invalid session branch' >&2; exit 1; }
-
-    - name: 下载配置结果
-      if: needs.configure.result == 'success'
-      uses: actions/download-artifact@v8
-      with:
-        name: OpenWrt_Config_Studio_${{ inputs.request_id }}
-        path: .config-studio-output
-
-    - name: 写回成功结果
-      if: needs.configure.result == 'success'
-      run: |
-        set -Eeuo pipefail
-        session_root=".openwrt-ng/config-studio/$REQUEST_ID"
-
-        put_file() {
-          local src="$1" path="$2" sha content body
-          sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${SESSION_BRANCH}" --jq '.sha' 2>/dev/null || true)"
-          content="$(base64 -w0 < "$src")"
-          body="$RUNNER_TEMP/put-$(basename "$path").json"
-          if [ -n "$sha" ]; then
-            jq -n --arg message "config-studio($REQUEST_ID): update $(basename "$path")" --arg content "$content" --arg branch "$SESSION_BRANCH" --arg sha "$sha" \
-              '{message:$message,content:$content,branch:$branch,sha:$sha}' > "$body"
-          else
-            jq -n --arg message "config-studio($REQUEST_ID): add $(basename "$path")" --arg content "$content" --arg branch "$SESSION_BRANCH" \
-              '{message:$message,content:$content,branch:$branch}' > "$body"
-          fi
-          gh api -X PUT "repos/${GITHUB_REPOSITORY}/contents/${path}" --input "$body" >/dev/null
-        }
-
-        put_file .config-studio-output/status.json "$session_root/status.json"
-        put_file .config-studio-output/catalog.json.gz.b64 "$session_root/catalog.json.gz.b64"
-        if [ "$CONFIG_MODE" = "resolve" ]; then
-          put_file .config-studio-output/result.json.gz.b64 "$session_root/result.json.gz.b64"
-        fi
-
-    - name: 写回失败状态
-      if: needs.configure.result != 'success'
-      run: |
-        set -Eeuo pipefail
-        session_root=".openwrt-ng/config-studio/$REQUEST_ID"
-        jq -n --arg mode "$CONFIG_MODE" --arg requestId "$REQUEST_ID" \
-          '{status:"failed",mode:$mode,requestId:$requestId}' > "$RUNNER_TEMP/config-studio-failed.json"
-        sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${session_root}/status.json?ref=${SESSION_BRANCH}" --jq '.sha' 2>/dev/null || true)"
-        content="$(base64 -w0 < "$RUNNER_TEMP/config-studio-failed.json")"
-        if [ -n "$sha" ]; then
-          jq -n --arg message "config-studio($REQUEST_ID): mark failure" --arg content "$content" --arg branch "$SESSION_BRANCH" --arg sha "$sha" \
-            '{message:$message,content:$content,branch:$branch,sha:$sha}' > "$RUNNER_TEMP/config-studio-failed-body.json"
-        else
-          jq -n --arg message "config-studio($REQUEST_ID): mark failure" --arg content "$content" --arg branch "$SESSION_BRANCH" \
-            '{message:$message,content:$content,branch:$branch}' > "$RUNNER_TEMP/config-studio-failed-body.json"
-        fi
-        gh api -X PUT "repos/${GITHUB_REPOSITORY}/contents/${session_root}/status.json" --input "$RUNNER_TEMP/config-studio-failed-body.json" >/dev/null
