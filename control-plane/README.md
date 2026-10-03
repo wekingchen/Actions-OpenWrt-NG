@@ -290,6 +290,7 @@ Builder 增加一个可选的 `control_plane_request_id` 输入。手动运行�
 - **构建**：显示当前仓库最近 100 次构建、运行详情与产物，不再放置第二个“开始构建”入口。
 - 构建确认弹层里的“本次构建同时发布 Release”只控制本次运行；若目标 Profile 的 `UPLOAD_RELEASE=false`，该开关直接禁用并说明原因。
 - 活动 Run 会自动轮询；手动刷新仅作为小图标补充操作。切换仓库、快速切换 Profile 或关闭构建弹层时，旧异步响应会被版本隔离，不会覆盖当前视图。
+- 点击“开始构建”后，不再只显示“等待 GitHub 建立运行记录”。工作区会立即出现统一 Action 进度卡；一旦拿到 run/job 数据，就显示 Profile 预检、源码、Feeds、缓存、编译、产物、Release、清理等真实阶段。构建详情页复用同一份 progress 数据。
 - 成功记录提供产物入口和 GitHub Actions 链接；详情中展示 Artifact 下载入口、匹配的 Release 和 Job 状态。
 
 Artifact 下载先经过 Control Plane 会话鉴权，再由服务端使用 GitHub user token 获取短时下载重定向；浏览器不会获得 GitHub access token，也不依赖浏览器是否已单独登录 GitHub。
@@ -342,7 +343,7 @@ profiles/<id>/feeds.conf
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
 
-V2.0E 解决“创建 `.config` 仍必须在本地搭建编译环境并执行 `make menuconfig`”的问题。0.14.0 延续“源码 → 额外 feeds → 生成菜单 → 选择配置 → 检查依赖 → 确认”的向导，并增加真实 GitHub Actions step 进度显示；feed 优先级/同名包覆盖语义保持不变。额外 feeds 保存为 `profiles/<id>/feeds.conf`，Config Studio 与正式 Builder 都在 `feeds update -a` 前应用它；带 `--force` 的 feed 由 OpenWrt 在 `feeds install` 阶段覆盖 core/default 同名包。
+V2.0E 解决“创建 `.config` 仍必须在本地搭建编译环境并执行 `make menuconfig`”的问题。0.15.0 把真实 GitHub Actions step 进度提升为整个 Control Plane 的统一等待模型：Config Studio 与 Builder 均显示真实 Action 阶段；feed 优先级/同名包覆盖语义保持不变。额外 feeds 保存为 `profiles/<id>/feeds.conf`，Config Studio 与正式 Builder 都在 `feeds update -a` 前应用它；带 `--force` 的 feed 由 OpenWrt 在 `feeds install` 阶段覆盖 core/default 同名包。
 
 用户仍然亲自决定：
 
@@ -359,6 +360,8 @@ Control Plane 不自己计算依赖。用户提交选择后，Action 实际运�
 - Kconfig 自动加入 / 移除的软件包。
 
 Config Studio Workflow 已拆成可观察阶段：读取请求、安装解析工具、加载 Profile、准备 OpenWrt 源码、应用额外 Feeds、更新 Feeds、安装 Feeds、运行 Kconfig、生成菜单、上传结果。Session API 会读取当前 run 的 jobs/steps，前端每轮轮询同步“已完成 X/Y 步”、当前步骤和已用时。Feeds update/install 阶段会明确提示通常耗时较长；不提供虚假的剩余分钟数。
+
+统一 progress API 使用同一结构：`completed / total / percent / current / currentDetail / failed / steps[]`。以后任何新的前端 workflow_dispatch 等待流程都应复用该模型，而不是新增独立 spinner 状态机。
 
 每次 resolve 后会重新生成菜单目录，因此切换 Target 或设备后点击“返回修改”，看到的是新目标上下文下的真实菜单。关闭 Config Studio、按 Esc 或点击遮罩默认只暂存 session；同一源码、feeds 与基础配置再次打开时直接恢复，不再重复触发 catalog Action。只有“放弃本次配置”会删除 session branch。
 
