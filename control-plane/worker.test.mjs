@@ -231,6 +231,85 @@ const github = {
     assert.equal(String(artifactId), "77");
     return "https://downloads.example.test/worker/77.zip";
   },
+  async startConfigStudio(token, owner, repo, payload) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(payload.profileId, "default");
+    return {
+      accepted: true,
+      requestId: "aabbccddeeff0011",
+      branch: "openwrt-ng/config-session-aabbccddeeff0011",
+      profileId: "default",
+      runId: 456,
+      runUrl: "https://github.com/acme/router/actions/runs/456"
+    };
+  },
+  async getConfigStudioSession(token, owner, repo, requestId) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(requestId, "aabbccddeeff0011");
+    return {
+      requestId,
+      branch: "openwrt-ng/config-session-aabbccddeeff0011",
+      profileId: "default",
+      status: { status: "ready", mode: "catalog", requestId },
+      run: {
+        id: 456,
+        status: "completed",
+        conclusion: "success",
+        url: "https://github.com/acme/router/actions/runs/456"
+      },
+      catalog: {
+        version: 1,
+        targets: [],
+        packages: [],
+        packageCategories: [],
+        features: []
+      },
+      result: null
+    };
+  },
+  async submitConfigStudioSelection(token, owner, repo, requestId, payload) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(requestId, "aabbccddeeff0011");
+    assert.equal(payload.values.CONFIG_PACKAGE_luci, "y");
+    return {
+      accepted: true,
+      requestId,
+      branch: "openwrt-ng/config-session-aabbccddeeff0011",
+      runId: 457,
+      runUrl: "https://github.com/acme/router/actions/runs/457"
+    };
+  },
+  async applyConfigStudioToProfile(token, owner, repo, requestId, profileId) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(requestId, "aabbccddeeff0011");
+    assert.equal(profileId, "default");
+    return {
+      branch: "openwrt-ng/profile-default-config-studio",
+      commitSha: "e".repeat(40),
+      changedFiles: [".config"],
+      action: "update",
+      pullRequest: {
+        number: 11,
+        url: "https://github.com/acme/router/pull/11"
+      }
+    };
+  },
+  async deleteConfigStudioSession(token, owner, repo, requestId) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(requestId, "aabbccddeeff0011");
+    return { deleted: true, requestId };
+  },
+
   async createNewProfilePullRequest(token, owner, repo, profileId, files) {
     assert.equal(token, "ghu_worker_access");
     assert.equal(owner, "acme");
@@ -643,6 +722,114 @@ const write = await handleControlPlaneRequest(
 );
 assert.equal(write.status, 201);
 assert.equal((await write.json()).pullRequest.number, 7);
+
+const rejectedConfigStudio = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/config-studio",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ profileId: "default" })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(rejectedConfigStudio.status, 403);
+
+const configStudioStart = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/config-studio",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ profileId: "default" })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(configStudioStart.status, 202);
+assert.equal((await configStudioStart.json()).requestId, "aabbccddeeff0011");
+
+const configStudioStatus = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/config-studio/aabbccddeeff0011",
+    { headers: { Cookie: sessionCookie } }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(configStudioStatus.status, 200);
+assert.equal((await configStudioStatus.json()).status.status, "ready");
+
+const configStudioResolve = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/config-studio/aabbccddeeff0011/resolve",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        values: { CONFIG_PACKAGE_luci: "y" }
+      })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(configStudioResolve.status, 202);
+assert.equal((await configStudioResolve.json()).runId, 457);
+
+const configStudioApply = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/config-studio/aabbccddeeff0011/apply/default",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: "{}"
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(configStudioApply.status, 201);
+assert.equal((await configStudioApply.json()).pullRequest.number, 11);
+
+const configStudioDelete = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/config-studio/aabbccddeeff0011",
+    {
+      method: "DELETE",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1"
+      }
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(configStudioDelete.status, 200);
+assert.equal((await configStudioDelete.json()).deleted, true);
 
 const builds = await handleControlPlaneRequest(
   new Request(
