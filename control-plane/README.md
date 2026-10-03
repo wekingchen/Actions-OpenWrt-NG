@@ -207,7 +207,7 @@ https://...workers.dev/api/v1/health
 4. 点击仓库与 Profile，确认可以读取标准 `profiles/*` 文件。
 5. 做一次无害编辑，预览差异后创建 Pull Request；确认默认分支没有被直接修改。
 6. 在目标配置行点击“构建”，在确认弹层中保持“本次构建同时发布 Release”关闭后开始构建；确认工作区“最近构建”自动更新，构建页能查看完整历史、Artifact / Release / Actions 出口。
-7. 再测试一次“新建 Profile”：服务端预览应只生成标准 6 文件，创建 PR 后确认默认分支仍未直接变化。
+7. 再测试一次“新建 Profile”：服务端预览应只生成标准 7 文件，创建 PR 后确认默认分支仍未直接变化。
 8. 验证通过后关闭测试 PR、清理临时分支，再在自己的模板实例启用 Pages Control Plane 入口。
 
 这套验证覆盖当前 V2.0A / V2.0B / V2.0C / V2.0D 的核心链路。首次测试建议关闭 Release，避免测试仓库留下无意义发布物。
@@ -298,7 +298,7 @@ Artifact 下载先经过 Control Plane 会话鉴权，再由服务端使用 GitH
 
 ### 10. V2.0D：直接新建标准 Profile
 
-V2.0D 已在独立 Test 仓完成真实端到端验证：通过控制面创建新 Profile 后，默认分支 SHA 保持不变；生成的 Pull Request 恰好包含 6 个标准文件和 1 个 commit；该 commit 的唯一父提交为创建前的 main；DIY 脚本 mode 为 100755，其余文件为 100644；测试 PR 验收后关闭且不合并。
+V2.0D 已在独立 Test 仓完成真实端到端验证：通过控制面创建新 Profile 后，默认分支 SHA 保持不变；生成的 Pull Request 恰好包含 7 个标准文件和 1 个 commit；该 commit 的唯一父提交为创建前的 main；DIY 脚本 mode 为 100755，其余文件为 100644；测试 PR 验收后关闭且不合并。
 
 V2.0D 在控制面中补齐 Profile Wizard 到仓库写入之间的缺口。用户填写与 Wizard 一致的结构化字段：
 
@@ -313,7 +313,7 @@ V2.0D 在控制面中补齐 Profile Wizard 到仓库写入之间的缺口。用�
 ```text
 浏览器提交结构化字段
         ↓
-服务端校验并生成固定 6 个文件
+服务端校验并生成固定 7 个文件
         ↓
 预览（不写 GitHub）
         ↓
