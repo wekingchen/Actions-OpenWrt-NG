@@ -304,7 +304,14 @@ const github = {
       action: "update",
       pullRequest: {
         number: 11,
-        url: "https://github.com/acme/router/pull/11"
+        url: "https://github.com/acme/router/pull/11",
+        merged: true,
+        mergeCommitSha: "e".repeat(40),
+        mergeReason: ""
+      },
+      cleanup: {
+        branchDeleted: true,
+        supersededPullRequests: []
       }
     };
   },
@@ -338,7 +345,14 @@ const github = {
       action: "create",
       pullRequest: {
         number: 8,
-        url: "https://github.com/acme/router/pull/8"
+        url: "https://github.com/acme/router/pull/8",
+        merged: true,
+        mergeCommitSha: "c".repeat(40),
+        mergeReason: ""
+      },
+      cleanup: {
+        branchDeleted: true,
+        supersededPullRequests: []
       }
     };
   },
@@ -355,7 +369,14 @@ const github = {
       changedFiles: [".config"],
       pullRequest: {
         number: 7,
-        url: "https://github.com/acme/router/pull/7"
+        url: "https://github.com/acme/router/pull/7",
+        merged: true,
+        mergeCommitSha: "b".repeat(40),
+        mergeReason: ""
+      },
+      cleanup: {
+        branchDeleted: true,
+        supersededPullRequests: []
       }
     };
   }
@@ -661,6 +682,7 @@ const createProfileBody = await createProfile.json();
 assert.equal(createProfileBody.profileId, "new-profile");
 assert.equal(createProfileBody.action, "create");
 assert.equal(createProfileBody.pullRequest.number, 8);
+assert.equal(createProfileBody.pullRequest.merged, true);
 
 const detail = await handleControlPlaneRequest(
   new Request(
@@ -730,7 +752,9 @@ const write = await handleControlPlaneRequest(
   deps
 );
 assert.equal(write.status, 201);
-assert.equal((await write.json()).pullRequest.number, 7);
+const writeBody = await write.json();
+assert.equal(writeBody.pullRequest.number, 7);
+assert.equal(writeBody.pullRequest.merged, true);
 
 const rejectedConfigStudio = await handleControlPlaneRequest(
   new Request(
@@ -820,7 +844,9 @@ const configStudioApply = await handleControlPlaneRequest(
   deps
 );
 assert.equal(configStudioApply.status, 201);
-assert.equal((await configStudioApply.json()).pullRequest.number, 11);
+const configStudioApplyBody = await configStudioApply.json();
+assert.equal(configStudioApplyBody.pullRequest.number, 11);
+assert.equal(configStudioApplyBody.pullRequest.merged, true);
 
 const configStudioDelete = await handleControlPlaneRequest(
   new Request(

@@ -39,7 +39,7 @@ GitHub App / GitHub API
 - 权限按能力最小化设计：V2.0A 只读需要 Metadata read + Contents read；V2.0B 编辑再增加 Contents write + Pull requests write；V2.0C Builder 再增加 Actions write。
 - 对当前完整 V2 功能的新部署，推荐一次配置最终权限：Metadata read、Contents write、Pull requests write、Actions write；不需要 Administration / Workflows。
 - V2.0B 写入严格限定在 `profiles/<id>/` 的标准文件，默认分支永不由控制面直接修改。
-- V2.0B 使用 Git Database API 原子创建 commit，再创建独立分支与 Pull Request。
+- V2.0B 使用 Git Database API 原子创建 commit，再创建独立分支与 Pull Request；Control Plane 默认立即 squash 合并，成功后删除临时分支。
 - 所有状态变更请求同时校验精确 Origin 与 `X-OpenWrt-NG-CSRF` 请求头。
 - 保存前携带默认分支基线 SHA；若仓库已变化，返回 `409 repository_changed`，要求重新加载后再编辑。
 - V2.0C 只允许调度固定的 `.github/workflows/build-openwrt.yml`，不接受浏览器传入任意 workflow、ref 或额外 inputs。
@@ -205,9 +205,9 @@ https://...workers.dev/api/v1/health
 2. 登录成功后安装 / 调整 GitHub App，并只授权目标测试仓库。
 3. 仓库列表应显示 Profile 可读取、可编辑 / PR、Builder 可运行。
 4. 点击仓库与 Profile，确认可以读取标准 `profiles/*` 文件。
-5. 做一次无害编辑，预览差异后创建 Pull Request；确认默认分支没有被直接修改。
+5. 做一次无害编辑，预览差异后保存；确认 Control Plane 创建 PR、自动 squash 合并，并清理临时分支。若仓库规则阻止合并，应保留 PR 并在页面提供入口。
 6. 在目标配置行点击“构建”，在确认弹层中保持“本次构建同时发布 Release”关闭后开始构建；确认工作区“最近构建”自动更新，构建页能查看完整历史、Artifact / Release / Actions 出口。
-7. 再测试一次“新建 Profile”：服务端预览应只生成标准 7 文件，创建 PR 后确认默认分支仍未直接变化。
+7. 再测试一次“新建 Profile”：服务端预览应只生成标准 7 文件，保存后 PR 应自动合并到默认分支并清理临时分支。
 8. 验证通过后关闭测试 PR、清理临时分支，再在自己的模板实例启用 Pages Control Plane 入口。
 
 这套验证覆盖当前 V2.0A / V2.0B / V2.0C / V2.0D 的核心链路。首次测试建议关闭 Release，避免测试仓库留下无意义发布物。
@@ -233,7 +233,9 @@ V2.0B 不允许直接写默认分支。编辑流程固定为：
         ↓
 创建 Pull Request
         ↓
-用户在 GitHub 审核后决定是否合并
+Control Plane 尝试 squash 自动合并
+        ├─ 成功 → 删除临时分支 → 清理同 Profile 已被取代的旧 Control Plane PR
+        └─ 受仓库规则 / 检查阻止 → 保留 PR 与分支，前端提示人工处理
 ```
 
 如果只部署到 V2.0B，可使用 Metadata read + Contents write + Pull requests write，并保持 Actions No access；当前完整 V2 推荐直接使用前文的最终权限。
@@ -299,7 +301,7 @@ Artifact 下载先经过 Control Plane 会话鉴权，再由服务端使用 GitH
 
 ### 10. V2.0D：直接新建标准 Profile
 
-V2.0D 已在独立 Test 仓完成真实端到端验证：通过控制面创建新 Profile 后，默认分支 SHA 保持不变；生成的 Pull Request 恰好包含 7 个标准文件和 1 个 commit；该 commit 的唯一父提交为创建前的 main；DIY 脚本 mode 为 100755，其余文件为 100644；测试 PR 验收后关闭且不合并。
+V2.0D 的写入仍先生成独立 Pull Request：PR 恰好包含 7 个标准文件和 1 个 commit，DIY 脚本 mode 为 100755，其余文件为 100644。自 0.16.0 起，Control Plane 默认在 PR 创建后立即 squash 合并并删除临时分支；若合并被仓库规则或检查阻止，则保留 PR 供人工处理。
 
 V2.0D 在控制面中补齐 Profile Wizard 到仓库写入之间的缺口。用户填写与 Wizard 一致的结构化字段：
 
@@ -324,7 +326,7 @@ V2.0D 在控制面中补齐 Profile Wizard 到仓库写入之间的缺口。用�
         ↓
 检查 profiles/<id> 当前不存在
         ↓
-原子 commit → 新分支 → Pull Request
+原子 commit → 新分支 → Pull Request → 自动 squash 合并 → 清理分支
 ```
 
 服务端只会生成：
@@ -343,7 +345,7 @@ profiles/<id>/feeds.conf
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
 
-V2.0E 解决“创建 `.config` 仍必须在本地搭建编译环境并执行 `make menuconfig`”的问题。0.15.0 把真实 GitHub Actions step 进度提升为整个 Control Plane 的统一等待模型：Config Studio 与 Builder 均显示真实 Action 阶段；feed 优先级/同名包覆盖语义保持不变。额外 feeds 保存为 `profiles/<id>/feeds.conf`，Config Studio 与正式 Builder 都在 `feeds update -a` 前应用它；带 `--force` 的 feed 由 OpenWrt 在 `feeds install` 阶段覆盖 core/default 同名包。
+V2.0E 解决“创建 `.config` 仍必须在本地搭建编译环境并执行 `make menuconfig`”的问题。0.16.0 在统一 Actions 实时进度的基础上补齐 Profile PR 生命周期：保存后自动 squash 合并、清理临时分支，并在新保存成功后清理同一 Profile 已被取代的旧 Control Plane PR；自动合并受阻时保留 PR 供人工处理。0.15.0 把真实 GitHub Actions step 进度提升为整个 Control Plane 的统一等待模型：Config Studio 与 Builder 均显示真实 Action 阶段；feed 优先级/同名包覆盖语义保持不变。额外 feeds 保存为 `profiles/<id>/feeds.conf`，Config Studio 与正式 Builder 都在 `feeds update -a` 前应用它；带 `--force` 的 feed 由 OpenWrt 在 `feeds install` 阶段覆盖 core/default 同名包。
 
 用户仍然亲自决定：
 
@@ -381,10 +383,10 @@ Config Studio Action · contents:read
 Control Plane 会话鉴权读取并解压
         ↓
 用户确认
-  ├─ 已有 Profile → 只替换 .config → 新分支 + PR
-  └─ 新 Profile   → 带回 V2.0D 创建表单 → 标准 7 文件 PR
+  ├─ 已有 Profile → 只替换 .config → 新分支 + PR → 自动合并
+  └─ 新 Profile   → 带回 V2.0D 创建表单 → 标准 7 文件 PR → 自动合并
         ↓
-清理 session branch
+清理 Profile 临时分支与 session branch；合并受阻时仅保留需要人工处理的 PR
 ```
 
 执行第三方 OpenWrt 源码和 feeds 的 Workflow 全程不拥有仓库写权限；大型 catalog / result 不再写入 GitHub 分支，避免尺寸限制和第三方代码与写权限共存。原 `.config` 上传 / 文本编辑仍然保留为高级兼容入口。SSH / tmate 不作为正式 Config Studio 主流程。

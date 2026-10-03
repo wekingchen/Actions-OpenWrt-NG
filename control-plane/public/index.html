@@ -37,7 +37,7 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.15.0</small>
+        <small>Control Plane 0.16.0</small>
       </div>
     </aside>
 
@@ -58,7 +58,7 @@
               <span class="repo-meta-chip" id="repo-capability"></span>
               <span class="repo-meta-security">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.9 8.2 7 10 4.1-1.8 7-5.4 7-10V6z"/><path d="m9.5 12 1.7 1.7 3.6-4"/></svg>
-                Profile 变更只通过分支与 Pull Request 写入
+                Profile 变更经 Pull Request 自动合并并保留审计记录
               </span>
             </div>
           </div>
@@ -139,7 +139,7 @@
                 <div>
                   <p class="eyebrow">配置</p>
                   <h2 id="new-profile-title">新建配置</h2>
-                  <p class="panel-description">服务端生成固定 7 个标准文件，并通过独立分支 + Pull Request 安全写入。</p>
+                  <p class="panel-description">服务端生成固定 7 个标准文件，经独立 Pull Request 校验后自动合并；受仓库规则阻止时保留 PR。</p>
                 </div>
                 <button class="icon-button" id="new-profile-close" type="button" aria-label="关闭">×</button>
               </div>
@@ -305,7 +305,7 @@
 
                 <div class="form-actions">
                   <button class="button ghost" id="new-profile-preview" type="button">下一步：预览 Profile</button>
-                  <button class="button primary" id="new-profile-create" type="submit" disabled>完成：创建 Profile PR</button>
+                  <button class="button primary" id="new-profile-create" type="submit" disabled>完成：保存并应用</button>
                 </div>
               </form>
 
@@ -352,7 +352,7 @@
               <div class="form-actions editor-actions">
                 <button class="button ghost" id="editor-config-studio" type="button">图形配置</button>
                 <button class="button ghost" id="preview-change" type="button">预览变更</button>
-                <button class="button primary" id="create-pr" type="button" disabled>创建分支并发起 PR</button>
+                <button class="button primary" id="create-pr" type="button" disabled>保存并应用</button>
               </div>
 
               <div id="preview-card" class="preview-box" hidden>
@@ -554,7 +554,7 @@
             <button class="button ghost" id="config-studio-cancel" type="button">放弃本次配置</button>
             <button class="button ghost" id="config-studio-back" type="button" hidden>返回修改</button>
             <button class="button primary" id="config-studio-resolve" type="button" disabled>下一步：检查依赖</button>
-            <button class="button primary" id="config-studio-apply" type="button" hidden>确认并创建 Profile PR</button>
+            <button class="button primary" id="config-studio-apply" type="button" hidden>确认并保存配置</button>
             <button class="button primary" id="config-studio-use" type="button" hidden>确认并返回新 Profile</button>
           </div>
         </section>

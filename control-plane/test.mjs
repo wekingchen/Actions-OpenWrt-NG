@@ -382,6 +382,38 @@ const profileFetch = async (url, options = {}) => {
       html_url: "https://github.com/acme/router/pull/17"
     }, { status: 201 });
   }
+  if (method === "PUT" && path === "/pulls/17/merge") {
+    return Response.json({
+      sha: "d".repeat(40),
+      merged: true,
+      message: "Pull Request successfully merged"
+    });
+  }
+  if (
+    method === "GET" &&
+    path === "/pulls" &&
+    parsed.searchParams.get("state") === "open"
+  ) {
+    return Response.json([
+      {
+        number: 9,
+        head: {
+          ref: "openwrt-ng/profile-default-stale",
+          repo: { full_name: "acme/router" }
+        }
+      },
+      {
+        number: 10,
+        head: {
+          ref: "openwrt-ng/profile-other-stale",
+          repo: { full_name: "acme/router" }
+        }
+      }
+    ]);
+  }
+  if (method === "PATCH" && path === "/pulls/9") {
+    return Response.json({ number: 9, state: "closed" });
+  }
   if (method === "DELETE" && path.startsWith("/git/refs/heads/")) {
     return new Response(null, { status: 204 });
   }
@@ -424,6 +456,13 @@ const createdProfilePr = await profileClient.createProfilePullRequest(
   }
 );
 assert.equal(createdProfilePr.pullRequest.number, 17);
+assert.equal(createdProfilePr.pullRequest.merged, true);
+assert.equal(createdProfilePr.pullRequest.mergeCommitSha, "d".repeat(40));
+assert.equal(createdProfilePr.cleanup.branchDeleted, true);
+assert.deepEqual(
+  createdProfilePr.cleanup.supersededPullRequests.map((item) => item.number),
+  [9]
+);
 assert.deepEqual(createdProfilePr.changedFiles, [".config"]);
 const createdNewProfilePr = await profileClient.createNewProfilePullRequest(
   "ghu_profile",
@@ -435,6 +474,7 @@ const createdNewProfilePr = await profileClient.createNewProfilePullRequest(
 assert.equal(createdNewProfilePr.action, "create");
 assert.equal(createdNewProfilePr.changedFiles.length, 7);
 assert.equal(createdNewProfilePr.pullRequest.number, 17);
+assert.equal(createdNewProfilePr.pullRequest.merged, true);
 
 const createTreeCall = [...profileCalls].reverse().find(
   (call) => call.method === "POST" && call.path === "/git/trees"
@@ -543,6 +583,22 @@ assert.ok(
 assert.ok(
   profileCalls.some((call) =>
     call.method === "POST" && call.path === "/pulls"
+  )
+);
+assert.ok(
+  profileCalls.some((call) =>
+    call.method === "PUT" && call.path === "/pulls/17/merge"
+  )
+);
+assert.ok(
+  profileCalls.some((call) =>
+    call.method === "PATCH" && call.path === "/pulls/9"
+  )
+);
+assert.ok(
+  profileCalls.some((call) =>
+    call.method === "DELETE" &&
+    call.path.startsWith("/git/refs/heads/openwrt-ng/profile-default-")
   )
 );
 

@@ -1589,6 +1589,183 @@ export class GitHubAppClient {
     return result;
   }
 
+  async deleteProfileBranch(token, owner, repo, branchName) {
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    try {
+      await this.api(
+        "/repos/" +
+          safeOwner +
+          "/" +
+          safeRepo +
+          "/git/refs/" +
+          refPath(branchName),
+        token,
+        { method: "DELETE" }
+      );
+      return true;
+    } catch (error) {
+      if (error?.httpStatus === 404) return true;
+      console.error("Failed to clean up Control Plane profile branch", error);
+      return false;
+    }
+  }
+
+  async cleanupSupersededProfilePullRequests(
+    token,
+    owner,
+    repo,
+    profileId,
+    defaultBranch
+  ) {
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const prefix =
+      "openwrt-ng/profile-" + branchSlug(profileId) + "-";
+    let pulls;
+    try {
+      pulls = await this.api(
+        "/repos/" +
+          safeOwner +
+          "/" +
+          safeRepo +
+          "/pulls?state=open&base=" +
+          encodeURIComponent(defaultBranch) +
+          "&per_page=100",
+        token
+      );
+    } catch (error) {
+      console.error("Failed to list superseded Control Plane PRs", error);
+      return [];
+    }
+
+    const repoFullName = (owner + "/" + repo).toLowerCase();
+    const cleaned = [];
+    for (const pull of Array.isArray(pulls) ? pulls : []) {
+      const number = Number(pull?.number || 0);
+      const branchName = String(pull?.head?.ref || "");
+      const headRepo = String(pull?.head?.repo?.full_name || "").toLowerCase();
+      if (
+        !Number.isInteger(number) ||
+        number <= 0 ||
+        !branchName.startsWith(prefix) ||
+        (headRepo && headRepo !== repoFullName)
+      ) {
+        continue;
+      }
+
+      try {
+        await this.api(
+          "/repos/" + safeOwner + "/" + safeRepo + "/pulls/" + number,
+          token,
+          {
+            method: "PATCH",
+            body: { state: "closed" }
+          }
+        );
+        const branchDeleted = await this.deleteProfileBranch(
+          token,
+          owner,
+          repo,
+          branchName
+        );
+        cleaned.push({ number, branch: branchName, branchDeleted });
+      } catch (error) {
+        console.error(
+          "Failed to clean up superseded Control Plane profile PR",
+          error
+        );
+      }
+    }
+    return cleaned;
+  }
+
+  async finalizeProfilePullRequest(
+    token,
+    owner,
+    repo,
+    profileId,
+    state,
+    branchName,
+    commitSha,
+    action,
+    pull
+  ) {
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const number = Number(pull?.number || 0);
+    let merged = false;
+    let mergeCommitSha = "";
+    let mergeReason = "";
+
+    try {
+      const merge = await this.api(
+        "/repos/" +
+          safeOwner +
+          "/" +
+          safeRepo +
+          "/pulls/" +
+          number +
+          "/merge",
+        token,
+        {
+          method: "PUT",
+          body: {
+            merge_method: "squash",
+            sha: commitSha,
+            commit_title:
+              "profile(" +
+              profileId +
+              "): " +
+              (action === "create" ? "create" : "update") +
+              " via Control Plane",
+            commit_message:
+              "由 OpenWrt NG Control Plane 自动合并；原始 Pull Request 保留用于审计。"
+          }
+        }
+      );
+      merged = merge?.merged === true;
+      mergeCommitSha = String(merge?.sha || "");
+      if (!merged) {
+        mergeReason = "github_merge_not_completed";
+      }
+    } catch (error) {
+      mergeReason = githubErrorReason(error);
+    }
+
+    const cleanup = {
+      branchDeleted: false,
+      supersededPullRequests: []
+    };
+    if (merged) {
+      cleanup.branchDeleted = await this.deleteProfileBranch(
+        token,
+        owner,
+        repo,
+        branchName
+      );
+      cleanup.supersededPullRequests =
+        await this.cleanupSupersededProfilePullRequests(
+          token,
+          owner,
+          repo,
+          profileId,
+          state.defaultBranch
+        );
+    }
+
+    return {
+      pullRequest: {
+        number,
+        url: pull?.html_url || "",
+        merged,
+        mergeCommitSha,
+        mergeReason
+      },
+      cleanup
+    };
+  }
+
   async createProfileFilesPullRequest(
     token,
     owner,
@@ -1698,9 +1875,21 @@ export class GitHubAppClient {
                     `- \`profiles/${profileId}/${name}\``
                 )
                 .join("\n") +
-              "\n\n默认分支不会被直接修改，请在 GitHub 中审核差异后再决定是否合并。"
+              "\n\nControl Plane 会在创建后自动尝试 squash 合并并清理临时分支；如果仓库规则或检查阻止合并，本 PR 会保留供人工处理。"
           }
         }
+      );
+
+      const finalized = await this.finalizeProfilePullRequest(
+        token,
+        owner,
+        repo,
+        profileId,
+        state,
+        branchName,
+        commit.sha,
+        action,
+        pull
       );
 
       return {
@@ -1708,10 +1897,7 @@ export class GitHubAppClient {
         commitSha: commit.sha,
         changedFiles,
         action,
-        pullRequest: {
-          number: pull.number,
-          url: pull.html_url || ""
-        }
+        ...finalized
       };
     } catch (error) {
       try {
