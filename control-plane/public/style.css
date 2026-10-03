@@ -1633,3 +1633,32 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   .topbar { padding: 0 9px; }
   .repo-chip:nth-child(2) { display: none; }
 }
+
+.user-avatar-fallback {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+@media (max-width: 620px) {
+  .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .summary-card {
+    min-height: 76px;
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px;
+  }
+  .summary-icon { width: 28px; height: 28px; border-radius: 9px; }
+  .summary-icon svg { width: 15px; height: 15px; }
+  .summary-label { font-size: 9px; }
+  .summary-value { font-size: 17px; }
+  .summary-value-text { font-size: 12px; }
+  .summary-card small { display: none; }
+}
