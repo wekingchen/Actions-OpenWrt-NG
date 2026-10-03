@@ -1498,6 +1498,7 @@ $("create-pr").addEventListener("click", async () => {
 $("trigger-build").addEventListener("click", async () => {
   const repo = buildDialogState.repo;
   const profileId = buildDialogState.profileId;
+  const requestVersion = buildDialogState.requestVersion;
   if (!repo || !profileId || !canRunRepo(repo)) return;
 
   const button = $("trigger-build");
@@ -1518,28 +1519,49 @@ $("trigger-build").addEventListener("click", async () => {
       }
     );
 
-    buildState.repo = repo;
+    if (currentRepository()?.fullName !== repo.fullName) return;
+
     buildState.requestId = result.requestId || "";
     buildState.pollAttempts = 0;
-    closeBuildDialog();
+    const generation = buildState.generation;
+    if (requestVersion === buildDialogState.requestVersion) {
+      closeBuildDialog();
+    }
 
-    await loadBuildRuns({ requestId: result.requestId || "" });
+    await loadBuildRuns({
+      requestId: result.requestId || "",
+      generation
+    });
   } catch (error) {
+    if (currentRepository()?.fullName !== repo.fullName) return;
+
     if (error.code === "build_already_active" && error.body?.activeRun) {
       const run = error.body.activeRun;
-      setBuildDialogStatus(
-        `这个 Profile 已有构建 #${run.runNumber} 正在${buildStatusLabel(run)}，不会重复触发。`,
-        true
-      );
-      buildState.repo = repo;
+      if (
+        requestVersion === buildDialogState.requestVersion &&
+        !$("build-dialog").hidden
+      ) {
+        setBuildDialogStatus(
+          `这个 Profile 已有构建 #${run.runNumber} 正在${buildStatusLabel(run)}，不会重复触发。`,
+          true
+        );
+      }
       buildState.requestId = "";
-      await loadBuildRuns();
-    } else {
+      await loadBuildRuns({ generation: buildState.generation });
+    } else if (
+      requestVersion === buildDialogState.requestVersion &&
+      !$("build-dialog").hidden
+    ) {
       setBuildDialogStatus(friendlyError(error), true);
     }
   } finally {
     button.textContent = "开始构建";
-    button.disabled = !canRunRepo(repo);
+    if (
+      requestVersion === buildDialogState.requestVersion &&
+      !$("build-dialog").hidden
+    ) {
+      button.disabled = !canRunRepo(repo);
+    }
   }
 });
 
