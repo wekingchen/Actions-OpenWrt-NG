@@ -6,7 +6,8 @@ const PROFILE_FILES = [
   "diy-part1.sh",
   "diy-part2.sh",
   "required-packages.txt",
-  "watch-sources.txt"
+  "watch-sources.txt",
+  "feeds.conf"
 ];
 
 const ACTIVE_BUILD_STATUSES = new Set([
@@ -48,7 +49,8 @@ const buildDialogState = {
 const createState = {
   repo: null,
   previewFiles: [],
-  previewValid: false
+  previewValid: false,
+  configStudioDraft: null
 };
 
 const configStudioState = {
@@ -68,7 +70,8 @@ const configStudioState = {
   pollTimer: null,
   pollAttempts: 0,
   generation: 0,
-  restoreFocus: null
+  restoreFocus: null,
+  newFingerprint: ""
 };
 
 const MAX_CONFIG_STUDIO_POLL_ATTEMPTS = 600;
@@ -172,6 +175,89 @@ const SOURCE_PRESETS = Object.freeze({
     branch: "master"
   }
 });
+
+const PASSWALL_FEEDS = [
+  "src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main",
+  "src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main"
+];
+
+function configStudioDraftStorageKey(repo) {
+  return "openwrt-ng:config-studio:new:" + (repo?.fullName || "unknown");
+}
+
+function fingerprintText(value) {
+  let hash = 2166136261;
+  const text = String(value || "");
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function newConfigStudioFingerprint(repo) {
+  return fingerprintText(
+    JSON.stringify({
+      repo: repo?.fullName || "",
+      sourceRepo: $("new-source-repo")?.value.trim() || "",
+      sourceBranch: $("new-source-branch")?.value.trim() || "",
+      adapter: $("new-adapter")?.value || "",
+      extraFeeds: $("new-extra-feeds")?.value || "",
+      baseConfig: $("new-config-text")?.value || ""
+    })
+  );
+}
+
+function loadNewConfigStudioDraft(repo) {
+  if (!repo) return null;
+  try {
+    const raw = sessionStorage.getItem(configStudioDraftStorageKey(repo));
+    if (!raw) return null;
+    const value = JSON.parse(raw);
+    return value && typeof value === "object" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveNewConfigStudioDraft(repo, draft) {
+  createState.configStudioDraft = draft || null;
+  if (!repo) return;
+  try {
+    if (draft) {
+      sessionStorage.setItem(
+        configStudioDraftStorageKey(repo),
+        JSON.stringify(draft)
+      );
+    } else {
+      sessionStorage.removeItem(configStudioDraftStorageKey(repo));
+    }
+  } catch {}
+}
+
+function renderNewConfigStudioState() {
+  const node = $("new-config-studio-state");
+  const button = $("new-config-studio");
+  if (!node || !button) return;
+  const repo = createState.repo;
+  const draft = createState.configStudioDraft || loadNewConfigStudioDraft(repo);
+  createState.configStudioDraft = draft;
+  const fingerprint = repo ? newConfigStudioFingerprint(repo) : "";
+  if (draft?.requestId && draft.fingerprint === fingerprint) {
+    node.textContent = "已有配置会话，可继续上次操作；不会重新生成。";
+    button.textContent = "继续图形配置";
+  } else if (draft?.requestId) {
+    node.textContent = "源码、feeds 或基础 .config 已变化，需要重新生成配置菜单。";
+    button.textContent = "重新生成配置菜单";
+  } else if ($("new-config-text")?.value.trim()) {
+    node.textContent = "已有 .config；可继续用图形界面检查或修改。";
+    button.textContent = "生成配置菜单";
+  } else {
+    node.textContent = "尚未生成。请先确认上方源码和软件源。";
+    button.textContent = "生成配置菜单";
+  }
+}
+
 
 const MAX_BUILD_POLL_ATTEMPTS = 480;
 
