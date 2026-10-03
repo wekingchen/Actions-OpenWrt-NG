@@ -2679,6 +2679,68 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   border-radius: 12px;
   background: var(--panel);
 }
+.config-studio-package-block {
+  border-bottom: 1px solid var(--border);
+}
+.config-studio-package-block:last-child {
+  border-bottom: 0;
+}
+.config-studio-package-block > .config-studio-option {
+  border-bottom: 0;
+}
+.config-studio-package-children {
+  border-top: 1px dashed var(--border);
+  background: color-mix(in srgb, var(--panel-soft) 62%, var(--panel));
+}
+.config-studio-package-children > summary {
+  padding: 7px 10px 8px 26px;
+  cursor: pointer;
+  color: var(--accent-strong);
+  font-size: 9px;
+  font-weight: 760;
+}
+.config-studio-package-children-body {
+  display: grid;
+  gap: 0;
+  padding: 0 10px 9px 24px;
+}
+.config-studio-package-child-row,
+.config-studio-package-choice {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.config-studio-package-child-row:first-child,
+.config-studio-package-choice:first-child {
+  border-top: 0;
+}
+.config-studio-package-child-row.modified,
+.config-studio-package-choice.modified {
+  background: color-mix(in srgb, var(--accent-soft) 18%, transparent);
+}
+.config-studio-package-child-row select,
+.config-studio-package-choice select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel-strong);
+  color: var(--text);
+  padding: 0 8px;
+  font: inherit;
+  font-size: 10px;
+}
+.config-studio-package-child-note {
+  padding: 8px 0 3px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
 .config-studio-option {
   min-width: 0;
   display: grid;
@@ -2877,6 +2939,11 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
     gap: 8px;
     padding: 8px;
   }
+  .config-studio-package-child-row,
+  .config-studio-package-choice {
+    grid-template-columns: minmax(0, 1fr) 132px;
+    gap: 8px;
+  }
   .config-studio-result-head {
     flex-direction: column;
   }
@@ -2903,8 +2970,17 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
     grid-template-columns: minmax(0, 1fr);
   }
   .config-studio-option select,
-  .config-studio-option input[type="text"] {
+  .config-studio-option input[type="text"],
+  .config-studio-package-child-row select,
+  .config-studio-package-choice select {
     min-height: 38px;
+  }
+  .config-studio-package-child-row,
+  .config-studio-package-choice {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .config-studio-package-children-body {
+    padding-left: 16px;
   }
   .config-studio-list-head span:last-child {
     display: none;

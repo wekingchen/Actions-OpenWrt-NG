@@ -51,6 +51,11 @@ static void json_string(const char *value)
 	putchar('"');
 }
 
+static bool package_symbol(const char *name)
+{
+	return name && !strncmp(name, "PACKAGE_", 8);
+}
+
 static bool excluded_symbol(const char *name)
 {
 	static const char *prefixes[] = {
@@ -126,6 +131,38 @@ static void print_assignable(struct symbol *sym)
 	putchar(']');
 }
 
+static void print_potential_assignable(struct symbol *sym)
+{
+	putchar('[');
+	if (sym->type == S_BOOLEAN) {
+		json_string("n");
+		putchar(',');
+		json_string("y");
+	} else if (sym->type == S_TRISTATE) {
+		json_string("n");
+		putchar(',');
+		json_string("m");
+		putchar(',');
+		json_string("y");
+	}
+	putchar(']');
+}
+
+static const char *choice_prompt(struct menu *menu)
+{
+	struct menu *parent;
+
+	for (parent = menu ? menu->parent : NULL;
+	     parent && parent != &rootmenu;
+	     parent = parent->parent) {
+		if (parent->sym && sym_is_choice(parent->sym)) {
+			const char *prompt = menu_get_prompt(parent);
+			return prompt ? prompt : "";
+		}
+	}
+	return "";
+}
+
 static void emit_menu(struct menu *menu)
 {
 	struct menu *child;
@@ -133,8 +170,15 @@ static void emit_menu(struct menu *menu)
 	for (child = menu->list; child; child = child->next) {
 		struct symbol *sym = child->sym;
 		const char *prompt;
+		bool visible = menu_is_visible(child);
 
-		if (!menu_is_visible(child)) {
+		/*
+		 * Package-specific config blocks are often wrapped in
+		 * "if PACKAGE_<name>". Keep PACKAGE_* prompt metadata even while
+		 * the parent package is off so Config Studio can reveal the same
+		 * submenu immediately after the user enables that package.
+		 */
+		if (!visible && !(sym && package_symbol(sym->name))) {
 			emit_menu(child);
 			continue;
 		}
@@ -165,8 +209,14 @@ static void emit_menu(struct menu *menu)
 			json_string(sym_get_string_value(sym));
 			fputs(",\"assignable\":", stdout);
 			print_assignable(sym);
-			printf(",\"visible\":true,\"changeable\":%s,\"menuPath\":",
-			       sym_is_changeable(sym) ? "true" : "false");
+			fputs(",\"potentialAssignable\":", stdout);
+			print_potential_assignable(sym);
+			printf(",\"visible\":%s,\"changeable\":%s,\"choiceValue\":%s,\"choicePrompt\":",
+			       visible ? "true" : "false",
+			       (visible && sym_is_changeable(sym)) ? "true" : "false",
+			       sym_is_choice_value(sym) ? "true" : "false");
+			json_string(choice_prompt(child));
+			fputs(",\"menuPath\":", stdout);
 			print_menu_path(child);
 			fputs(",\"help\":", stdout);
 			json_string(menu_get_help(child));

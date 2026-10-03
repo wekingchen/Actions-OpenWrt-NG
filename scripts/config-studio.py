@@ -259,6 +259,61 @@ def parse_packageinfo(path: Path, config: dict[str, str]) -> list[dict[str, Any]
     return visible
 
 
+
+def attach_package_config_options(
+    packages: list[dict[str, Any]],
+    package_kconfig: dict[str, dict[str, Any]],
+) -> None:
+    """Attach Package/<name>/config symbols to their owning package."""
+    by_name = {str(package["name"]): package for package in packages}
+    owners = sorted(by_name, key=lambda value: (-len(value), value.casefold()))
+    for package in packages:
+        package["configOptions"] = []
+
+    for config_name, state in package_kconfig.items():
+        if config_name in by_name:
+            continue
+        owner = next(
+            (
+                name
+                for name in owners
+                if config_name.startswith(name + "_")
+            ),
+            "",
+        )
+        if not owner:
+            continue
+
+        option = dict(state)
+        option["configName"] = config_name
+        option["name"] = config_name[len(owner) + 1 :]
+        option["choicePrompt"] = str(option.get("choicePrompt") or "")
+        option["choiceValue"] = bool(option.get("choiceValue"))
+        potential = [
+            str(value)
+            for value in (option.get("potentialAssignable") or [])
+            if str(value) in {"n", "m", "y"}
+        ]
+        if not potential:
+            option_type = str(option.get("type") or "")
+            if option_type == "boolean":
+                potential = ["n", "y"]
+            elif option_type == "tristate":
+                potential = ["n", "m", "y"]
+        option["potentialAssignable"] = potential
+        by_name[owner]["configOptions"].append(option)
+
+    for package in packages:
+        package["configOptions"].sort(
+            key=lambda item: (
+                tuple(item.get("menuPath") or []),
+                str(item.get("choicePrompt") or "").casefold(),
+                str(item.get("prompt") or "").casefold(),
+                str(item.get("name") or "").casefold(),
+            )
+        )
+
+
 def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], str]:
     config_dir = root / "scripts" / "config"
     exporter_source = Path(__file__).with_name("config-studio-kconfig.c")
@@ -362,18 +417,18 @@ def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], dict[str, dict[s
                 for value in (item.get("assignable") or [])
                 if str(value) in {"n", "m", "y"}
             ]
+            item["potentialAssignable"] = [
+                str(value)
+                for value in (item.get("potentialAssignable") or [])
+                if str(value) in {"n", "m", "y"}
+            ]
             item["visible"] = bool(item.get("visible"))
             item["changeable"] = bool(item.get("changeable"))
+            item["choiceValue"] = bool(item.get("choiceValue"))
+            item["choicePrompt"] = str(item.get("choicePrompt") or "")
 
             if name.startswith("PACKAGE_"):
-                package_states[name.removeprefix("PACKAGE_")] = {
-                    "symbol": symbol,
-                    "value": str(item.get("value") or "n"),
-                    "visible": item["visible"],
-                    "changeable": item["changeable"],
-                    "assignable": item["assignable"],
-                    "menuPath": item["menuPath"],
-                }
+                package_states[name.removeprefix("PACKAGE_")] = item
                 continue
 
             features.append(item)
@@ -429,6 +484,8 @@ def command_catalog(args: argparse.Namespace) -> None:
             package["assignable"] = []
             package["menuPath"] = []
 
+    attach_package_config_options(packages, package_states)
+
     categories = sorted(
         {
             item["category"]
@@ -438,7 +495,7 @@ def command_catalog(args: argparse.Namespace) -> None:
         key=str.casefold,
     )
     payload = {
-        "version": 1,
+        "version": 2,
         "targets": parse_targetinfo(targetinfo, config),
         "packages": packages,
         "packageCategories": categories,
@@ -447,6 +504,10 @@ def command_catalog(args: argparse.Namespace) -> None:
         "configStats": {
             "symbols": len(config),
             "packages": len(packages),
+            "packageOptions": sum(
+                len(package.get("configOptions") or [])
+                for package in packages
+            ),
             "features": len(features),
         },
     }

@@ -26,7 +26,106 @@ def run(*args: str) -> None:
     )
 
 
+def test_package_config_options() -> None:
+    packages = [
+        {"name": "luci-app-ssr-plus"},
+        {"name": "luci-app-ssr-plus-helper"},
+        {"name": "dnsmasq-full"},
+    ]
+    package_kconfig = {
+        "luci-app-ssr-plus": {
+            "symbol": "CONFIG_PACKAGE_luci-app-ssr-plus",
+            "value": "y",
+        },
+        "luci-app-ssr-plus_INCLUDE_Mihomo": {
+            "symbol": "CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Mihomo",
+            "prompt": "Include Mihomo (Clash Support)",
+            "type": "boolean",
+            "value": "y",
+            "visible": True,
+            "changeable": True,
+            "assignable": ["n", "y"],
+            "potentialAssignable": ["n", "y"],
+            "choicePrompt": "",
+            "choiceValue": False,
+            "menuPath": ["LuCI", "Applications"],
+        },
+        "luci-app-ssr-plus_Iptables_Transparent_Proxy": {
+            "symbol": "CONFIG_PACKAGE_luci-app-ssr-plus_Iptables_Transparent_Proxy",
+            "prompt": "Iptables Transparent Proxy",
+            "type": "boolean",
+            "value": "y",
+            "visible": True,
+            "changeable": True,
+            "assignable": ["n", "y"],
+            "potentialAssignable": ["n", "y"],
+            "choicePrompt": "Transparent Proxy Backend",
+            "choiceValue": True,
+            "menuPath": ["LuCI", "Applications", "Transparent Proxy Backend"],
+        },
+        "luci-app-ssr-plus_Nftables_Transparent_Proxy": {
+            "symbol": "CONFIG_PACKAGE_luci-app-ssr-plus_Nftables_Transparent_Proxy",
+            "prompt": "Nftables Transparent Proxy",
+            "type": "boolean",
+            "value": "n",
+            "visible": False,
+            "changeable": False,
+            "assignable": [],
+            "potentialAssignable": ["n", "y"],
+            "choicePrompt": "Transparent Proxy Backend",
+            "choiceValue": True,
+            "menuPath": ["LuCI", "Applications", "Transparent Proxy Backend"],
+        },
+        "luci-app-ssr-plus-helper_DEBUG": {
+            "symbol": "CONFIG_PACKAGE_luci-app-ssr-plus-helper_DEBUG",
+            "prompt": "Debug helper",
+            "type": "boolean",
+            "value": "n",
+            "visible": True,
+            "changeable": True,
+            "assignable": ["n", "y"],
+            "potentialAssignable": ["n", "y"],
+            "choicePrompt": "",
+            "choiceValue": False,
+            "menuPath": [],
+        },
+    }
+
+    CONFIG_STUDIO.attach_package_config_options(packages, package_kconfig)
+    ssr = next(item for item in packages if item["name"] == "luci-app-ssr-plus")
+    helper = next(
+        item
+        for item in packages
+        if item["name"] == "luci-app-ssr-plus-helper"
+    )
+
+    assert len(ssr["configOptions"]) == 3
+    assert {
+        item["name"] for item in ssr["configOptions"]
+    } == {
+        "INCLUDE_Mihomo",
+        "Iptables_Transparent_Proxy",
+        "Nftables_Transparent_Proxy",
+    }
+    choice = [
+        item
+        for item in ssr["configOptions"]
+        if item["choicePrompt"] == "Transparent Proxy Backend"
+    ]
+    assert len(choice) == 2
+    assert all(item["choiceValue"] for item in choice)
+    assert {item["name"] for item in helper["configOptions"]} == {"DEBUG"}
+
+
 def main() -> None:
+    test_package_config_options()
+
+    exporter_source = (ROOT / "scripts" / "config-studio-kconfig.c").read_text(
+        encoding="utf-8"
+    )
+    assert "choicePrompt" in exporter_source
+    assert "package_symbol(sym->name)" in exporter_source
+
     legacy = CONFIG_STUDIO.decode_process_text(
         b'{"prompt":"legacy \xa1 text","symbol":"CONFIG_TEST"}\n'
     )

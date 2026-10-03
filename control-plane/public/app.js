@@ -1925,6 +1925,243 @@ function renderConfigStudioPackageCategories() {
     : "all";
 }
 
+function configStudioPackageEnabled(pkg) {
+  return ["y", "m"].includes(
+    configStudioOptionValue(pkg.symbol, pkg.value)
+  );
+}
+
+function configStudioPackageOptionAssignable(pkg, option) {
+  const current = Array.isArray(option.assignable)
+    ? option.assignable.filter((value) => ["n", "m", "y"].includes(value))
+    : [];
+  if (current.length) return current;
+
+  const baselineEnabled = ["y", "m"].includes(String(pkg.value || "n"));
+  if (!baselineEnabled && configStudioPackageEnabled(pkg)) {
+    return Array.isArray(option.potentialAssignable)
+      ? option.potentialAssignable.filter((value) =>
+          ["n", "m", "y"].includes(value)
+        )
+      : [];
+  }
+  return [];
+}
+
+function configStudioPackageOptionSearch(pkg, search) {
+  if (!search) return false;
+  return (pkg.configOptions || []).some((option) =>
+    [
+      option.name,
+      option.prompt,
+      option.choicePrompt,
+      ...(option.menuPath || []),
+      option.help
+    ].some((value) => String(value || "").toLowerCase().includes(search))
+  );
+}
+
+function configStudioPackageOptionRow(pkg, option) {
+  const row = document.createElement("div");
+  row.className =
+    "config-studio-package-child-row" +
+    (configStudioState.modifiedValues.has(option.symbol) ? " modified" : "");
+
+  const copy = document.createElement("div");
+  copy.className = "config-studio-option-copy";
+  const title = document.createElement("div");
+  title.className = "config-studio-option-title";
+  const strong = document.createElement("strong");
+  strong.textContent = option.prompt || option.name;
+  const symbol = document.createElement("span");
+  symbol.textContent = option.name;
+  title.append(strong, symbol);
+
+  const meta = document.createElement("small");
+  const path = (option.menuPath || []).slice(-3).join(" › ");
+  meta.textContent = [path, option.help].filter(Boolean).join(" · ");
+  copy.append(title, meta);
+
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", option.prompt || option.name);
+  const assignable = configStudioPackageOptionAssignable(pkg, option);
+  const labels = { n: "关闭", m: "模块", y: "开启" };
+  const current = configStudioOptionValue(option.symbol, option.value);
+
+  for (const value of assignable) {
+    const item = document.createElement("option");
+    item.value = value;
+    item.textContent = labels[value] || value;
+    select.appendChild(item);
+  }
+  if (
+    current &&
+    ![...select.options].some((item) => item.value === current)
+  ) {
+    const item = document.createElement("option");
+    item.value = current;
+    item.textContent = labels[current] || current;
+    select.appendChild(item);
+  }
+  select.value = current;
+  select.disabled = !configStudioPackageEnabled(pkg) || !assignable.length;
+  if (select.disabled) {
+    select.title = configStudioPackageEnabled(pkg)
+      ? "当前目标的 Kconfig 依赖不允许修改该子选项"
+      : "先选择主软件包后再配置子选项";
+  }
+  select.addEventListener("change", () => {
+    setConfigStudioModifiedValue(option.symbol, select.value);
+    row.classList.add("modified");
+  });
+
+  row.append(copy, select);
+  return row;
+}
+
+function configStudioPackageChoice(pkg, prompt, options) {
+  const row = document.createElement("div");
+  row.className = "config-studio-package-choice";
+
+  const copy = document.createElement("div");
+  copy.className = "config-studio-option-copy";
+  const title = document.createElement("div");
+  title.className = "config-studio-option-title";
+  const strong = document.createElement("strong");
+  strong.textContent = prompt || "单选配置";
+  const badge = document.createElement("span");
+  badge.textContent = "choice";
+  title.append(strong, badge);
+
+  const meta = document.createElement("small");
+  meta.textContent =
+    "与传统 menuconfig 的 choice 一致：同组只能选择一个值。";
+  copy.append(title, meta);
+
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", prompt || "单选配置");
+
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "";
+  defaultOption.textContent = "使用 OpenWrt 默认值";
+  select.appendChild(defaultOption);
+
+  const baselineEnabled = ["y", "m"].includes(String(pkg.value || "n"));
+  let selectedSymbol = "";
+  for (const option of options) {
+    const assignable = configStudioPackageOptionAssignable(pkg, option);
+    const canSelect = assignable.includes("y");
+    const current = configStudioOptionValue(option.symbol, option.value);
+    if (current === "y") selectedSymbol = option.symbol;
+
+    const item = document.createElement("option");
+    item.value = option.symbol;
+    item.textContent = option.prompt || option.name;
+    item.disabled =
+      !configStudioPackageEnabled(pkg) ||
+      (!canSelect && baselineEnabled);
+    select.appendChild(item);
+  }
+  select.value = [...select.options].some(
+    (item) => item.value === selectedSymbol
+  )
+    ? selectedSymbol
+    : "";
+  select.disabled = !configStudioPackageEnabled(pkg);
+
+  select.addEventListener("change", () => {
+    if (!select.value) {
+      for (const option of options) {
+        configStudioState.modifiedValues.delete(option.symbol);
+      }
+      updateConfigStudioChangeCount();
+      persistNewConfigStudioUi();
+      row.classList.remove("modified");
+      return;
+    }
+    for (const option of options) {
+      configStudioState.modifiedValues.set(
+        option.symbol,
+        option.symbol === select.value ? "y" : "n"
+      );
+    }
+    updateConfigStudioChangeCount();
+    persistNewConfigStudioUi();
+    row.classList.add("modified");
+  });
+
+  row.append(copy, select);
+  return row;
+}
+
+function configStudioPackageChildren(pkg, search) {
+  const options = Array.isArray(pkg.configOptions)
+    ? pkg.configOptions
+    : [];
+  if (!options.length) return null;
+
+  const details = document.createElement("details");
+  details.className = "config-studio-package-children";
+  const hasModifiedChild = options.some((option) =>
+    configStudioState.modifiedValues.has(option.symbol)
+  );
+  details.open =
+    Boolean(search && configStudioPackageOptionSearch(pkg, search)) ||
+    hasModifiedChild;
+
+  const summary = document.createElement("summary");
+  summary.textContent =
+    "子选项 " +
+    options.length +
+    (configStudioPackageEnabled(pkg)
+      ? " · 点击展开"
+      : " · 选择主软件包后可配置");
+  details.appendChild(summary);
+
+  const body = document.createElement("div");
+  body.className = "config-studio-package-children-body";
+  if (!configStudioPackageEnabled(pkg)) {
+    const note = document.createElement("div");
+    note.className = "config-studio-package-child-note";
+    note.textContent =
+      "这些选项来自此软件包自己的 Package/<name>/config；启用主软件包后即可设置。";
+    body.appendChild(note);
+    details.appendChild(body);
+    return details;
+  }
+
+  const choices = new Map();
+  const regular = [];
+  for (const option of options) {
+    if (option.choiceValue && option.choicePrompt) {
+      if (!choices.has(option.choicePrompt)) {
+        choices.set(option.choicePrompt, []);
+      }
+      choices.get(option.choicePrompt).push(option);
+    } else {
+      regular.push(option);
+    }
+  }
+
+  for (const [prompt, members] of choices) {
+    body.appendChild(configStudioPackageChoice(pkg, prompt, members));
+  }
+  for (const option of regular) {
+    body.appendChild(configStudioPackageOptionRow(pkg, option));
+  }
+
+  if (!["y", "m"].includes(String(pkg.value || "n"))) {
+    const note = document.createElement("div");
+    note.className = "config-studio-package-child-note";
+    note.textContent =
+      "主软件包是本次刚启用的；子选项的最终可用性会在“检查依赖”时由真实 OpenWrt Kconfig 再确认。";
+    body.appendChild(note);
+  }
+
+  details.appendChild(body);
+  return details;
+}
+
 function renderConfigStudioPackages() {
   const root = $("config-studio-packages");
   const search = $("config-studio-search").value.trim().toLowerCase();
@@ -1941,7 +2178,8 @@ function renderConfigStudioPackages() {
       pkg.category,
       pkg.submenu,
       pkg.repository
-    ].some((value) => String(value || "").toLowerCase().includes(search));
+    ].some((value) => String(value || "").toLowerCase().includes(search)) ||
+      configStudioPackageOptionSearch(pkg, search);
   });
 
   $("config-studio-package-count").textContent =
@@ -1958,6 +2196,9 @@ function renderConfigStudioPackages() {
 
   const cap = 600;
   for (const pkg of matches.slice(0, cap)) {
+    const block = document.createElement("div");
+    block.className = "config-studio-package-block";
+
     const row = document.createElement("div");
     row.className =
       "config-studio-option" +
@@ -2001,12 +2242,17 @@ function renderConfigStudioPackages() {
     }
     select.value = configStudioOptionValue(pkg.symbol, pkg.value);
     select.addEventListener("change", () => {
+      const scrollTop = root.scrollTop;
       setConfigStudioModifiedValue(pkg.symbol, select.value);
-      row.classList.add("modified");
+      renderConfigStudioPackages();
+      root.scrollTop = scrollTop;
     });
 
     row.append(copy, select);
-    root.appendChild(row);
+    block.appendChild(row);
+    const children = configStudioPackageChildren(pkg, search);
+    if (children) block.appendChild(children);
+    root.appendChild(block);
   }
 
   if (matches.length > cap) {
