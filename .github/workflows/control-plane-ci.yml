@@ -134,6 +134,8 @@ jobs:
         ! grep -q 'kconfiglib' .github/workflows/config-studio.yml
         grep -q 'unset FILES_DIR' .github/workflows/config-studio.yml
         grep -q 'apply-extra-feeds.sh' .github/workflows/config-studio.yml
+        grep -q 'extraFeeds // ""' .github/workflows/config-studio.yml
+        grep -q 'config-studio-request.json' .github/workflows/config-studio.yml
         grep -q 'apply-extra-feeds.sh' .github/workflows/build-openwrt.yml
         grep -q 'EXTRA_FEEDS_FILE' scripts/profile.sh
         grep -q 'id="new-extra-feeds"' control-plane/public/index.html
