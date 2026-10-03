@@ -114,9 +114,11 @@ jobs:
         grep -q 'make defconfig' .github/workflows/config-studio.yml
         grep -q 'permissions:' .github/workflows/config-studio.yml
         grep -q 'contents: read' .github/workflows/config-studio.yml
-        grep -q 'contents: write' .github/workflows/config-studio.yml
+        ! grep -q 'contents: write' .github/workflows/config-studio.yml
         grep -q 'actions/upload-artifact@v7' .github/workflows/config-studio.yml
-        grep -q 'actions/download-artifact@v8' .github/workflows/config-studio.yml
+        ! grep -q 'actions/download-artifact' .github/workflows/config-studio.yml
+        grep -q 'apiBytes' control-plane/lib/github.mjs
+        grep -q 'unzipSync' control-plane/lib/github.mjs
         grep -q 'unset FILES_DIR' .github/workflows/config-studio.yml
         grep -q 'id="config-studio-dialog"' control-plane/public/index.html
         grep -q 'function renderConfigStudioPackages' control-plane/public/app.js
