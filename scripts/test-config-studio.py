@@ -95,6 +95,45 @@ Description: Base
         assert pkg["selected"] is True
         assert pkg["luciApp"] is True
         assert pkg["category"] == "LuCI"
+        assert pkg["assignable"] == ["n", "m", "y"]
+
+        # OpenWrt scripts/metadata.pm::confstr() also converts '-' to '_'.
+        (build / ".config").write_text(
+            "CONFIG_TARGET_demo_board=y\n",
+            encoding="utf-8",
+        )
+        (build / "tmp" / ".targetinfo").write_text(
+            """Target: demo-board
+Target-Name: Demo Board
+""",
+            encoding="utf-8",
+        )
+        hyphen_catalog_path = temp / "catalog-hyphen.json"
+        run("catalog", build, hyphen_catalog_path)
+        hyphen_catalog = json.loads(
+            hyphen_catalog_path.read_text(encoding="utf-8")
+        )
+        demo = next(
+            item
+            for item in hyphen_catalog["targets"]
+            if item["id"] == "demo-board"
+        )
+        assert demo["symbol"] == "CONFIG_TARGET_demo_board"
+        assert demo["selected"] is True
+
+        # Restore the original metadata for the result tests below.
+        (build / ".config").write_text(
+            "\n".join(
+                [
+                    "CONFIG_TARGET_ath79=y",
+                    "CONFIG_TARGET_ath79_generic=y",
+                    "CONFIG_TARGET_ath79_generic_DEVICE_glinet_gl-ar300m16=y",
+                    "CONFIG_PACKAGE_luci-app-test=y",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
 
         request = {
             "requestId": "0123456789abcdef",
