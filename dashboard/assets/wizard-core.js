@@ -48,10 +48,10 @@ export function validateProfileInput(input) {
   for (const line of feeds ? feeds.split("\n") : []) {
     if (line.startsWith("#")) continue;
     const match = line.match(
-      /^src-git(?:-full)?\s+([A-Za-z0-9._-]+)\s+([^\s]+)$/
+      /^src-git(?:-full)?(?:\s+--force)?\s+([A-Za-z0-9._-]+)\s+([^\s]+)$/
     );
     if (!match) {
-      errors.push("额外 feed 格式必须是：src-git 名称 Git地址[;分支]。");
+      errors.push("额外 feed 格式必须是：src-git [--force] 名称 Git地址[;分支]。");
       break;
     }
     if (feedNames.has(match[1])) {
@@ -151,7 +151,7 @@ set -Eeuo pipefail
       path: `${base}/feeds.conf`,
       text: [
         "# 在 ./scripts/feeds update -a 前插入的额外 feeds。",
-        "# 格式：src-git 名称 Git地址[;分支]",
+        "# 格式：src-git [--force] 名称 Git地址[;分支]",
         ...(extraFeeds ? ["", extraFeeds] : []),
         ""
       ].join("\n"),
