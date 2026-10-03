@@ -13,6 +13,10 @@ fi
 mkdir -p "$(dirname "$log_file")"
 
 cd "$build_root"
+
+priority_report="${log_file%.log}-priority.json"
+python3 "$OLDPWD/scripts/resolve-feed-priority.py" "$build_root" --report "$priority_report"
+
 set +e
 ./scripts/feeds install -a 2>&1 | tee "$log_file"
 status=${PIPESTATUS[0]}
