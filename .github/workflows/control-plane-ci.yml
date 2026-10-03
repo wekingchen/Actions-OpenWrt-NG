@@ -158,6 +158,12 @@ jobs:
         grep -q 'data.repositories.length === 1' /tmp/control-plane-app.js
         grep -q 'data.profiles.length === 1' /tmp/control-plane-app.js
         grep -q 'profile-build-action' /tmp/control-plane-app.js
+        grep -q 'function navigateControlPlane' /tmp/control-plane-app.js
+        grep -q 'function setActiveNavigation' /tmp/control-plane-app.js
+        grep -q 'activateNavigation: true' /tmp/control-plane-app.js
+        grep -q 'data-nav="workspace"' /tmp/control-plane-index.html
+        grep -q 'data-nav="profiles"' /tmp/control-plane-index.html
+        grep -q 'data-nav="builder"' /tmp/control-plane-index.html
         grep -q 'account-dropdown' /tmp/control-plane-app.js
         grep -q '.app-shell' /tmp/control-plane-style.css
         grep -q '.content-grid' /tmp/control-plane-style.css
@@ -181,6 +187,16 @@ jobs:
         fi
         if grep -q '>Profiles</span>' /tmp/control-plane-index.html || grep -q '>Builder</span>' /tmp/control-plane-index.html; then
           echo "ERROR: 底部 / 侧栏导航应保持中文标签" >&2
+          exit 1
+        fi
+        if grep -q 'href="#profile-card"' /tmp/control-plane-index.html || \
+           grep -q 'href="#editor-card"' /tmp/control-plane-index.html || \
+           grep -q 'href="#build-card"' /tmp/control-plane-index.html; then
+          echo "ERROR: 工作台导航不能退化为页内锚点" >&2
+          exit 1
+        fi
+        if ! grep -q '<button class="nav-item active" type="button" data-nav="workspace"' /tmp/control-plane-index.html; then
+          echo "ERROR: 工作区导航必须使用真实操作按钮" >&2
           exit 1
         fi
 
