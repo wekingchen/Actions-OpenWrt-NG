@@ -51,6 +51,25 @@ const createState = {
   previewValid: false
 };
 
+const configStudioState = {
+  repo: null,
+  requestId: "",
+  profileId: "",
+  context: "existing",
+  catalog: null,
+  result: null,
+  modifiedValues: new Map(),
+  targetId: "",
+  subtargetId: "",
+  deviceProfileId: "",
+  pollTimer: null,
+  pollAttempts: 0,
+  generation: 0,
+  restoreFocus: null
+};
+
+const MAX_CONFIG_STUDIO_POLL_ATTEMPTS = 600;
+
 const repositoryState = {
   repositories: [],
   selectedFullName: "",
@@ -188,6 +207,26 @@ const ERROR_MESSAGES = {
     "暂时无法从 GitHub 读取 Builder 状态。",
   github_builder_dispatch_failed:
     "GitHub 未能启动 Builder，请检查 Actions 权限与 workflow 是否存在。",
+  github_config_studio_failed:
+    "GitHub 未能启动图形配置会话，请检查 Actions / Contents 权限与 Config Studio workflow。",
+  github_config_studio_apply_failed:
+    "Kconfig 已完成，但 GitHub 未能创建 Profile 配置 Pull Request。",
+  config_studio_session_not_found:
+    "图形配置会话已经不存在，可能已完成、取消或被清理。",
+  config_studio_run_active:
+    "当前图形配置仍在 Actions 中运行，请等本轮解析完成后再提交。",
+  config_studio_not_resolved:
+    "还没有可应用的 Kconfig 解析结果，请先校验当前选择。",
+  config_studio_profile_mismatch:
+    "这次图形配置会话不属于当前 Profile，已拒绝应用。",
+  invalid_config_studio_selection:
+    "图形配置选择格式无效，请刷新配置目录后重试。",
+  invalid_config_symbol:
+    "提交内容包含不允许的 Kconfig 符号，已拒绝处理。",
+  config_studio_gzip_unavailable:
+    "当前 Control Plane 运行环境无法解压配置目录。",
+  config_studio_result_invalid:
+    "Config Studio 返回的数据无法解析，请查看对应 Actions 日志。",
   build_already_active:
     "这个 Profile 已经有构建在运行，本次不会重复排队。",
   invalid_build_request:
