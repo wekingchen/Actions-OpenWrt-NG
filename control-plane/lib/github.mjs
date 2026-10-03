@@ -1187,8 +1187,6 @@ export class GitHubAppClient {
     } catch {
       throw new ConfigStudioError("config_studio_request_invalid", 502);
     }
-    request.selection = { values: Object.fromEntries(entries) };
-
     const current = await this.getConfigStudioSession(
       token,
       owner,
@@ -1198,6 +1196,19 @@ export class GitHubAppClient {
     if (current.run && ACTIVE_BUILD_STATUSES.has(current.run.status)) {
       throw new ConfigStudioError("config_studio_run_active", 409);
     }
+
+    // When the user continues adjusting after a resolved round, use that
+    // resolved .config as the next seed. This mirrors repeated menuconfig
+    // sessions and prevents accepted choices from falling back to the
+    // repository's original baseConfig on the next resolve.
+    if (
+      current.status?.status === "resolved" &&
+      typeof current.result?.finalConfig === "string" &&
+      current.result.finalConfig
+    ) {
+      request.baseConfig = current.result.finalConfig;
+    }
+    request.selection = { values: Object.fromEntries(entries) };
 
     await this.commitConfigStudioFiles(
       token,
