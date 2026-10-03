@@ -1547,6 +1547,10 @@ function featureControl(feature, row) {
       select.appendChild(option);
     }
     select.value = current;
+    select.disabled = feature.changeable === false;
+    if (select.disabled) {
+      select.title = "该选项当前由 Kconfig 依赖固定，不能手动修改";
+    }
     select.addEventListener("change", () => {
       setConfigStudioModifiedValue(symbol, select.value);
       row.classList.add("modified");
@@ -1557,6 +1561,10 @@ function featureControl(feature, row) {
   const input = document.createElement("input");
   input.type = "text";
   input.value = current;
+  input.disabled = feature.changeable === false;
+  if (input.disabled) {
+    input.title = "该选项当前由 Kconfig 依赖固定，不能手动修改";
+  }
   input.setAttribute("aria-label", feature.prompt || feature.name);
   input.addEventListener("change", () => {
     setConfigStudioModifiedValue(symbol, input.value);
