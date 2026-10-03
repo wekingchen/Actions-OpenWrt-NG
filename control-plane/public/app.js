@@ -865,8 +865,12 @@ async function loadBuildRuns(options = {}) {
     if (!lookup.runs.length) {
       buildState.requestId = requestId;
       buildState.hasActiveRuns = true;
-      renderBuildRows($("recent-build-runs"), [], { compact: true });
-      renderBuildRows($("build-runs"), []);
+      if (!$("recent-build-runs").querySelector(".build-record")) {
+        renderBuildRows($("recent-build-runs"), [], { compact: true });
+      }
+      if (!$("build-runs").querySelector(".build-record")) {
+        renderBuildRows($("build-runs"), []);
+      }
       buildState.pollAttempts += 1;
       scheduleBuildPoll(2500);
       return;
@@ -875,7 +879,7 @@ async function loadBuildRuns(options = {}) {
   }
 
   const data = await request(
-    `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds?limit=20`
+    `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds?limit=100`
   );
 
   renderBuildRows($("recent-build-runs"), data.runs, { compact: true });
