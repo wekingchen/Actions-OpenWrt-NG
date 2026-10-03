@@ -241,7 +241,7 @@ Profile ID 必须以字母或数字开头，只允许字母、数字、点、下
 
 ## Config Studio / Web Menuconfig
 
-Control Plane 0.12.0 把“新 Profile”整理成和手工 OpenWrt 配置一致的顺序：
+Control Plane 0.13.0 延续 0.12.0 的向导，并把第三方源的优先级/同名包覆盖也纳入配置。新 Profile 仍按和手工 OpenWrt 配置一致的顺序：
 
 1. 选择 OpenWrt / LEDE 源码与分支。
 2. **先配置额外 feeds / 软件源。**
@@ -260,6 +260,22 @@ src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;m
 ```
 
 因此正确顺序是“先加 Passwall 源，再生成 Menuconfig，再搜索并选择 Passwall App”，而不是在 Menuconfig 之后补源。
+
+0.13.0 还支持把“这个第三方源是否要替代默认同名包”直接写进 `feeds.conf`。OpenWrt 自己支持在 feed 行声明 `--force`；项目会在 `feeds install` 阶段由 OpenWrt 完成 override，并汇总“已覆盖 / 未覆盖”的同名包日志。常用源预设：
+
+```text
+# Passwall：普通新增，不默认覆盖 core
+src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main
+src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main
+
+# fw876 HelloWorld：优先覆盖 OpenWrt 默认同名包
+src-git --force helloworld https://github.com/fw876/helloworld.git
+
+# sbwml HelloWorld 依赖源：优先覆盖同名包；固定当前 v5 系列
+src-git --force sbwml_helloworld https://github.com/sbwml/openwrt_helloworld.git;v5
+```
+
+如果多个第三方 feed 都提供同一个 source package，`feeds.conf` 中越靠上的源优先。对于自定义 feed，只有明确写 `--force` 才表示“我要用这个源替代 OpenWrt 默认同名包”；未写时保持 OpenWrt 默认的保守行为。sbwml 上游还给出了替换 Golang 的做法，但本项目不随源预设自动更换工具链，避免对不同 OpenWrt 分支造成额外影响。
 
 
 工作方式：
