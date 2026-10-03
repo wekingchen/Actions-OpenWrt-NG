@@ -1,0 +1,44 @@
+name: Deploy Control Plane hotfix 0.16.1
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-control-plane-hotfix-0161.yml"
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: 触发正式 Control Plane 部署
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          gh api             -X POST             "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-control-plane.yml/dispatches"             --input - <<'JSON'
+          {
+            "ref": "main",
+            "inputs": {
+              "apply_github_app_secrets": "false"
+            }
+          }
+          JSON
+
+      - name: 检出 main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: 删除一次性部署 Workflow
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm ".github/workflows/deploy-control-plane-hotfix-0161.yml"
+          git commit -m "chore: remove Control Plane 0.16.1 deploy helper"
+          git push origin HEAD:main
