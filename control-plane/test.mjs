@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import {
   GitHubAppClient,
+  configStudioProgressFromJobs,
   githubErrorReason,
   selectConfigStudioRun
 } from "./lib/github.mjs";
@@ -19,6 +20,38 @@ import {
   profileFilesObject
 } from "./lib/profile-template.mjs";
 import { buildProfileFiles as buildWizardProfileFiles } from "../dashboard/assets/wizard-core.js";
+
+const configStudioProgress = configStudioProgressFromJobs([
+  {
+    name: "解析 OpenWrt 配置",
+    steps: [
+      { name: "Set up job", status: "completed", conclusion: "success" },
+      {
+        name: "校验会话并读取请求",
+        status: "completed",
+        conclusion: "success"
+      },
+      {
+        name: "安装配置解析依赖",
+        status: "in_progress",
+        conclusion: ""
+      },
+      {
+        name: "准备 OpenWrt 源码",
+        status: "pending",
+        conclusion: ""
+      }
+    ]
+  }
+]);
+assert.equal(configStudioProgress?.completed, 1);
+assert.equal(configStudioProgress?.total, 3);
+assert.equal(configStudioProgress?.percent, 33);
+assert.equal(configStudioProgress?.current, "安装配置工具");
+assert.deepEqual(
+  configStudioProgress?.steps.map((step) => step.name),
+  ["读取配置请求", "安装配置工具", "拉取并准备 OpenWrt 源码"]
+);
 
 const staleCatalogRun = {
   id: 100,
