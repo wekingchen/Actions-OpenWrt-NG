@@ -182,6 +182,29 @@ const PASSWALL_FEEDS = [
   "src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main"
 ];
 
+const FW876_HELLOWORLD_FEEDS = [
+  "src-git --force helloworld https://github.com/fw876/helloworld.git"
+];
+
+const SBWML_HELLOWORLD_FEEDS = [
+  "src-git --force sbwml_helloworld https://github.com/sbwml/openwrt_helloworld.git;v5"
+];
+
+function addFeedPreset(lines) {
+  const current = $("new-extra-feeds").value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const merged = [...current];
+  for (const line of lines) {
+    if (!merged.includes(line)) merged.push(line);
+  }
+  $("new-extra-feeds").value = merged.join("\n");
+  invalidateNewProfilePreview();
+  renderNewConfigStudioState();
+}
+
+
 function configStudioDraftStorageKey(repo) {
   return "openwrt-ng:config-studio:new:" + (repo?.fullName || "unknown");
 }
@@ -2549,17 +2572,15 @@ for (const id of ["new-source-repo", "new-source-branch"]) {
 }
 
 $("new-feed-passwall").addEventListener("click", () => {
-  const current = $("new-extra-feeds").value
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const merged = [...current];
-  for (const line of PASSWALL_FEEDS) {
-    if (!merged.includes(line)) merged.push(line);
-  }
-  $("new-extra-feeds").value = merged.join("\n");
-  invalidateNewProfilePreview();
-  renderNewConfigStudioState();
+  addFeedPreset(PASSWALL_FEEDS);
+});
+
+$("new-feed-fw876").addEventListener("click", () => {
+  addFeedPreset(FW876_HELLOWORLD_FEEDS);
+});
+
+$("new-feed-sbwml").addEventListener("click", () => {
+  addFeedPreset(SBWML_HELLOWORLD_FEEDS);
 });
 
 $("new-config-file").addEventListener("change", async (event) => {
