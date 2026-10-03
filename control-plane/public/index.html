@@ -248,53 +248,56 @@
                   </details>
                 </div>
 
-                <div class="form-section">
-                  <div class="form-section-title">
-                    <span>04</span>
-                    <div><strong>自动化策略</strong><small>控制追新、发布与构建行为</small></div>
-                  </div>
-                  <div class="toggle-grid">
-                    <label class="check-row compact-check">
-                      <input id="new-auto-update" type="checkbox">
-                      <span><strong>自动追新</strong><small>自动检测上游变化</small></span>
-                    </label>
-                    <label class="check-row compact-check">
-                      <input id="new-upload-release" type="checkbox" checked>
-                      <span><strong>发布 Release</strong><small>成功后允许发布</small></span>
-                    </label>
-                    <label class="check-row compact-check">
-                      <input id="new-upload-firmware" type="checkbox" checked>
-                      <span><strong>固件 Artifact</strong><small>保留构建产物</small></span>
-                    </label>
-                    <label class="check-row compact-check">
-                      <input id="new-maximize-space" type="checkbox">
-                      <span><strong>扩展构建空间</strong><small>大型源码时开启</small></span>
-                    </label>
-                    <label class="check-row compact-check">
-                      <input id="new-stream-log" type="checkbox" checked>
-                      <span><strong>流式日志</strong><small>实时输出 make 日志</small></span>
-                    </label>
-                  </div>
-                </div>
+                <details class="advanced-disclosure profile-advanced-options">
+                  <summary>高级选项（可选）· 发布、追新、Manifest 校验</summary>
+                  <div class="profile-advanced-body">
+                    <div class="form-section compact-section">
+                      <div class="form-section-title">
+                        <div><strong>构建与发布</strong><small>一般保持默认即可</small></div>
+                      </div>
+                      <div class="toggle-grid">
+                        <label class="check-row compact-check">
+                          <input id="new-auto-update" type="checkbox">
+                          <span><strong>自动追新</strong><small>自动检测上游变化</small></span>
+                        </label>
+                        <label class="check-row compact-check">
+                          <input id="new-upload-release" type="checkbox" checked>
+                          <span><strong>发布 Release</strong><small>成功后允许发布</small></span>
+                        </label>
+                        <label class="check-row compact-check">
+                          <input id="new-upload-firmware" type="checkbox" checked>
+                          <span><strong>固件 Artifact</strong><small>保留构建产物</small></span>
+                        </label>
+                        <label class="check-row compact-check">
+                          <input id="new-maximize-space" type="checkbox">
+                          <span><strong>扩展构建空间</strong><small>大型源码时开启</small></span>
+                        </label>
+                        <label class="check-row compact-check">
+                          <input id="new-stream-log" type="checkbox" checked>
+                          <span><strong>流式日志</strong><small>实时输出 make 日志</small></span>
+                        </label>
+                      </div>
+                    </div>
 
-                <div class="form-section">
-                  <div class="form-section-title">
-                    <span>05</span>
-                    <div><strong>高级校验</strong><small>可选的 Manifest 与额外上游监控</small></div>
+                    <div class="form-section compact-section">
+                      <div class="form-section-title">
+                        <div><strong>高级校验</strong><small>Manifest 与额外上游监控</small></div>
+                      </div>
+                      <div class="form-grid two-cols">
+                        <label class="field">
+                          <span>Manifest 必选软件包</span>
+                          <textarea id="new-required-packages" class="compact-input" spellcheck="false"
+                                    placeholder="luci&#10;curl"></textarea>
+                        </label>
+                        <label class="field">
+                          <span>额外 Git 上游监控</span>
+                          <textarea id="new-watch-sources" class="compact-input" spellcheck="false"
+                                    placeholder="label|git_url|branch_or_tag"></textarea>
+                        </label>
+                      </div>
+                    </div>
                   </div>
-                  <div class="form-grid two-cols">
-                    <label class="field">
-                      <span>Manifest 必选软件包</span>
-                      <textarea id="new-required-packages" class="compact-input" spellcheck="false"
-                                placeholder="luci&#10;curl"></textarea>
-                    </label>
-                    <label class="field">
-                      <span>额外 Git 上游监控</span>
-                      <textarea id="new-watch-sources" class="compact-input" spellcheck="false"
-                                placeholder="label|git_url|branch_or_tag"></textarea>
-                    </label>
-                  </div>
-                </div>
+                </details>
 
                 <div class="form-actions">
                   <button class="button ghost" id="new-profile-preview" type="button">下一步：预览 Profile</button>
