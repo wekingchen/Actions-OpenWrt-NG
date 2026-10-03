@@ -1355,6 +1355,14 @@ function setConfigStudioStatus(title, detail = "") {
   $("config-studio-status-detail").textContent = detail;
 }
 
+function setConfigStudioStep(step) {
+  for (const node of document.querySelectorAll("[data-config-step]")) {
+    const value = Number(node.dataset.configStep || 0);
+    node.classList.toggle("active", value === step);
+    node.classList.toggle("done", value < step);
+  }
+}
+
 function currentConfigStudioTarget() {
   return (configStudioState.catalog?.targets || []).find(
     (item) => item.id === configStudioState.targetId
@@ -1888,6 +1896,7 @@ function resetConfigStudioState() {
   configStudioState.baselineDeviceProfileId = "";
   configStudioState.pollAttempts = 0;
   configStudioState.restoreFocus = null;
+  configStudioState.newFingerprint = "";
 }
 
 function hideConfigStudioDialog() {
@@ -1914,9 +1923,21 @@ async function deleteConfigStudioSession() {
 
 async function closeConfigStudio({ cleanup = true } = {}) {
   const restoreFocus = configStudioState.restoreFocus;
+  const context = configStudioState.context;
+  const requestId = configStudioState.requestId;
+  const repo = configStudioState.repo;
   configStudioState.generation += 1;
   clearConfigStudioPolling();
-  if (cleanup) await deleteConfigStudioSession();
+  if (cleanup) {
+    await deleteConfigStudioSession();
+    if (
+      context === "new" &&
+      createState.configStudioDraft?.requestId === requestId
+    ) {
+      saveNewConfigStudioDraft(repo, null);
+      renderNewConfigStudioState();
+    }
+  }
   hideConfigStudioDialog();
   resetConfigStudioState();
   if (restoreFocus?.isConnected && typeof restoreFocus.focus === "function") {
@@ -1964,6 +1985,7 @@ async function pollConfigStudio(generation) {
     }
 
     if (status === "ready" && data.catalog) {
+      setConfigStudioStep(1);
       setConfigStudioStatus(
         "配置目录已就绪",
         "现在由你选择设备、软件包和特性；下一步交给 OpenWrt Kconfig 校验依赖。"
@@ -1973,6 +1995,7 @@ async function pollConfigStudio(generation) {
     }
 
     if (status === "resolved" && data.result) {
+      setConfigStudioStep(3);
       configStudioState.result = data.result;
       if (data.catalog) {
         configStudioState.catalog = data.catalog;
@@ -1983,14 +2006,16 @@ async function pollConfigStudio(generation) {
     }
 
     if (status === "resolving") {
+      setConfigStudioStep(2);
       setConfigStudioStatus(
         "Kconfig 正在解析选择",
         "正在真实运行 make defconfig，并重新生成当前目标下的菜单目录。"
       );
       $("config-studio-resolve").disabled = true;
     } else {
+      setConfigStudioStep(1);
       setConfigStudioStatus(
-        "正在准备真实 OpenWrt 配置环境",
+        "正在生成配置菜单",
         "正在读取源码、feeds 和设备元数据。"
       );
     }
@@ -2029,7 +2054,8 @@ async function startConfigStudio(repo, options) {
         sourceRepo: options.sourceRepo,
         sourceBranch: options.sourceBranch,
         adapter: options.adapter,
-        baseConfig: options.baseConfig || ""
+        baseConfig: options.baseConfig || "",
+        extraFeeds: options.extraFeeds || ""
       };
 
   resetConfigStudioState();
@@ -2038,6 +2064,7 @@ async function startConfigStudio(repo, options) {
   configStudioState.repo = repo;
   configStudioState.profileId = options.profileId || "";
   configStudioState.context = existing ? "existing" : "new";
+  configStudioState.newFingerprint = options.fingerprint || "";
   configStudioState.restoreFocus =
     document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -2059,9 +2086,12 @@ async function startConfigStudio(repo, options) {
   $("config-studio-back").hidden = true;
   $("config-studio-apply").hidden = true;
   $("config-studio-use").hidden = true;
+  setConfigStudioStep(1);
   setConfigStudioStatus(
-    "正在提交配置环境",
-    "不会直接修改默认分支；Config Studio 使用受控临时分支保存会话。"
+    options.resumeRequestId ? "正在恢复上次配置" : "正在生成配置菜单",
+    options.resumeRequestId
+      ? "源码和 feeds 没有变化，继续使用上次会话，不会重新启动 Action。"
+      : "后台会读取源码、应用 feeds，并生成可选择的设备、App 与特性。"
   );
 
   $("config-studio-dialog").hidden = false;
@@ -2069,6 +2099,13 @@ async function startConfigStudio(repo, options) {
   $("config-studio-close").focus();
 
   try {
+    if (options.resumeRequestId) {
+      configStudioState.requestId = options.resumeRequestId;
+      configStudioState.pollAttempts = 0;
+      await pollConfigStudio(generation);
+      return;
+    }
+
     const result = await request(configStudioBasePath(repo), {
       method: "POST",
       body: JSON.stringify(payload)
@@ -2080,6 +2117,13 @@ async function startConfigStudio(repo, options) {
       return;
     }
     configStudioState.requestId = result.requestId;
+    if (!existing) {
+      saveNewConfigStudioDraft(repo, {
+        requestId: result.requestId,
+        fingerprint: options.fingerprint || ""
+      });
+      renderNewConfigStudioState();
+    }
     if (result.runUrl) {
       $("config-studio-run-link").href = result.runUrl;
       $("config-studio-run-link").hidden = false;
@@ -2107,7 +2151,8 @@ async function resolveConfigStudio() {
   };
   const button = $("config-studio-resolve");
   button.disabled = true;
-  button.textContent = "正在提交…";
+  button.textContent = "正在检查依赖…";
+  setConfigStudioStep(2);
   setConfigStudioError();
 
   try {
@@ -2135,7 +2180,7 @@ async function resolveConfigStudio() {
     setConfigStudioError(error);
     button.disabled = false;
   } finally {
-    button.textContent = "让 Kconfig 校验选择";
+    button.textContent = "下一步：检查依赖";
   }
 }
 
