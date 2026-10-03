@@ -1012,9 +1012,17 @@ async function openProfile(repo, profileId, options = {}) {
   $("new-profile-card").hidden = true;
   invalidateNewProfilePreview();
 
+  const loadVersion = editorState.loadVersion + 1;
+  editorState.loadVersion = loadVersion;
   const data = await request(
     `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}`
   );
+  if (
+    loadVersion !== editorState.loadVersion ||
+    currentRepository()?.fullName !== repo.fullName
+  ) {
+    return;
+  }
 
   editorState.repo = repo;
   editorState.profileId = profileId;
@@ -1064,11 +1072,12 @@ async function openProfile(repo, profileId, options = {}) {
   }
 }
 
-async function loadProfiles(repo) {
+async function loadProfiles(repo, selectionVersion) {
   showError();
   clearBuildPolling();
+  editorState.loadVersion += 1;
   createState.repo = repo;
-  repositoryState.selectedFullName = repo.fullName;
+  if (!$("build-dialog").hidden) closeBuildDialog();
   $("repo-switcher").value = repo.fullName;
   $("workspace-empty").hidden = true;
   $("editor-card").hidden = true;
@@ -1085,6 +1094,12 @@ async function loadProfiles(repo) {
   const data = await request(
     `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles`
   );
+  if (
+    selectionVersion !== repositoryState.selectionVersion ||
+    repositoryState.selectedFullName !== repo.fullName
+  ) {
+    return;
+  }
 
   $("profile-card").hidden = false;
   $("profile-title").textContent = "配置";
@@ -1152,7 +1167,10 @@ async function loadProfiles(repo) {
 
 async function selectRepository(repo) {
   if (!repo) return;
-  await loadProfiles(repo);
+  const selectionVersion = repositoryState.selectionVersion + 1;
+  repositoryState.selectionVersion = selectionVersion;
+  repositoryState.selectedFullName = repo.fullName;
+  await loadProfiles(repo, selectionVersion);
 }
 
 async function init() {
