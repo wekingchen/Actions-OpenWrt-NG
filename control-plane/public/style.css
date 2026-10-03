@@ -2002,10 +2002,14 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 .sidebar-nav .nav-item {
   width: 100%;
   border: 0;
-  background-color: transparent;
+  background: transparent;
+  appearance: none;
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+.sidebar-nav .nav-item.active {
+  background: linear-gradient(90deg, rgba(36,201,143,.18), rgba(36,201,143,.07));
 }
 #profile-card,
 #new-profile-card,
@@ -2018,6 +2022,9 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 @media (max-width: 860px) {
   .sidebar-nav .nav-item {
     text-align: center;
+  }
+  .sidebar-nav .nav-item.active {
+    background: var(--accent-soft);
   }
   #profile-card,
   #new-profile-card,
