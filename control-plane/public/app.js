@@ -2364,31 +2364,75 @@ document.addEventListener("keydown", (event) => {
     $("user-box").setAttribute("aria-expanded", "false");
     if (!$("build-dialog").hidden) closeBuildDialog();
     if (!$("config-studio-dialog").hidden) {
-      closeConfigStudio({ cleanup: true }).catch((error) => showError(error));
+      closeConfigStudio({ cleanup: false }).catch((error) => showError(error));
     }
   }
 });
 
 $("new-profile-open").addEventListener("click", openNewProfileForm);
 
-$("new-config-studio").addEventListener("click", () => {
+$("new-config-studio").addEventListener("click", async () => {
   const repo = createState.repo;
   const sourceRepo = $("new-source-repo").value.trim();
   const sourceBranch = $("new-source-branch").value.trim();
   const adapter = $("new-adapter").value;
+  const extraFeeds = $("new-extra-feeds").value;
   if (!repo) {
     showError("请先选择仓库。");
     return;
   }
   if (!sourceRepo || !sourceBranch) {
-    showError("请先填写源码仓库与分支 / Tag，再打开图形配置。");
+    showError("请先填写源码仓库与分支 / Tag。");
     return;
   }
+
+  const fingerprint = newConfigStudioFingerprint(repo);
+  let draft = createState.configStudioDraft || loadNewConfigStudioDraft(repo);
+
+  if (draft?.requestId && draft.fingerprint !== fingerprint) {
+    try {
+      await request(
+        configStudioBasePath(repo) + "/" + draft.requestId,
+        { method: "DELETE" }
+      );
+    } catch (error) {
+      if (error.code !== "config_studio_session_not_found") {
+        console.warn("Old Config Studio draft cleanup failed", error);
+      }
+    }
+    saveNewConfigStudioDraft(repo, null);
+    draft = null;
+  }
+
+  if (draft?.requestId && draft.fingerprint === fingerprint) {
+    try {
+      await request(configStudioBasePath(repo) + "/" + draft.requestId);
+      await startConfigStudio(repo, {
+        sourceRepo,
+        sourceBranch,
+        adapter,
+        baseConfig: $("new-config-text").value,
+        extraFeeds,
+        fingerprint,
+        resumeRequestId: draft.requestId
+      });
+      return;
+    } catch (error) {
+      if (error.code !== "config_studio_session_not_found") {
+        showError(error);
+        return;
+      }
+      saveNewConfigStudioDraft(repo, null);
+    }
+  }
+
   startConfigStudio(repo, {
     sourceRepo,
     sourceBranch,
     adapter,
-    baseConfig: $("new-config-text").value
+    baseConfig: $("new-config-text").value,
+    extraFeeds,
+    fingerprint
   }).catch((error) => showError(error));
 });
 
@@ -2407,6 +2451,7 @@ $("new-source-preset").addEventListener("change", () => {
     $("new-source-branch").value = preset.branch;
   }
   invalidateNewProfilePreview();
+  renderNewConfigStudioState();
 });
 
 for (const id of ["new-source-repo", "new-source-branch"]) {
@@ -2419,6 +2464,20 @@ for (const id of ["new-source-repo", "new-source-branch"]) {
     $("new-source-preset").value = match?.[0] || "custom";
   });
 }
+
+$("new-feed-passwall").addEventListener("click", () => {
+  const current = $("new-extra-feeds").value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const merged = [...current];
+  for (const line of PASSWALL_FEEDS) {
+    if (!merged.includes(line)) merged.push(line);
+  }
+  $("new-extra-feeds").value = merged.join("\n");
+  invalidateNewProfilePreview();
+  renderNewConfigStudioState();
+});
 
 $("new-config-file").addEventListener("change", async (event) => {
   const file = event.target.files?.[0];
@@ -2433,12 +2492,24 @@ $("new-config-file").addEventListener("change", async (event) => {
 });
 
 for (const id of [
+  "new-source-repo",
+  "new-source-branch",
+  "new-adapter",
+  "new-extra-feeds",
+  "new-config-text"
+]) {
+  $(id).addEventListener("input", renderNewConfigStudioState);
+  $(id).addEventListener("change", renderNewConfigStudioState);
+}
+
+for (const id of [
   "new-profile-id",
   "new-profile-name",
   "new-source-repo",
   "new-source-branch",
   "new-adapter",
   "new-config-text",
+  "new-extra-feeds",
   "new-auto-update",
   "new-upload-release",
   "new-upload-firmware",
@@ -2470,7 +2541,7 @@ $("new-profile-preview").addEventListener("click", async () => {
       body: JSON.stringify(readNewProfileInput())
     });
     createState.previewFiles = data.files || [];
-    createState.previewValid = createState.previewFiles.length === 6;
+    createState.previewValid = createState.previewFiles.length === 7;
     renderNewProfilePreview();
     $("new-profile-create").disabled =
       !createState.previewValid || !canWriteRepo(createState.repo);
@@ -2779,15 +2850,17 @@ $("config-studio-use").addEventListener("click", () => {
   useConfigStudioForNewProfile().catch((error) => setConfigStudioError(error));
 });
 
-for (const id of ["config-studio-close", "config-studio-cancel"]) {
-  $(id).addEventListener("click", () => {
-    closeConfigStudio({ cleanup: true }).catch((error) => showError(error));
-  });
-}
+$("config-studio-close").addEventListener("click", () => {
+  closeConfigStudio({ cleanup: false }).catch((error) => showError(error));
+});
+
+$("config-studio-cancel").addEventListener("click", () => {
+  closeConfigStudio({ cleanup: true }).catch((error) => showError(error));
+});
 
 $("config-studio-dialog").addEventListener("click", (event) => {
   if (event.target === $("config-studio-dialog")) {
-    closeConfigStudio({ cleanup: true }).catch((error) => showError(error));
+    closeConfigStudio({ cleanup: false }).catch((error) => showError(error));
   }
 });
 
