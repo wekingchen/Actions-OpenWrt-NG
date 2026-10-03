@@ -58,6 +58,7 @@ assert.match(controlPlaneAppJs, /configStudioDependencyConditionMatches/);
 assert.match(controlPlaneAppJs, /configStudioEffectiveModifiedEntries/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-dependency-summary"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-show-dependencies"/);
+assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.19\.2<\/span>/);
 
 const builderProgress = builderProgressFromJobs([
   {

@@ -143,6 +143,10 @@ jobs:
         grep -q 'config-studio-request.json' .github/workflows/config-studio.yml
         grep -q 'apply-extra-feeds.sh' .github/workflows/build-openwrt.yml
         grep -q 'merge-feeds.py' scripts/apply-extra-feeds.sh
+        grep -q '同步主仓运行时脚本' .github/workflows/config-studio.yml
+        grep -q '同步主仓运行时脚本' .github/workflows/build-openwrt.yml
+        grep -q 'wekingchen/Actions-OpenWrt-NG.git' .github/workflows/config-studio.yml
+        grep -q 'wekingchen/Actions-OpenWrt-NG.git' .github/workflows/build-openwrt.yml
         grep -q 'install-feeds.sh' .github/workflows/config-studio.yml
         grep -q 'install-feeds.sh' .github/workflows/build-openwrt.yml
         grep -q 'resolve-feed-priority.py' scripts/install-feeds.sh

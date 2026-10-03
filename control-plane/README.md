@@ -345,6 +345,8 @@ profiles/<id>/feeds.conf
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
 
+0.19.2 修复跨仓运行时漂移：当 Config Studio 或 Builder 在非主仓（例如 `Actions-OpenWrt-NG-Test`）运行时，Workflow 在 Runner 中先从 `wekingchen/Actions-OpenWrt-NG@main` 同步最新 `scripts/` 与 `adapters/`，再解析 Profile/feeds/Kconfig。这样主仓的 feeds 去重、Config Studio 解析器等修复无需逐个复制到测试仓脚本目录；目标仓本身不会被这个同步步骤改写。移动端同时在顶栏显示 Control Plane 版本徽标，避免桌面侧栏 footer 在手机布局中被隐藏后无法确认部署版本。
+
 0.19.1 增加 feed name 级自动去重。Config Studio 与正式 Builder 在 `feeds update -a` 前统一通过 `scripts/apply-extra-feeds.sh` + `scripts/merge-feeds.py` 生成唯一 feed 名列表：额外/常用源优先于源码默认源；额外源内部或源码默认源内部重名时保留第一条。这样源码自带 `helloworld`、用户又加入同名 `helloworld` 时，不再触发 `Duplicate feed name`。Control Plane/Wizard 生成 Profile 时也会先按名称去重，常用源按钮不会重复加入已存在的同名 feed。这里的“feed 名称去重”与后续“不同 feed 的同名 source package 按版本择优”是两层独立机制。
 
 0.19.0 增加 menuconfig 式依赖联动预览。catalog 从 OpenWrt `.packageinfo` 的 `Depends:` 提取 `+` 包依赖与常见条件依赖，浏览器根据当前手动选择递归计算依赖闭包：被必需依赖的可见软件包会自动显示为已选并标记“依赖锁定”，下拉框不可取消，同时展示“由谁依赖”。条件依赖支持常见的 `!`、`&&`、`||` 与括号，并兼容 OpenWrt 包符号中的连字符。自动联动值只用于界面预览，不会作为用户手工修改提交；“检查依赖”仍由真实 OpenWrt `make defconfig` 给出最终结果。界面增加联动数量摘要和“查看联动项 / 返回分类浏览”快捷入口，手机端自动改为纵向布局。
