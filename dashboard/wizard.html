@@ -178,6 +178,13 @@
           </div>
 
           <label class="field">
+            <span>额外 feeds</span>
+            <textarea id="extra-feeds" class="compact-textarea" spellcheck="false"
+                      placeholder="src-git my_feed https://github.com/example/openwrt-packages.git;main"></textarea>
+            <small>会在 ./scripts/feeds update -a 前插入。</small>
+          </label>
+
+          <label class="field">
             <span>必须出现在最终 Manifest 的软件包</span>
             <textarea id="required-packages" class="compact-textarea" spellcheck="false"
                       placeholder="每行一个，例如：&#10;luci&#10;curl"></textarea>
@@ -221,7 +228,8 @@
             ├── diy-part1.sh<br>
             ├── diy-part2.sh<br>
             ├── required-packages.txt<br>
-            └── watch-sources.txt
+            ├── watch-sources.txt<br>
+            └── feeds.conf
           </div>
 
           <div class="preview-tabs" id="preview-tabs"></div>
