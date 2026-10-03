@@ -158,8 +158,13 @@ jobs:
         grep -q 'name: 更新 Feeds' .github/workflows/config-studio.yml
         grep -q 'name: 安装 Feeds' .github/workflows/config-studio.yml
         grep -q 'configStudioProgressFromJobs' control-plane/lib/github.mjs
+        grep -q 'builderProgressFromJobs' control-plane/lib/github.mjs
         grep -q 'id="config-studio-progress-bar"' control-plane/public/index.html
+        grep -q 'id="recent-build-progress"' control-plane/public/index.html
+        grep -q 'id="build-detail-progress"' control-plane/public/index.html
         grep -q 'renderConfigStudioProgress' control-plane/public/app.js
+        grep -q 'renderActionProgressCard' control-plane/public/app.js
+        grep -q '真实步骤进度会自动刷新' control-plane/public/app.js
         grep -q 'function renderConfigStudioPackages' control-plane/public/app.js
         grep -q 'friendlyError' control-plane/public/app.js
         grep -q 'Profile 可读取' control-plane/public/app.js
