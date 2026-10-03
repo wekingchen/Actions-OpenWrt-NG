@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import {
   GitHubAppClient,
+  builderProgressFromJobs,
   configStudioProgressFromJobs,
   githubErrorReason,
   selectConfigStudioRun
@@ -20,6 +21,49 @@ import {
   profileFilesObject
 } from "./lib/profile-template.mjs";
 import { buildProfileFiles as buildWizardProfileFiles } from "../dashboard/assets/wizard-core.js";
+
+const builderProgress = builderProgressFromJobs([
+  {
+    name: "构建前快速预检",
+    status: "completed",
+    conclusion: "success",
+    steps: [
+      { name: "静态预检", status: "completed", conclusion: "success" }
+    ]
+  },
+  {
+    name: "编译 OpenWrt 固件",
+    status: "in_progress",
+    conclusion: "",
+    steps: [
+      { name: "准备 OpenWrt 源码", status: "completed", conclusion: "success" },
+      { name: "更新 Feeds", status: "completed", conclusion: "success" },
+      { name: "安装 Feeds", status: "in_progress", conclusion: "" },
+      { name: "恢复编译缓存", status: "pending", conclusion: "" },
+      { name: "下载软件包源码", status: "pending", conclusion: "" },
+      { name: "编译固件", status: "pending", conclusion: "" },
+      { name: "校验固件 Manifest", status: "pending", conclusion: "" },
+      { name: "上传固件目录", status: "pending", conclusion: "" }
+    ]
+  },
+  {
+    name: "发布 OpenWrt 固件",
+    status: "queued",
+    conclusion: "",
+    steps: []
+  },
+  {
+    name: "清理旧 Workflow 运行记录",
+    status: "queued",
+    conclusion: "",
+    steps: []
+  }
+]);
+assert.equal(builderProgress?.completed, 3);
+assert.equal(builderProgress?.total, 11);
+assert.equal(builderProgress?.current, "安装 Feeds");
+assert.equal(builderProgress?.currentDetail, "安装 Feeds");
+assert.equal(builderProgress?.percent, 27);
 
 const configStudioProgress = configStudioProgressFromJobs([
   {
