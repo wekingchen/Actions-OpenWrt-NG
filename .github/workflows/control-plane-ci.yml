@@ -13,6 +13,7 @@ on:
       - ".github/workflows/config-studio.yml"
       - "scripts/compile.sh"
       - "scripts/config-studio.py"
+      - "scripts/config-studio-kconfig.c"
       - "scripts/cleanup-workflow-runs.sh"
       - "scripts/write-summary.sh"
   pull_request:
@@ -24,6 +25,7 @@ on:
       - ".github/workflows/config-studio.yml"
       - "scripts/compile.sh"
       - "scripts/config-studio.py"
+      - "scripts/config-studio-kconfig.c"
       - "scripts/cleanup-workflow-runs.sh"
       - "scripts/write-summary.sh"
 
@@ -119,6 +121,8 @@ jobs:
         ! grep -q 'actions/download-artifact' .github/workflows/config-studio.yml
         grep -q 'apiBytes' control-plane/lib/github.mjs
         grep -q 'unzipSync' control-plane/lib/github.mjs
+        grep -q 'config-studio-kconfig.c' scripts/config-studio.py
+        ! grep -q 'kconfiglib' .github/workflows/config-studio.yml
         grep -q 'unset FILES_DIR' .github/workflows/config-studio.yml
         grep -q 'id="config-studio-dialog"' control-plane/public/index.html
         grep -q 'function renderConfigStudioPackages' control-plane/public/app.js
