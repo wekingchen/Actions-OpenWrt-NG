@@ -653,7 +653,8 @@
         "maximizeSpace",
         "streamLog",
         "requiredPackages",
-        "watchSources"
+        "watchSources",
+        "extraFeeds"
       ],
       "additionalProperties": false,
       "properties": {
@@ -704,6 +705,10 @@
         },
         "watchSources": {
           "type": "string"
+        },
+        "extraFeeds": {
+          "type": "string",
+          "maxLength": 262144
         }
       }
     },
@@ -831,6 +836,10 @@
         },
         "baseConfig": {
           "type": "string"
+        },
+        "extraFeeds": {
+          "type": "string",
+          "maxLength": 262144
         }
       },
       "oneOf": [

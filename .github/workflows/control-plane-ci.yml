@@ -71,6 +71,7 @@ jobs:
         python3 -m py_compile scripts/config-studio.py
         python3 scripts/test-config-studio.py
         bash -n scripts/compile.sh
+        bash -n scripts/apply-extra-feeds.sh
         bash -n scripts/cleanup-workflow-runs.sh
         bash -n scripts/write-summary.sh
         python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
@@ -94,8 +95,16 @@ jobs:
         tmp_env="$(mktemp)"
         GITHUB_ENV="$tmp_env" scripts/profile.sh export default >/dev/null
         grep -q '^PROFILE_FILES_DIR=' "$tmp_env"
+        grep -q '^EXTRA_FEEDS_FILE=' "$tmp_env"
         ! grep -q '^FILES_DIR=' "$tmp_env"
         rm -f "$tmp_env"
+
+        tmp_root="$(mktemp -d)"
+        printf 'src-git demo https://github.com/example/demo.git;main\n' > "$tmp_root/extra-feeds.conf"
+        printf 'src-git packages https://github.com/openwrt/packages.git;master\n' > "$tmp_root/feeds.conf.default"
+        bash scripts/apply-extra-feeds.sh "$tmp_root" "$tmp_root/extra-feeds.conf" >/dev/null
+        head -n1 "$tmp_root/feeds.conf.default" | grep -q '^src-git demo '
+        rm -rf "$tmp_root"
         grep -q "steps.compile.outcome == 'failure'" .github/workflows/build-openwrt.yml
         grep -q 'actions/cache/save@v6' .github/workflows/build-openwrt.yml
         grep -q 'Resource not accessible by integration' .github/workflows/build-openwrt.yml
@@ -124,6 +133,14 @@ jobs:
         grep -q 'config-studio-kconfig.c' scripts/config-studio.py
         ! grep -q 'kconfiglib' .github/workflows/config-studio.yml
         grep -q 'unset FILES_DIR' .github/workflows/config-studio.yml
+        grep -q 'apply-extra-feeds.sh' .github/workflows/config-studio.yml
+        grep -q 'extraFeeds // ""' .github/workflows/config-studio.yml
+        grep -q 'config-studio-request.json' .github/workflows/config-studio.yml
+        grep -q 'apply-extra-feeds.sh' .github/workflows/build-openwrt.yml
+        grep -q 'EXTRA_FEEDS_FILE' scripts/profile.sh
+        grep -q 'id="new-extra-feeds"' control-plane/public/index.html
+        grep -q 'id="new-feed-passwall"' control-plane/public/index.html
+        grep -q '继续图形配置' control-plane/public/app.js
         grep -q 'id="config-studio-dialog"' control-plane/public/index.html
         grep -q 'function renderConfigStudioPackages' control-plane/public/app.js
         grep -q 'friendlyError' control-plane/public/app.js

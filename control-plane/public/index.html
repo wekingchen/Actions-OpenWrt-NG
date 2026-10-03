@@ -37,7 +37,7 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.11.1</small>
+        <small>Control Plane 0.12.0</small>
       </div>
     </aside>
 
@@ -139,7 +139,7 @@
                 <div>
                   <p class="eyebrow">配置</p>
                   <h2 id="new-profile-title">新建配置</h2>
-                  <p class="panel-description">服务端生成固定 6 个标准文件，并通过独立分支 + Pull Request 安全写入。</p>
+                  <p class="panel-description">服务端生成固定 7 个标准文件，并通过独立分支 + Pull Request 安全写入。</p>
                 </div>
                 <button class="icon-button" id="new-profile-close" type="button" aria-label="关闭">×</button>
               </div>
@@ -197,84 +197,111 @@
                 <div class="form-section">
                   <div class="form-section-title">
                     <span>02</span>
-                    <div><strong>构建配置</strong><small>上传或粘贴 OpenWrt .config</small></div>
+                    <div><strong>软件源 / Feeds</strong><small>先添加第三方源，再生成 Menuconfig</small></div>
                   </div>
-                  <div class="config-source-choice">
+
+                  <div class="feed-preset-row">
                     <div>
-                      <strong>推荐：图形配置</strong>
-                      <span>基于真实源码与 feeds 生成可选项，由 OpenWrt Kconfig 解析依赖。</span>
+                      <strong>常用源</strong>
+                      <span>点击即可加入；仍可在下方手动修改。</span>
                     </div>
-                    <button class="button primary" id="new-config-studio" type="button">
-                      打开图形 Menuconfig
-                    </button>
+                    <button class="button ghost" id="new-feed-passwall" type="button">+ Passwall</button>
                   </div>
 
                   <label class="field">
-                    <span>OpenWrt .config · 高级 / 兼容方式</span>
-                    <div class="file-drop">
-                      <input id="new-config-file" type="file" accept=".config,text/plain">
-                      <div class="file-drop-copy">
-                        <strong>选择已有 .config 文件</strong>
-                        <span>也可以直接在下方粘贴或继续手动编辑</span>
-                      </div>
-                    </div>
-                    <textarea id="new-config-text" class="editor create-config-editor" spellcheck="false"
-                              placeholder="也可以先留空，使用上方图形 Menuconfig 生成"></textarea>
-                    <small>图形配置完成后会把 Kconfig 解析后的最终配置自动填入这里。</small>
+                    <span>额外 feeds</span>
+                    <textarea id="new-extra-feeds" class="editor feeds-editor" spellcheck="false"
+                              placeholder="src-git my_feed https://github.com/example/openwrt-packages.git;main"></textarea>
+                    <small>这些源会在 <code>./scripts/feeds update -a</code> 之前插入。修改源码或 feeds 后，需要重新生成配置菜单。</small>
                   </label>
                 </div>
 
                 <div class="form-section">
                   <div class="form-section-title">
                     <span>03</span>
-                    <div><strong>自动化策略</strong><small>控制追新、发布与构建行为</small></div>
+                    <div><strong>图形 Menuconfig</strong><small>生成一次菜单，然后选择设备、App 与编译特性</small></div>
                   </div>
-                  <div class="toggle-grid">
-                    <label class="check-row compact-check">
-                      <input id="new-auto-update" type="checkbox">
-                      <span><strong>自动追新</strong><small>自动检测上游变化</small></span>
-                    </label>
-                    <label class="check-row compact-check">
-                      <input id="new-upload-release" type="checkbox" checked>
-                      <span><strong>发布 Release</strong><small>成功后允许发布</small></span>
-                    </label>
-                    <label class="check-row compact-check">
-                      <input id="new-upload-firmware" type="checkbox" checked>
-                      <span><strong>固件 Artifact</strong><small>保留构建产物</small></span>
-                    </label>
-                    <label class="check-row compact-check">
-                      <input id="new-maximize-space" type="checkbox">
-                      <span><strong>扩展构建空间</strong><small>大型源码时开启</small></span>
-                    </label>
-                    <label class="check-row compact-check">
-                      <input id="new-stream-log" type="checkbox" checked>
-                      <span><strong>流式日志</strong><small>实时输出 make 日志</small></span>
-                    </label>
+                  <div class="config-source-choice">
+                    <div>
+                      <strong>配置菜单</strong>
+                      <span id="new-config-studio-state">尚未生成。请先确认上方源码和软件源。</span>
+                    </div>
+                    <button class="button primary" id="new-config-studio" type="button">
+                      生成配置菜单
+                    </button>
                   </div>
+
+                  <details class="advanced-disclosure">
+                    <summary>已有 .config / 高级方式</summary>
+                    <label class="field">
+                      <span>OpenWrt .config</span>
+                      <div class="file-drop">
+                        <input id="new-config-file" type="file" accept=".config,text/plain">
+                        <div class="file-drop-copy">
+                          <strong>选择已有 .config 文件</strong>
+                          <span>也可以直接在下方粘贴或继续手动编辑</span>
+                        </div>
+                      </div>
+                      <textarea id="new-config-text" class="editor create-config-editor" spellcheck="false"
+                                placeholder="通常不需要手写；图形配置完成后会自动填入"></textarea>
+                    </label>
+                  </details>
                 </div>
 
-                <div class="form-section">
-                  <div class="form-section-title">
-                    <span>04</span>
-                    <div><strong>高级校验</strong><small>可选的 Manifest 与额外上游监控</small></div>
+                <details class="advanced-disclosure profile-advanced-options">
+                  <summary>高级选项（可选）· 发布、追新、Manifest 校验</summary>
+                  <div class="profile-advanced-body">
+                    <div class="form-section compact-section">
+                      <div class="form-section-title">
+                        <div><strong>构建与发布</strong><small>一般保持默认即可</small></div>
+                      </div>
+                      <div class="toggle-grid">
+                        <label class="check-row compact-check">
+                          <input id="new-auto-update" type="checkbox">
+                          <span><strong>自动追新</strong><small>自动检测上游变化</small></span>
+                        </label>
+                        <label class="check-row compact-check">
+                          <input id="new-upload-release" type="checkbox" checked>
+                          <span><strong>发布 Release</strong><small>成功后允许发布</small></span>
+                        </label>
+                        <label class="check-row compact-check">
+                          <input id="new-upload-firmware" type="checkbox" checked>
+                          <span><strong>固件 Artifact</strong><small>保留构建产物</small></span>
+                        </label>
+                        <label class="check-row compact-check">
+                          <input id="new-maximize-space" type="checkbox">
+                          <span><strong>扩展构建空间</strong><small>大型源码时开启</small></span>
+                        </label>
+                        <label class="check-row compact-check">
+                          <input id="new-stream-log" type="checkbox" checked>
+                          <span><strong>流式日志</strong><small>实时输出 make 日志</small></span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="form-section compact-section">
+                      <div class="form-section-title">
+                        <div><strong>高级校验</strong><small>Manifest 与额外上游监控</small></div>
+                      </div>
+                      <div class="form-grid two-cols">
+                        <label class="field">
+                          <span>Manifest 必选软件包</span>
+                          <textarea id="new-required-packages" class="compact-input" spellcheck="false"
+                                    placeholder="luci&#10;curl"></textarea>
+                        </label>
+                        <label class="field">
+                          <span>额外 Git 上游监控</span>
+                          <textarea id="new-watch-sources" class="compact-input" spellcheck="false"
+                                    placeholder="label|git_url|branch_or_tag"></textarea>
+                        </label>
+                      </div>
+                    </div>
                   </div>
-                  <div class="form-grid two-cols">
-                    <label class="field">
-                      <span>Manifest 必选软件包</span>
-                      <textarea id="new-required-packages" class="compact-input" spellcheck="false"
-                                placeholder="luci&#10;curl"></textarea>
-                    </label>
-                    <label class="field">
-                      <span>额外 Git 上游监控</span>
-                      <textarea id="new-watch-sources" class="compact-input" spellcheck="false"
-                                placeholder="label|git_url|branch_or_tag"></textarea>
-                    </label>
-                  </div>
-                </div>
+                </details>
 
                 <div class="form-actions">
-                  <button class="button ghost" id="new-profile-preview" type="button">预览标准文件</button>
-                  <button class="button primary" id="new-profile-create" type="submit" disabled>创建分支并发起 PR</button>
+                  <button class="button ghost" id="new-profile-preview" type="button">下一步：预览 Profile</button>
+                  <button class="button primary" id="new-profile-create" type="submit" disabled>完成：创建 Profile PR</button>
                 </div>
               </form>
 
@@ -391,7 +418,13 @@
               <h2 id="config-studio-title">图形配置</h2>
               <p class="panel-description" id="config-studio-context"></p>
             </div>
-            <button class="icon-button" id="config-studio-close" type="button" aria-label="关闭图形配置">×</button>
+            <button class="icon-button" id="config-studio-close" type="button" aria-label="暂存并关闭图形配置" title="暂存并关闭">×</button>
+          </div>
+
+          <div class="config-studio-steps" aria-label="配置步骤">
+            <div class="config-studio-step active" data-config-step="1"><span>1</span><strong>选择设备与 App</strong></div>
+            <div class="config-studio-step" data-config-step="2"><span>2</span><strong>检查依赖</strong></div>
+            <div class="config-studio-step" data-config-step="3"><span>3</span><strong>确认配置</strong></div>
           </div>
 
           <div class="config-studio-status-row">
@@ -399,7 +432,10 @@
               <strong id="config-studio-status">正在准备真实 OpenWrt 配置环境…</strong>
               <span id="config-studio-status-detail">Actions 会读取目标源码、安装 feeds，并运行 make defconfig。</span>
             </div>
-            <a class="text-link" id="config-studio-run-link" href="#" target="_blank" rel="noreferrer" hidden>打开 Actions ↗</a>
+            <details class="config-studio-technical">
+              <summary>后台运行详情</summary>
+              <a class="text-link" id="config-studio-run-link" href="#" target="_blank" rel="noreferrer" hidden>打开 Actions ↗</a>
+            </details>
           </div>
 
           <div id="config-studio-loading" class="config-studio-loading">
@@ -497,11 +533,11 @@
           <p class="build-dialog-status" id="config-studio-error" role="alert" aria-live="polite" hidden></p>
 
           <div class="form-actions config-studio-actions">
-            <button class="button ghost" id="config-studio-cancel" type="button">取消</button>
-            <button class="button ghost" id="config-studio-back" type="button" hidden>继续调整</button>
-            <button class="button primary" id="config-studio-resolve" type="button" disabled>让 Kconfig 校验选择</button>
-            <button class="button primary" id="config-studio-apply" type="button" hidden>生成 Profile PR</button>
-            <button class="button primary" id="config-studio-use" type="button" hidden>使用此配置</button>
+            <button class="button ghost" id="config-studio-cancel" type="button">放弃本次配置</button>
+            <button class="button ghost" id="config-studio-back" type="button" hidden>返回修改</button>
+            <button class="button primary" id="config-studio-resolve" type="button" disabled>下一步：检查依赖</button>
+            <button class="button primary" id="config-studio-apply" type="button" hidden>确认并创建 Profile PR</button>
+            <button class="button primary" id="config-studio-use" type="button" hidden>确认并返回新 Profile</button>
           </div>
         </section>
       </div>

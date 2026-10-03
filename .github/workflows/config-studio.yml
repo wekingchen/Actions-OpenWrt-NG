@@ -63,6 +63,7 @@ jobs:
         source_branch="$(jq -r '.sourceBranch // empty' "$RUNNER_TEMP/config-studio-request.json")"
         adapter="$(jq -r '.adapter // "direct-openwrt"' "$RUNNER_TEMP/config-studio-request.json")"
         profile_id="$(jq -r '.profileId // empty' "$RUNNER_TEMP/config-studio-request.json")"
+        extra_feeds="$(jq -r '.extraFeeds // ""' "$RUNNER_TEMP/config-studio-request.json")"
         [ -n "$source_repo" ] || { echo 'ERROR: sourceRepo missing' >&2; exit 1; }
         [ -n "$source_branch" ] || { echo 'ERROR: sourceBranch missing' >&2; exit 1; }
         [[ "$adapter" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'ERROR: invalid adapter' >&2; exit 1; }
@@ -98,6 +99,7 @@ jobs:
             echo "DIY_PART2="
             echo "POST_FEEDS_SCRIPT="
             echo "PROFILE_FILES_DIR="
+            echo "EXTRA_FEEDS_FILE="
           } >> "$GITHUB_ENV"
         fi
 
@@ -111,6 +113,14 @@ jobs:
         if [ -n "${DIY_PART1:-}" ]; then
           (cd openwrt && bash "$DIY_PART1")
         fi
+
+        extra_feeds="$(jq -r '.extraFeeds // ""' "$RUNNER_TEMP/config-studio-request.json")"
+        extra_feeds_file="${EXTRA_FEEDS_FILE:-}"
+        if [ -n "$extra_feeds" ]; then
+          extra_feeds_file="$RUNNER_TEMP/config-studio-extra-feeds.conf"
+          printf '%s\n' "$extra_feeds" > "$extra_feeds_file"
+        fi
+        scripts/apply-extra-feeds.sh "$GITHUB_WORKSPACE/openwrt" "$extra_feeds_file"
         (cd openwrt && ./scripts/feeds update -a)
         if [ -n "${POST_FEEDS_SCRIPT:-}" ]; then
           (cd openwrt && bash "$POST_FEEDS_SCRIPT")

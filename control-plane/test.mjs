@@ -29,13 +29,14 @@ const templateInput = {
   maximizeSpace: false,
   streamLog: true,
   requiredPackages: "curl\nluci\n",
-  watchSources: "packages|https://github.com/openwrt/packages|master"
+  watchSources: "packages|https://github.com/openwrt/packages|master",
+  extraFeeds: "src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main"
 };
 
 const controlPlaneTemplateFiles = buildProfileTemplateFiles(templateInput);
 const wizardTemplateFiles = buildWizardProfileFiles(templateInput);
 assert.deepEqual(controlPlaneTemplateFiles, wizardTemplateFiles);
-assert.equal(controlPlaneTemplateFiles.length, 6);
+assert.equal(controlPlaneTemplateFiles.length, 7);
 assert.deepEqual(
   Object.keys(profileFilesObject(controlPlaneTemplateFiles)).sort(),
   [
@@ -44,7 +45,8 @@ assert.deepEqual(
     "diy-part2.sh",
     "profile.env",
     "required-packages.txt",
-    "watch-sources.txt"
+    "watch-sources.txt",
+    "feeds.conf"
   ].sort()
 );
 
@@ -169,7 +171,8 @@ const profileFileContents = {
   "diy-part1.sh": "#!/bin/bash\n",
   "diy-part2.sh": "#!/bin/bash\n",
   "required-packages.txt": "",
-  "watch-sources.txt": ""
+  "watch-sources.txt": "",
+  "feeds.conf": ""
 };
 const profileCalls = [];
 const profileFetch = async (url, options = {}) => {
@@ -304,7 +307,7 @@ const createdNewProfilePr = await profileClient.createNewProfilePullRequest(
   profileFilesObject(controlPlaneTemplateFiles)
 );
 assert.equal(createdNewProfilePr.action, "create");
-assert.equal(createdNewProfilePr.changedFiles.length, 6);
+assert.equal(createdNewProfilePr.changedFiles.length, 7);
 assert.equal(createdNewProfilePr.pullRequest.number, 17);
 
 const createTreeCall = [...profileCalls].reverse().find(
@@ -955,7 +958,7 @@ try {
   );
   assert.equal(previewProfileTemplate.status, 200);
   const previewProfileTemplateBody = await previewProfileTemplate.json();
-  assert.equal(previewProfileTemplateBody.files.length, 6);
+  assert.equal(previewProfileTemplateBody.files.length, 7);
 
   const createProfileResponse = await fetch(
     base + "/api/v1/repositories/acme/router/profiles",

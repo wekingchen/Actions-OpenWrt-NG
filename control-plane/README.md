@@ -207,7 +207,7 @@ https://...workers.dev/api/v1/health
 4. 点击仓库与 Profile，确认可以读取标准 `profiles/*` 文件。
 5. 做一次无害编辑，预览差异后创建 Pull Request；确认默认分支没有被直接修改。
 6. 在目标配置行点击“构建”，在确认弹层中保持“本次构建同时发布 Release”关闭后开始构建；确认工作区“最近构建”自动更新，构建页能查看完整历史、Artifact / Release / Actions 出口。
-7. 再测试一次“新建 Profile”：服务端预览应只生成标准 6 文件，创建 PR 后确认默认分支仍未直接变化。
+7. 再测试一次“新建 Profile”：服务端预览应只生成标准 7 文件，创建 PR 后确认默认分支仍未直接变化。
 8. 验证通过后关闭测试 PR、清理临时分支，再在自己的模板实例启用 Pages Control Plane 入口。
 
 这套验证覆盖当前 V2.0A / V2.0B / V2.0C / V2.0D 的核心链路。首次测试建议关闭 Release，避免测试仓库留下无意义发布物。
@@ -298,7 +298,7 @@ Artifact 下载先经过 Control Plane 会话鉴权，再由服务端使用 GitH
 
 ### 10. V2.0D：直接新建标准 Profile
 
-V2.0D 已在独立 Test 仓完成真实端到端验证：通过控制面创建新 Profile 后，默认分支 SHA 保持不变；生成的 Pull Request 恰好包含 6 个标准文件和 1 个 commit；该 commit 的唯一父提交为创建前的 main；DIY 脚本 mode 为 100755，其余文件为 100644；测试 PR 验收后关闭且不合并。
+V2.0D 已在独立 Test 仓完成真实端到端验证：通过控制面创建新 Profile 后，默认分支 SHA 保持不变；生成的 Pull Request 恰好包含 7 个标准文件和 1 个 commit；该 commit 的唯一父提交为创建前的 main；DIY 脚本 mode 为 100755，其余文件为 100644；测试 PR 验收后关闭且不合并。
 
 V2.0D 在控制面中补齐 Profile Wizard 到仓库写入之间的缺口。用户填写与 Wizard 一致的结构化字段：
 
@@ -313,7 +313,7 @@ V2.0D 在控制面中补齐 Profile Wizard 到仓库写入之间的缺口。用�
 ```text
 浏览器提交结构化字段
         ↓
-服务端校验并生成固定 6 个文件
+服务端校验并生成固定 7 个文件
         ↓
 预览（不写 GitHub）
         ↓
@@ -335,13 +335,14 @@ profiles/<id>/diy-part1.sh
 profiles/<id>/diy-part2.sh
 profiles/<id>/required-packages.txt
 profiles/<id>/watch-sources.txt
+profiles/<id>/feeds.conf
 ```
 
 浏览器不能通过该接口提交任意仓库路径；如果目标 Profile 已经存在，返回 `409 profile_already_exists`，不会覆盖。创建前还会再次确认默认分支 head 与检查时的基线 SHA 一致；如果期间仓库发生变化，返回 `409 repository_changed`，不会基于旧 head 静默创建。预览时 `.config` 会发送到用户自己的 Control Plane 做服务端校验，但不会写入 GitHub。
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
 
-V2.0E 解决“创建 `.config` 仍必须在本地搭建编译环境并执行 `make menuconfig`”的问题。Control Plane 现在可以启动一个受控 Config Studio 会话，在 GitHub Actions 中用目标源码和真实 feeds 建立 Kconfig 环境，然后把可选项映射成浏览器图形界面。
+V2.0E 解决“创建 `.config` 仍必须在本地搭建编译环境并执行 `make menuconfig`”的问题。0.12.0 进一步把新 Profile 固定为“源码 → 额外 feeds → 生成菜单 → 选择配置 → 检查依赖 → 确认”的向导。额外 feeds 保存为 `profiles/<id>/feeds.conf`，Config Studio 与正式 Builder 都在 `feeds update -a` 前应用它。
 
 用户仍然亲自决定：
 
@@ -355,7 +356,7 @@ Control Plane 不自己计算依赖。用户提交选择后，Action 实际运�
 - 因依赖条件被 Kconfig 调整或取消的选项。
 - Kconfig 自动加入 / 移除的软件包。
 
-每次 resolve 后会重新生成菜单目录，因此切换 Target 或设备后点击“继续调整”，看到的是新目标上下文下的真实菜单。
+每次 resolve 后会重新生成菜单目录，因此切换 Target 或设备后点击“返回修改”，看到的是新目标上下文下的真实菜单。关闭 Config Studio、按 Esc 或点击遮罩默认只暂存 session；同一源码、feeds 与基础配置再次打开时直接恢复，不再重复触发 catalog Action。只有“放弃本次配置”会删除 session branch。
 
 安全模型：
 
@@ -374,7 +375,7 @@ Control Plane 会话鉴权读取并解压
         ↓
 用户确认
   ├─ 已有 Profile → 只替换 .config → 新分支 + PR
-  └─ 新 Profile   → 带回 V2.0D 创建表单 → 标准 6 文件 PR
+  └─ 新 Profile   → 带回 V2.0D 创建表单 → 标准 7 文件 PR
         ↓
 清理 session branch
 ```

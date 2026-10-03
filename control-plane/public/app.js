@@ -6,7 +6,8 @@ const PROFILE_FILES = [
   "diy-part1.sh",
   "diy-part2.sh",
   "required-packages.txt",
-  "watch-sources.txt"
+  "watch-sources.txt",
+  "feeds.conf"
 ];
 
 const ACTIVE_BUILD_STATUSES = new Set([
@@ -48,7 +49,8 @@ const buildDialogState = {
 const createState = {
   repo: null,
   previewFiles: [],
-  previewValid: false
+  previewValid: false,
+  configStudioDraft: null
 };
 
 const configStudioState = {
@@ -68,7 +70,9 @@ const configStudioState = {
   pollTimer: null,
   pollAttempts: 0,
   generation: 0,
-  restoreFocus: null
+  restoreFocus: null,
+  newFingerprint: "",
+  resumeUi: null
 };
 
 const MAX_CONFIG_STUDIO_POLL_ATTEMPTS = 600;
@@ -172,6 +176,141 @@ const SOURCE_PRESETS = Object.freeze({
     branch: "master"
   }
 });
+
+const PASSWALL_FEEDS = [
+  "src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main",
+  "src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main"
+];
+
+function configStudioDraftStorageKey(repo) {
+  return "openwrt-ng:config-studio:new:" + (repo?.fullName || "unknown");
+}
+
+function fingerprintText(value) {
+  let hash = 2166136261;
+  const text = String(value || "");
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function newConfigStudioFingerprint(repo) {
+  return fingerprintText(
+    JSON.stringify({
+      repo: repo?.fullName || "",
+      sourceRepo: $("new-source-repo")?.value.trim() || "",
+      sourceBranch: $("new-source-branch")?.value.trim() || "",
+      adapter: $("new-adapter")?.value || "",
+      extraFeeds: $("new-extra-feeds")?.value || "",
+      baseConfig: $("new-config-text")?.value || ""
+    })
+  );
+}
+
+function loadNewConfigStudioDraft(repo) {
+  if (!repo) return null;
+  try {
+    const raw = localStorage.getItem(configStudioDraftStorageKey(repo));
+    if (!raw) return null;
+    const value = JSON.parse(raw);
+    return value && typeof value === "object" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveNewConfigStudioDraft(repo, draft) {
+  createState.configStudioDraft = draft || null;
+  if (!repo) return;
+  try {
+    if (draft) {
+      localStorage.setItem(
+        configStudioDraftStorageKey(repo),
+        JSON.stringify(draft)
+      );
+    } else {
+      localStorage.removeItem(configStudioDraftStorageKey(repo));
+    }
+  } catch {}
+}
+
+function configStudioUiSnapshot() {
+  return {
+    targetId: configStudioState.targetId || "",
+    subtargetId: configStudioState.subtargetId || "",
+    deviceProfileId: configStudioState.deviceProfileId || "",
+    modifiedValues: Object.fromEntries(configStudioState.modifiedValues)
+  };
+}
+
+function persistNewConfigStudioUi() {
+  if (
+    configStudioState.context !== "new" ||
+    !configStudioState.repo ||
+    !configStudioState.requestId
+  ) {
+    return;
+  }
+  const draft =
+    createState.configStudioDraft ||
+    loadNewConfigStudioDraft(configStudioState.repo) ||
+    {};
+  if (draft.requestId !== configStudioState.requestId) return;
+  saveNewConfigStudioDraft(configStudioState.repo, {
+    ...draft,
+    ui: configStudioUiSnapshot()
+  });
+}
+
+function restoreNewConfigStudioUi() {
+  const ui = configStudioState.resumeUi;
+  if (!ui || typeof ui !== "object") return false;
+  if (ui.targetId) configStudioState.targetId = String(ui.targetId);
+  if (ui.subtargetId) configStudioState.subtargetId = String(ui.subtargetId);
+  if (ui.deviceProfileId) {
+    configStudioState.deviceProfileId = String(ui.deviceProfileId);
+  }
+  if (
+    ui.modifiedValues &&
+    typeof ui.modifiedValues === "object" &&
+    !Array.isArray(ui.modifiedValues)
+  ) {
+    configStudioState.modifiedValues = new Map(
+      Object.entries(ui.modifiedValues).map(([key, value]) => [
+        key,
+        String(value)
+      ])
+    );
+  }
+  configStudioState.resumeUi = null;
+  return true;
+}
+
+function renderNewConfigStudioState() {
+  const node = $("new-config-studio-state");
+  const button = $("new-config-studio");
+  if (!node || !button) return;
+  const repo = createState.repo;
+  const draft = createState.configStudioDraft || loadNewConfigStudioDraft(repo);
+  createState.configStudioDraft = draft;
+  const fingerprint = repo ? newConfigStudioFingerprint(repo) : "";
+  if (draft?.requestId && draft.fingerprint === fingerprint) {
+    node.textContent = "已有配置会话，可继续上次操作；不会重新生成。";
+    button.textContent = "继续图形配置";
+  } else if (draft?.requestId) {
+    node.textContent = "源码、feeds 或基础 .config 已变化，需要重新生成配置菜单。";
+    button.textContent = "重新生成配置菜单";
+  } else if ($("new-config-text")?.value.trim()) {
+    node.textContent = "已有 .config；可继续用图形界面检查或修改。";
+    button.textContent = "生成配置菜单";
+  } else {
+    node.textContent = "尚未生成。请先确认上方源码和软件源。";
+    button.textContent = "生成配置菜单";
+  }
+}
+
 
 const MAX_BUILD_POLL_ATTEMPTS = 480;
 
@@ -374,7 +513,8 @@ function readNewProfileInput() {
     maximizeSpace: $("new-maximize-space").checked,
     streamLog: $("new-stream-log").checked,
     requiredPackages: $("new-required-packages").value,
-    watchSources: $("new-watch-sources").value
+    watchSources: $("new-watch-sources").value,
+    extraFeeds: $("new-extra-feeds").value
   };
 }
 
@@ -415,8 +555,26 @@ function resetNewProfileForm() {
   $("new-stream-log").checked = true;
   $("new-config-file").value = "";
   $("new-config-text").value = "";
+  $("new-extra-feeds").value = "";
   $("new-required-packages").value = "";
   $("new-watch-sources").value = "";
+
+  createState.configStudioDraft = loadNewConfigStudioDraft(createState.repo);
+  const draft = createState.configStudioDraft;
+  if (draft?.requestId) {
+    $("new-source-repo").value = draft.sourceRepo || $("new-source-repo").value;
+    $("new-source-branch").value =
+      draft.sourceBranch || $("new-source-branch").value;
+    $("new-adapter").value = draft.adapter || "direct-openwrt";
+    $("new-extra-feeds").value = draft.extraFeeds || "";
+    $("new-config-text").value = draft.baseConfig || "";
+    const match = Object.entries(SOURCE_PRESETS).find(([, preset]) =>
+      preset.repo === $("new-source-repo").value.trim() &&
+      preset.branch === $("new-source-branch").value.trim()
+    );
+    $("new-source-preset").value = match?.[0] || "custom";
+  }
+  renderNewConfigStudioState();
   invalidateNewProfilePreview();
 }
 
@@ -1265,6 +1423,14 @@ function setConfigStudioStatus(title, detail = "") {
   $("config-studio-status-detail").textContent = detail;
 }
 
+function setConfigStudioStep(step) {
+  for (const node of document.querySelectorAll("[data-config-step]")) {
+    const value = Number(node.dataset.configStep || 0);
+    node.classList.toggle("active", value === step);
+    node.classList.toggle("done", value < step);
+  }
+}
+
 function currentConfigStudioTarget() {
   return (configStudioState.catalog?.targets || []).find(
     (item) => item.id === configStudioState.targetId
@@ -1378,6 +1544,7 @@ function configStudioOptionValue(symbol, fallback = "n") {
 function setConfigStudioModifiedValue(symbol, value) {
   configStudioState.modifiedValues.set(symbol, String(value));
   updateConfigStudioChangeCount();
+  persistNewConfigStudioUi();
 }
 
 function updateConfigStudioChangeCount() {
@@ -1777,7 +1944,7 @@ function renderConfigStudioResult() {
   $("config-studio-use").hidden = existing;
   setConfigStudioStatus(
     "Kconfig 解析完成",
-    "请检查依赖调整；确认后再生成 Profile PR 或带回新 Profile。"
+    "依赖检查完成。确认无误后，点击右下角的确认按钮进入下一步。"
   );
 }
 
@@ -1798,6 +1965,8 @@ function resetConfigStudioState() {
   configStudioState.baselineDeviceProfileId = "";
   configStudioState.pollAttempts = 0;
   configStudioState.restoreFocus = null;
+  configStudioState.newFingerprint = "";
+  configStudioState.resumeUi = null;
 }
 
 function hideConfigStudioDialog() {
@@ -1824,9 +1993,23 @@ async function deleteConfigStudioSession() {
 
 async function closeConfigStudio({ cleanup = true } = {}) {
   const restoreFocus = configStudioState.restoreFocus;
+  const context = configStudioState.context;
+  const requestId = configStudioState.requestId;
+  const repo = configStudioState.repo;
+  const shouldCleanup = cleanup || context !== "new";
+  if (!shouldCleanup) persistNewConfigStudioUi();
   configStudioState.generation += 1;
   clearConfigStudioPolling();
-  if (cleanup) await deleteConfigStudioSession();
+  if (shouldCleanup) {
+    await deleteConfigStudioSession();
+    if (
+      context === "new" &&
+      createState.configStudioDraft?.requestId === requestId
+    ) {
+      saveNewConfigStudioDraft(repo, null);
+      renderNewConfigStudioState();
+    }
+  }
   hideConfigStudioDialog();
   resetConfigStudioState();
   if (restoreFocus?.isConnected && typeof restoreFocus.focus === "function") {
@@ -1874,15 +2057,20 @@ async function pollConfigStudio(generation) {
     }
 
     if (status === "ready" && data.catalog) {
+      setConfigStudioStep(1);
       setConfigStudioStatus(
-        "配置目录已就绪",
-        "现在由你选择设备、软件包和特性；下一步交给 OpenWrt Kconfig 校验依赖。"
+        "配置菜单已就绪",
+        "选择设备、App 和编译特性；完成后点击“下一步：检查依赖”。"
       );
       renderConfigStudioCatalog(true);
+      if (restoreNewConfigStudioUi()) {
+        renderConfigStudioCatalog(false);
+      }
       return;
     }
 
     if (status === "resolved" && data.result) {
+      setConfigStudioStep(3);
       configStudioState.result = data.result;
       if (data.catalog) {
         configStudioState.catalog = data.catalog;
@@ -1893,14 +2081,16 @@ async function pollConfigStudio(generation) {
     }
 
     if (status === "resolving") {
+      setConfigStudioStep(2);
       setConfigStudioStatus(
         "Kconfig 正在解析选择",
         "正在真实运行 make defconfig，并重新生成当前目标下的菜单目录。"
       );
       $("config-studio-resolve").disabled = true;
     } else {
+      setConfigStudioStep(1);
       setConfigStudioStatus(
-        "正在准备真实 OpenWrt 配置环境",
+        "正在生成配置菜单",
         "正在读取源码、feeds 和设备元数据。"
       );
     }
@@ -1939,7 +2129,8 @@ async function startConfigStudio(repo, options) {
         sourceRepo: options.sourceRepo,
         sourceBranch: options.sourceBranch,
         adapter: options.adapter,
-        baseConfig: options.baseConfig || ""
+        baseConfig: options.baseConfig || "",
+        extraFeeds: options.extraFeeds || ""
       };
 
   resetConfigStudioState();
@@ -1948,6 +2139,8 @@ async function startConfigStudio(repo, options) {
   configStudioState.repo = repo;
   configStudioState.profileId = options.profileId || "";
   configStudioState.context = existing ? "existing" : "new";
+  configStudioState.newFingerprint = options.fingerprint || "";
+  configStudioState.resumeUi = options.resumeUi || null;
   configStudioState.restoreFocus =
     document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -1969,9 +2162,12 @@ async function startConfigStudio(repo, options) {
   $("config-studio-back").hidden = true;
   $("config-studio-apply").hidden = true;
   $("config-studio-use").hidden = true;
+  setConfigStudioStep(1);
   setConfigStudioStatus(
-    "正在提交配置环境",
-    "不会直接修改默认分支；Config Studio 使用受控临时分支保存会话。"
+    options.resumeRequestId ? "正在恢复上次配置" : "正在生成配置菜单",
+    options.resumeRequestId
+      ? "源码和 feeds 没有变化，继续使用上次会话，不会重新启动 Action。"
+      : "后台会读取源码、应用 feeds，并生成可选择的设备、App 与特性。"
   );
 
   $("config-studio-dialog").hidden = false;
@@ -1979,6 +2175,13 @@ async function startConfigStudio(repo, options) {
   $("config-studio-close").focus();
 
   try {
+    if (options.resumeRequestId) {
+      configStudioState.requestId = options.resumeRequestId;
+      configStudioState.pollAttempts = 0;
+      await pollConfigStudio(generation);
+      return;
+    }
+
     const result = await request(configStudioBasePath(repo), {
       method: "POST",
       body: JSON.stringify(payload)
@@ -1990,6 +2193,18 @@ async function startConfigStudio(repo, options) {
       return;
     }
     configStudioState.requestId = result.requestId;
+    if (!existing) {
+      saveNewConfigStudioDraft(repo, {
+        requestId: result.requestId,
+        fingerprint: options.fingerprint || "",
+        sourceRepo: options.sourceRepo || "",
+        sourceBranch: options.sourceBranch || "",
+        adapter: options.adapter || "direct-openwrt",
+        extraFeeds: options.extraFeeds || "",
+        baseConfig: options.baseConfig || ""
+      });
+      renderNewConfigStudioState();
+    }
     if (result.runUrl) {
       $("config-studio-run-link").href = result.runUrl;
       $("config-studio-run-link").hidden = false;
@@ -2017,7 +2232,8 @@ async function resolveConfigStudio() {
   };
   const button = $("config-studio-resolve");
   button.disabled = true;
-  button.textContent = "正在提交…";
+  button.textContent = "正在检查依赖…";
+  setConfigStudioStep(2);
   setConfigStudioError();
 
   try {
@@ -2045,7 +2261,7 @@ async function resolveConfigStudio() {
     setConfigStudioError(error);
     button.disabled = false;
   } finally {
-    button.textContent = "让 Kconfig 校验选择";
+    button.textContent = "下一步：检查依赖";
   }
 }
 
@@ -2083,7 +2299,7 @@ async function applyConfigStudioToProfile() {
     setConfigStudioError(error);
     button.disabled = false;
   } finally {
-    button.textContent = "生成 Profile PR";
+    button.textContent = "确认并创建 Profile PR";
   }
 }
 
@@ -2103,8 +2319,9 @@ async function useConfigStudioForNewProfile() {
   setActiveNavigation("profiles");
   scrollToPanel($("new-profile-card"));
   showNewProfileResult(
-    "已使用真实 Kconfig 解析后的 .config；请预览标准文件后创建 Profile PR。"
+    "图形配置已完成，正在自动生成 Profile 预览。最后检查后点击“完成：创建 Profile PR”。"
   );
+  $("new-profile-preview").click();
 }
 
 async function init() {
@@ -2229,31 +2446,76 @@ document.addEventListener("keydown", (event) => {
     $("user-box").setAttribute("aria-expanded", "false");
     if (!$("build-dialog").hidden) closeBuildDialog();
     if (!$("config-studio-dialog").hidden) {
-      closeConfigStudio({ cleanup: true }).catch((error) => showError(error));
+      closeConfigStudio({ cleanup: false }).catch((error) => showError(error));
     }
   }
 });
 
 $("new-profile-open").addEventListener("click", openNewProfileForm);
 
-$("new-config-studio").addEventListener("click", () => {
+$("new-config-studio").addEventListener("click", async () => {
   const repo = createState.repo;
   const sourceRepo = $("new-source-repo").value.trim();
   const sourceBranch = $("new-source-branch").value.trim();
   const adapter = $("new-adapter").value;
+  const extraFeeds = $("new-extra-feeds").value;
   if (!repo) {
     showError("请先选择仓库。");
     return;
   }
   if (!sourceRepo || !sourceBranch) {
-    showError("请先填写源码仓库与分支 / Tag，再打开图形配置。");
+    showError("请先填写源码仓库与分支 / Tag。");
     return;
   }
+
+  const fingerprint = newConfigStudioFingerprint(repo);
+  let draft = createState.configStudioDraft || loadNewConfigStudioDraft(repo);
+
+  if (draft?.requestId && draft.fingerprint !== fingerprint) {
+    try {
+      await request(
+        configStudioBasePath(repo) + "/" + draft.requestId,
+        { method: "DELETE" }
+      );
+    } catch (error) {
+      if (error.code !== "config_studio_session_not_found") {
+        console.warn("Old Config Studio draft cleanup failed", error);
+      }
+    }
+    saveNewConfigStudioDraft(repo, null);
+    draft = null;
+  }
+
+  if (draft?.requestId && draft.fingerprint === fingerprint) {
+    try {
+      await request(configStudioBasePath(repo) + "/" + draft.requestId);
+      await startConfigStudio(repo, {
+        sourceRepo,
+        sourceBranch,
+        adapter,
+        baseConfig: $("new-config-text").value,
+        extraFeeds,
+        fingerprint,
+        resumeRequestId: draft.requestId,
+        resumeUi: draft.ui || null
+      });
+      return;
+    } catch (error) {
+      if (error.code !== "config_studio_session_not_found") {
+        showError(error);
+        return;
+      }
+      saveNewConfigStudioDraft(repo, null);
+    }
+  }
+
   startConfigStudio(repo, {
     sourceRepo,
     sourceBranch,
     adapter,
-    baseConfig: $("new-config-text").value
+    baseConfig: $("new-config-text").value,
+    extraFeeds,
+    fingerprint
   }).catch((error) => showError(error));
 });
 
@@ -2272,6 +2534,7 @@ $("new-source-preset").addEventListener("change", () => {
     $("new-source-branch").value = preset.branch;
   }
   invalidateNewProfilePreview();
+  renderNewConfigStudioState();
 });
 
 for (const id of ["new-source-repo", "new-source-branch"]) {
@@ -2284,6 +2547,20 @@ for (const id of ["new-source-repo", "new-source-branch"]) {
     $("new-source-preset").value = match?.[0] || "custom";
   });
 }
+
+$("new-feed-passwall").addEventListener("click", () => {
+  const current = $("new-extra-feeds").value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const merged = [...current];
+  for (const line of PASSWALL_FEEDS) {
+    if (!merged.includes(line)) merged.push(line);
+  }
+  $("new-extra-feeds").value = merged.join("\n");
+  invalidateNewProfilePreview();
+  renderNewConfigStudioState();
+});
 
 $("new-config-file").addEventListener("change", async (event) => {
   const file = event.target.files?.[0];
@@ -2298,12 +2575,24 @@ $("new-config-file").addEventListener("change", async (event) => {
 });
 
 for (const id of [
+  "new-source-repo",
+  "new-source-branch",
+  "new-adapter",
+  "new-extra-feeds",
+  "new-config-text"
+]) {
+  $(id).addEventListener("input", renderNewConfigStudioState);
+  $(id).addEventListener("change", renderNewConfigStudioState);
+}
+
+for (const id of [
   "new-profile-id",
   "new-profile-name",
   "new-source-repo",
   "new-source-branch",
   "new-adapter",
   "new-config-text",
+  "new-extra-feeds",
   "new-auto-update",
   "new-upload-release",
   "new-upload-firmware",
@@ -2335,7 +2624,7 @@ $("new-profile-preview").addEventListener("click", async () => {
       body: JSON.stringify(readNewProfileInput())
     });
     createState.previewFiles = data.files || [];
-    createState.previewValid = createState.previewFiles.length === 6;
+    createState.previewValid = createState.previewFiles.length === 7;
     renderNewProfilePreview();
     $("new-profile-create").disabled =
       !createState.previewValid || !canWriteRepo(createState.repo);
@@ -2344,7 +2633,7 @@ $("new-profile-preview").addEventListener("click", async () => {
     showError(error);
   } finally {
     button.disabled = false;
-    button.textContent = "预览标准文件";
+    button.textContent = "下一步：预览 Profile";
   }
 });
 
@@ -2561,6 +2850,7 @@ $("config-studio-target").addEventListener("change", () => {
   configStudioState.deviceProfileId = device?.profileId || "";
   renderConfigStudioTargetSelectors();
   updateConfigStudioChangeCount();
+  persistNewConfigStudioUi();
 });
 
 $("config-studio-subtarget").addEventListener("change", () => {
@@ -2573,11 +2863,13 @@ $("config-studio-subtarget").addEventListener("change", () => {
   configStudioState.deviceProfileId = device?.profileId || "";
   renderConfigStudioTargetSelectors();
   updateConfigStudioChangeCount();
+  persistNewConfigStudioUi();
 });
 
 $("config-studio-device").addEventListener("change", () => {
   configStudioState.deviceProfileId = $("config-studio-device").value;
   updateConfigStudioChangeCount();
+  persistNewConfigStudioUi();
 });
 
 for (const id of [
@@ -2629,11 +2921,13 @@ $("config-studio-back").addEventListener("click", () => {
   configStudioState.baselineSubtargetId = configStudioState.subtargetId;
   configStudioState.baselineDeviceProfileId =
     configStudioState.deviceProfileId;
+  setConfigStudioStep(1);
   setConfigStudioStatus(
-    "继续调整",
-    "以上一轮 make defconfig 的真实结果作为新的起点。"
+    "返回修改",
+    "以上一轮依赖检查结果作为新的起点；修改后可再次检查依赖。"
   );
   renderConfigStudioCatalog(false);
+  persistNewConfigStudioUi();
 });
 
 $("config-studio-apply").addEventListener("click", () => {
@@ -2644,15 +2938,17 @@ $("config-studio-use").addEventListener("click", () => {
   useConfigStudioForNewProfile().catch((error) => setConfigStudioError(error));
 });
 
-for (const id of ["config-studio-close", "config-studio-cancel"]) {
-  $(id).addEventListener("click", () => {
-    closeConfigStudio({ cleanup: true }).catch((error) => showError(error));
-  });
-}
+$("config-studio-close").addEventListener("click", () => {
+  closeConfigStudio({ cleanup: false }).catch((error) => showError(error));
+});
+
+$("config-studio-cancel").addEventListener("click", () => {
+  closeConfigStudio({ cleanup: true }).catch((error) => showError(error));
+});
 
 $("config-studio-dialog").addEventListener("click", (event) => {
   if (event.target === $("config-studio-dialog")) {
-    closeConfigStudio({ cleanup: true }).catch((error) => showError(error));
+    closeConfigStudio({ cleanup: false }).catch((error) => showError(error));
   }
 });
 

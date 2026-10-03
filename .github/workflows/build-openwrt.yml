@@ -307,6 +307,11 @@ jobs:
           )
         fi
 
+    - name: 应用额外 Feeds
+      run: |
+        set -Eeuo pipefail
+        scripts/apply-extra-feeds.sh "$GITHUB_WORKSPACE/openwrt" "$EXTRA_FEEDS_FILE"
+
     - name: 更新 Feeds
       run: |
         set -Eeuo pipefail
@@ -414,6 +419,7 @@ jobs:
           [ -z "$PREFLIGHT_SCRIPT" ] || sha256sum "$PREFLIGHT_SCRIPT"
           [ -z "$DIY_PART1" ] || sha256sum "$DIY_PART1"
           [ -z "$POST_FEEDS_SCRIPT" ] || sha256sum "$POST_FEEDS_SCRIPT"
+          [ -z "$EXTRA_FEEDS_FILE" ] || sha256sum "$EXTRA_FEEDS_FILE"
           [ -z "$DIY_PART2" ] || sha256sum "$DIY_PART2"
           [ ! -s "$GITHUB_WORKSPACE/.openwrt-ng-upstreams.env" ] ||
             sort "$GITHUB_WORKSPACE/.openwrt-ng-upstreams.env"
