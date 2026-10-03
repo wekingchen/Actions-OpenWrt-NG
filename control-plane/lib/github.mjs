@@ -445,7 +445,7 @@ export class GitHubAppClient {
     const safeRepo = encodeSegment(repo);
     const profileId = String(options.profileId || "").trim();
     const requestId = String(options.requestId || "").trim();
-    const limit = Math.min(20, Math.max(1, Number(options.limit) || 10));
+    const limit = Math.min(100, Math.max(1, Number(options.limit) || 10));
 
     if (profileId && !PROFILE_ID_RE.test(profileId)) {
       throw new BuildControlError("invalid_profile_id", 400);

@@ -29,11 +29,16 @@ const editorState = {
 
 const buildState = {
   repo: null,
-  profileId: "",
   requestId: "",
   pollTimer: null,
   pollAttempts: 0,
-  activeRunId: 0
+  hasActiveRuns: false
+};
+
+const buildDialogState = {
+  repo: null,
+  profileId: "",
+  releaseAllowed: false
 };
 
 const createState = {
@@ -53,23 +58,6 @@ function currentRepository() {
   ) || null;
 }
 
-function currentProfileId(repo) {
-  if (!repo) return "";
-  if (
-    buildState.repo?.fullName === repo.fullName &&
-    buildState.profileId
-  ) {
-    return buildState.profileId;
-  }
-  if (
-    editorState.repo?.fullName === repo.fullName &&
-    editorState.profileId
-  ) {
-    return editorState.profileId;
-  }
-  return "";
-}
-
 function setActiveNavigation(name) {
   for (const item of document.querySelectorAll(".sidebar-nav .nav-item")) {
     const active = item.dataset.nav === name;
@@ -77,6 +65,17 @@ function setActiveNavigation(name) {
     if (active) item.setAttribute("aria-current", "page");
     else item.removeAttribute("aria-current");
   }
+}
+
+function showControlPlaneView(name) {
+  const grid = $("workspace-grid");
+  const build = $("build-card");
+  const recent = $("recent-build-card");
+
+  grid.hidden = name === "builder";
+  grid.classList.toggle("config-only", name === "profiles");
+  build.hidden = name !== "builder";
+  recent.hidden = name !== "workspace";
 }
 
 function scrollToPanel(node) {
@@ -88,17 +87,6 @@ async function navigateControlPlane(destination) {
   showError();
   const repo = currentRepository();
 
-  if (destination === "workspace") {
-    setActiveNavigation("workspace");
-    if (!repo) {
-      scrollToPanel($("workspace-empty"));
-      return;
-    }
-    $("build-card").hidden = false;
-    scrollToPanel($("profile-card"));
-    return;
-  }
-
   if (!repo) {
     showError("请先从顶栏选择一个仓库。");
     setActiveNavigation("workspace");
@@ -106,55 +94,28 @@ async function navigateControlPlane(destination) {
     return;
   }
 
+  if (destination === "workspace") {
+    showControlPlaneView("workspace");
+    setActiveNavigation("workspace");
+    scrollToPanel($("profile-card"));
+    return;
+  }
+
   if (destination === "profiles") {
-    if (!$("new-profile-card").hidden) {
-      setActiveNavigation("profiles");
-      scrollToPanel($("new-profile-card"));
-      return;
-    }
-
-    const profileId = currentProfileId(repo);
-    if (!profileId) {
-      showError("请先在工作区选择一个 Profile，再进入配置。");
-      setActiveNavigation("workspace");
-      scrollToPanel($("profile-card"));
-      return;
-    }
-
-    const editorReady =
-      !$("editor-card").hidden &&
-      editorState.repo?.fullName === repo.fullName &&
-      editorState.profileId === profileId;
-
-    if (!editorReady) {
-      await openProfile(repo, profileId, {
-        scroll: false,
-        activateNavigation: false
-      });
-    }
+    showControlPlaneView("profiles");
     setActiveNavigation("profiles");
-    scrollToPanel($("editor-card"));
+    if (!$("new-profile-card").hidden) {
+      scrollToPanel($("new-profile-card"));
+    } else if (!$("editor-card").hidden) {
+      scrollToPanel($("editor-card"));
+    } else {
+      scrollToPanel($("profile-card"));
+    }
     return;
   }
 
   if (destination === "builder") {
-    const profileId = currentProfileId(repo);
-    if (!profileId) {
-      showError("请先在工作区选择一个 Profile，再进入构建。");
-      setActiveNavigation("workspace");
-      scrollToPanel($("profile-card"));
-      return;
-    }
-
-    const buildReady =
-      buildState.repo?.fullName === repo.fullName &&
-      buildState.profileId === profileId;
-
-    if (!buildReady) {
-      await setupBuildControl(repo, profileId);
-    } else {
-      $("build-card").hidden = false;
-    }
+    showControlPlaneView("builder");
     setActiveNavigation("builder");
     scrollToPanel($("build-card"));
   }
@@ -423,9 +384,9 @@ function openNewProfileForm() {
   showError();
   resetNewProfileForm();
   $("editor-card").hidden = true;
-  $("build-card").hidden = true;
   $("new-profile-card").hidden = false;
-  $("new-profile-title").textContent = repo.fullName + " · 新建 Profile";
+  $("new-profile-title").textContent = repo.fullName + " · 新建配置";
+  showControlPlaneView("profiles");
   setActiveNavigation("profiles");
   scrollToPanel($("new-profile-card"));
 }
@@ -531,20 +492,6 @@ function updateRepositoryContext(repo) {
     "repo-meta-chip " + (ready ? "ready" : "limited");
 }
 
-function updateBuildOverview(run) {
-  if (!buildState.profileId) {
-    $("build-meta").textContent = "选择一个 Profile 后显示构建记录。";
-    return;
-  }
-  if (!run) {
-    $("build-meta").textContent =
-      `当前 Profile：${buildState.profileId} · 暂无构建记录`;
-    return;
-  }
-  $("build-meta").textContent =
-    `当前 Profile：${buildState.profileId} · 最近 #${run.runNumber} ${buildStatusLabel(run)}`;
-}
-
 function canReadActions(repo) {
   return ["read", "write"].includes(repo?.permissions?.actions);
 }
@@ -565,6 +512,21 @@ function formatTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
+}
+
+function relativeTime(value) {
+  if (!value) return "—";
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return value;
+  const diff = Math.max(0, Date.now() - time);
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "刚刚";
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} 天前`;
+  return formatTime(value);
 }
 
 function buildStatusLabel(run) {
@@ -600,6 +562,170 @@ function statusClass(run) {
   return "status-neutral";
 }
 
+function buildProfileId(run) {
+  const title = String(run.displayTitle || "");
+  const parts = title.split(" · ").map((item) => item.trim()).filter(Boolean);
+  if (parts[0] === "Build" && parts[1]) return parts[1];
+  return parts.find((part) => !part.startsWith("cp:") && part !== "Build") || "unknown";
+}
+
+function parseProfileReleasePolicy(content) {
+  const match = String(content || "").match(
+    /^\s*UPLOAD_RELEASE\s*=\s*['"]?(true|false)['"]?\s*$/mi
+  );
+  return match ? match[1].toLowerCase() === "true" : false;
+}
+
+function setBuildDialogStatus(message = "", isError = false) {
+  const node = $("build-dialog-status");
+  node.hidden = !message;
+  node.textContent = message;
+  node.classList.toggle("error-text", Boolean(isError));
+}
+
+function closeBuildDialog() {
+  $("build-dialog").hidden = true;
+  document.body.classList.remove("dialog-open");
+  buildDialogState.repo = null;
+  buildDialogState.profileId = "";
+  buildDialogState.releaseAllowed = false;
+  setBuildDialogStatus();
+}
+
+async function openBuildDialog(repo, profileId) {
+  showError();
+  buildDialogState.repo = repo;
+  buildDialogState.profileId = profileId;
+  buildDialogState.releaseAllowed = false;
+
+  $("build-dialog-profile").textContent = profileId;
+  $("build-dialog-title").textContent = `构建 ${profileId}`;
+  $("build-dialog-repo").textContent = repo.fullName;
+  $("publish-release").checked = false;
+  $("publish-release").disabled = true;
+  $("publish-release-help").textContent = "正在读取 Profile 发布策略…";
+  $("trigger-build").disabled = true;
+  setBuildDialogStatus();
+  $("build-dialog").hidden = false;
+  document.body.classList.add("dialog-open");
+
+  try {
+    const data = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}`
+    );
+    const profileEnv = data.profile.files["profile.env"]?.content || "";
+    const releaseAllowed = parseProfileReleasePolicy(profileEnv);
+    buildDialogState.releaseAllowed = releaseAllowed;
+    $("publish-release").disabled = !releaseAllowed;
+    $("publish-release-help").textContent = releaseAllowed
+      ? "Profile 允许发布；开启后仅影响本次构建。"
+      : "此 Profile 的 UPLOAD_RELEASE=false，本次不能发布 Release。";
+
+    if (!canRunRepo(repo)) {
+      $("trigger-build").disabled = true;
+      setBuildDialogStatus("当前 GitHub App 没有 Actions 写权限，不能发起构建。", true);
+    } else {
+      $("trigger-build").disabled = false;
+    }
+  } catch (error) {
+    $("trigger-build").disabled = true;
+    setBuildDialogStatus(friendlyError(error), true);
+  }
+}
+
+function buildStatusIcon(run) {
+  const icon = document.createElement("span");
+  icon.className = `build-status-icon ${statusClass(run)}`;
+  icon.title = buildStatusLabel(run);
+  icon.setAttribute("aria-label", buildStatusLabel(run));
+  icon.setAttribute("role", "img");
+  return icon;
+}
+
+function renderBuildRows(root, runs, options = {}) {
+  root.replaceChildren();
+  const compact = Boolean(options.compact);
+  const visibleRuns = compact ? runs.slice(0, 5) : runs;
+
+  if (!visibleRuns.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state build-empty";
+    const title = document.createElement("strong");
+    title.textContent = buildState.requestId
+      ? "正在等待 GitHub 建立运行记录"
+      : "还没有构建记录";
+    const detail = document.createElement("span");
+    detail.textContent = buildState.requestId
+      ? "请求已经提交，状态会自动刷新。"
+      : "从任意配置行点击“构建”即可发起第一次构建。";
+    empty.append(title, detail);
+    root.appendChild(empty);
+    return;
+  }
+
+  for (const run of visibleRuns) {
+    const row = document.createElement("div");
+    row.className = "build-record";
+
+    const main = document.createElement("button");
+    main.type = "button";
+    main.className = "build-record-main";
+
+    const status = buildStatusIcon(run);
+    const copy = document.createElement("span");
+    copy.className = "build-record-copy";
+    const title = document.createElement("strong");
+    title.textContent = `#${run.runNumber} ${buildProfileId(run)}`;
+
+    const meta = document.createElement("span");
+    meta.className = "build-record-meta";
+    const time = document.createElement("span");
+    time.textContent = relativeTime(run.updatedAt || run.createdAt);
+    const sha = document.createElement("code");
+    sha.textContent = String(run.headSha || "").slice(0, 8) || "—";
+    meta.append(time, sha);
+    copy.append(title, meta);
+    main.append(status, copy);
+
+    main.addEventListener("click", () => {
+      showControlPlaneView("builder");
+      setActiveNavigation("builder");
+      loadBuildDetail(run.id)
+        .then(() => scrollToPanel($("build-detail")))
+        .catch((error) => showError(error));
+    });
+
+    const actions = document.createElement("span");
+    actions.className = "build-record-actions";
+
+    if (run.status === "completed" && run.conclusion === "success") {
+      const outputs = document.createElement("button");
+      outputs.type = "button";
+      outputs.className = "build-record-action";
+      outputs.textContent = compact ? "产物" : "查看产物";
+      outputs.addEventListener("click", () => {
+        showControlPlaneView("builder");
+        setActiveNavigation("builder");
+        loadBuildDetail(run.id)
+          .then(() => scrollToPanel($("build-detail")))
+          .catch((error) => showError(error));
+      });
+      actions.appendChild(outputs);
+    }
+
+    const actionLink = document.createElement("a");
+    actionLink.className = "build-record-action";
+    actionLink.href = run.url;
+    actionLink.target = "_blank";
+    actionLink.rel = "noreferrer";
+    actionLink.textContent = "Actions ↗";
+    actions.appendChild(actionLink);
+
+    row.append(main, actions);
+    root.appendChild(row);
+  }
+}
+
 async function loadBuildDetail(runId) {
   const repo = buildState.repo;
   if (!repo || !runId) return null;
@@ -608,23 +734,22 @@ async function loadBuildDetail(runId) {
     `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds/${runId}`
   );
   const run = data.run;
-  buildState.activeRunId = run.id;
-  updateBuildOverview(run);
 
   $("build-detail").hidden = false;
   $("build-detail-title").textContent =
-    `#${run.runNumber} · ${buildStatusLabel(run)}`;
+    `#${run.runNumber} ${buildProfileId(run)} · ${buildStatusLabel(run)}`;
   $("build-summary-link").href = run.summaryUrl || run.url;
 
   const jobs = $("build-jobs");
   jobs.replaceChildren();
   const jobsTitle = document.createElement("h4");
-  jobsTitle.textContent = "Jobs";
+  jobsTitle.textContent = "任务";
   jobs.appendChild(jobsTitle);
+
   if (!run.jobs.length) {
     const empty = document.createElement("p");
     empty.className = "muted";
-    empty.textContent = "暂时还没有 Job 信息。";
+    empty.textContent = "暂时还没有任务信息。";
     jobs.appendChild(empty);
   } else {
     for (const job of run.jobs) {
@@ -648,18 +773,21 @@ async function loadBuildDetail(runId) {
   const artifacts = $("build-artifacts");
   artifacts.replaceChildren();
   const artifactsTitle = document.createElement("h4");
-  artifactsTitle.textContent = "Artifacts";
+  artifactsTitle.textContent = "固件产物";
   artifacts.appendChild(artifactsTitle);
   const availableArtifacts = run.artifacts.filter((item) => !item.expired);
+
   if (!availableArtifacts.length) {
     const empty = document.createElement("p");
     empty.className = "muted";
-    empty.textContent = "当前没有可下载 Artifact。";
+    empty.textContent = run.status === "completed"
+      ? "本次运行没有可下载的 Artifact。"
+      : "构建完成后将在这里显示固件 Artifact。";
     artifacts.appendChild(empty);
   } else {
     for (const artifact of availableArtifacts) {
       const row = document.createElement("a");
-      row.className = "build-link-row";
+      row.className = "build-link-row output-link-row";
       row.href = artifact.url;
       row.target = "_blank";
       row.rel = "noreferrer";
@@ -667,7 +795,7 @@ async function loadBuildDetail(runId) {
       strong.textContent = artifact.name;
       const span = document.createElement("span");
       span.textContent =
-        `${Math.max(1, Math.round(artifact.sizeBytes / 1024))} KiB`;
+        `下载固件 ↗ · ${Math.max(1, Math.round(artifact.sizeBytes / 1024))} KiB`;
       row.append(strong, span);
       artifacts.appendChild(row);
     }
@@ -678,16 +806,17 @@ async function loadBuildDetail(runId) {
   const releaseTitle = document.createElement("h4");
   releaseTitle.textContent = "Release";
   release.appendChild(releaseTitle);
+
   if (run.release) {
     const link = document.createElement("a");
-    link.className = "build-link-row";
+    link.className = "build-link-row output-link-row";
     link.href = run.release.url;
     link.target = "_blank";
     link.rel = "noreferrer";
     const strong = document.createElement("strong");
     strong.textContent = run.release.name || run.release.tag;
     const span = document.createElement("span");
-    span.textContent = formatTime(run.release.publishedAt);
+    span.textContent = "打开 Release ↗";
     link.append(strong, span);
     release.appendChild(link);
   } else {
@@ -695,217 +824,109 @@ async function loadBuildDetail(runId) {
     empty.className = "muted";
     empty.textContent =
       run.status === "completed"
-        ? "本次运行没有匹配到 Release。"
-        : "运行完成后如成功发布，会在这里显示。";
+        ? "本次构建没有发布 Release。"
+        : "运行完成后如发布 Release，会在这里显示。";
     release.appendChild(empty);
   }
 
   return run;
 }
 
-function finishBuildPolling(run) {
-  clearBuildPolling();
-  buildState.requestId = "";
-  buildState.activeRunId = 0;
-  buildState.pollAttempts = 0;
-  showBuildResult(
-    `构建 #${run.runNumber} 已完成：${buildStatusLabel(run)}。`
-  );
-}
-
-async function pollActiveBuild() {
-  if (!buildState.activeRunId) return;
-  const run = await loadBuildDetail(buildState.activeRunId);
-  if (!run) return;
-
-  buildState.pollAttempts += 1;
-  showBuildResult(
-    `构建 #${run.runNumber}：${buildStatusLabel(run)}。`
-  );
-
-  if (ACTIVE_BUILD_STATUSES.has(run.status)) {
-    scheduleBuildPoll(15000);
-  } else {
-    finishBuildPolling(run);
-  }
-}
-
-function scheduleBuildPoll(delay = 5000) {
+function scheduleBuildPoll(delay = 15000) {
   clearBuildPolling();
   if (
-    (!buildState.activeRunId && !buildState.requestId) ||
+    (!buildState.hasActiveRuns && !buildState.requestId) ||
     buildState.pollAttempts >= MAX_BUILD_POLL_ATTEMPTS
   ) {
     return;
   }
 
-  buildState.pollTimer = setTimeout(async () => {
-    try {
-      if (buildState.activeRunId) {
-        await pollActiveBuild();
-      } else {
-        await loadBuildRuns({
-          requestId: buildState.requestId,
-          polling: true
-        });
-      }
-    } catch (error) {
+  buildState.pollTimer = setTimeout(() => {
+    loadBuildRuns({ polling: true }).catch((error) => {
       buildState.pollAttempts += 1;
       showBuildResult(
         `状态刷新暂时失败，将继续自动重试：${error.message}`
       );
       scheduleBuildPoll(5000);
-    }
+    });
   }, delay);
 }
 
 async function loadBuildRuns(options = {}) {
   const repo = buildState.repo;
-  if (!repo || !buildState.profileId) return;
+  if (!repo || !canReadActions(repo)) return;
 
-  const requestId = options.requestId || "";
-  const params = new URLSearchParams({
-    profile: buildState.profileId,
-    limit: "10"
-  });
-  if (requestId) params.set("request_id", requestId);
-
-  const data = await request(
-    `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds?${params}`
-  );
-  const root = $("build-runs");
-  root.replaceChildren();
-
-  if (!data.runs.length) {
-    updateBuildOverview(null);
-    const empty = document.createElement("div");
-    empty.className = "empty-state build-empty";
-
-    const title = document.createElement("strong");
-    title.textContent = requestId
-      ? "正在等待 GitHub 建立运行记录"
-      : "还没有构建记录";
-    const detail = document.createElement("span");
-    detail.textContent = requestId
-      ? "Builder 请求已提交，页面会自动继续刷新。"
-      : "可以直接从这里发起这个 Profile 的第一次构建。";
-    empty.append(title, detail);
-
-    if (!requestId && canRunRepo(repo)) {
-      const action = document.createElement("button");
-      action.type = "button";
-      action.className = "button primary compact-action";
-      action.textContent = "发起构建";
-      action.addEventListener("click", () => $("trigger-build").click());
-      empty.appendChild(action);
-    }
-
-    root.appendChild(empty);
-
-    if (requestId) {
+  const requestId = options.requestId || buildState.requestId || "";
+  if (requestId) {
+    const lookup = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds?request_id=${encodeURIComponent(requestId)}&limit=1`
+    );
+    if (!lookup.runs.length) {
+      buildState.requestId = requestId;
+      buildState.hasActiveRuns = true;
+      showBuildResult("构建请求已提交，正在等待 GitHub 建立运行记录。");
+      if (!$("recent-build-runs").querySelector(".build-record")) {
+        renderBuildRows($("recent-build-runs"), [], { compact: true });
+      }
+      if (!$("build-runs").querySelector(".build-record")) {
+        renderBuildRows($("build-runs"), []);
+      }
       buildState.pollAttempts += 1;
       scheduleBuildPoll(2500);
+      return;
     }
-    return;
+    buildState.requestId = "";
   }
 
-  for (const run of data.runs) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "build-item";
+  const data = await request(
+    `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds?limit=100`
+  );
 
-    const left = document.createElement("span");
-    const strong = document.createElement("strong");
-    strong.textContent = `#${run.runNumber} · ${run.displayTitle}`;
-    const small = document.createElement("small");
-    small.textContent =
-      `${formatTime(run.createdAt)} · ${run.headSha.slice(0, 12)}`;
-    left.append(strong, small);
+  renderBuildRows($("recent-build-runs"), data.runs, { compact: true });
+  renderBuildRows($("build-runs"), data.runs);
 
-    const status = document.createElement("span");
-    status.className = `status-pill ${statusClass(run)}`;
-    status.textContent = buildStatusLabel(run);
+  buildState.hasActiveRuns = data.runs.some((run) =>
+    ACTIVE_BUILD_STATUSES.has(run.status)
+  );
+  buildState.pollAttempts = options.polling
+    ? buildState.pollAttempts + 1
+    : 0;
 
-    button.append(left, status);
-    button.addEventListener("click", () =>
-      loadBuildDetail(run.id).catch((error) => showError(error))
-    );
-    root.appendChild(button);
-  }
-
-  const first = data.runs[0];
-  updateBuildOverview(first);
-  if (requestId) {
-    buildState.activeRunId = first.id;
-    await pollActiveBuild();
-    return;
-  }
-
-  if (ACTIVE_BUILD_STATUSES.has(first.status)) {
-    buildState.activeRunId = first.id;
-    buildState.pollAttempts = 0;
-    await pollActiveBuild();
+  if (buildState.hasActiveRuns) {
+    showBuildResult("有构建正在运行，状态会自动刷新。");
+    scheduleBuildPoll(15000);
+  } else {
+    showBuildResult();
+    clearBuildPolling();
   }
 }
 
-async function setupBuildControl(repo, profileId) {
+async function setupBuildHistory(repo) {
   clearBuildPolling();
   buildState.repo = repo;
-  buildState.profileId = profileId;
   buildState.requestId = "";
   buildState.pollAttempts = 0;
-  buildState.activeRunId = 0;
+  buildState.hasActiveRuns = false;
 
-  $("build-card").hidden = false;
-  $("build-title").textContent = "最近构建";
-  $("build-meta").textContent = `当前 Profile：${profileId}`;
-  $("publish-release").checked = false;
+  $("recent-build-card").hidden = false;
+  $("build-card").hidden = true;
   $("build-detail").hidden = true;
   showBuildResult();
 
-  const readable = canReadActions(repo);
-  const ready = canRunRepo(repo);
-  $("actions-permission").textContent = ready
-    ? "Actions 可调度"
-    : readable
-      ? "Actions 只读"
-      : "需 Actions 权限";
-  $("trigger-build").disabled = !ready;
-  $("refresh-builds").disabled = !readable;
-
-  if (!readable) {
-    const root = $("build-runs");
-    root.replaceChildren();
-    const note = document.createElement("p");
-    note.className = "muted";
-    note.textContent =
-      "当前 GitHub App 未授予 Actions 权限；Profile 编辑与 PR 功能仍可正常使用。";
-    root.appendChild(note);
+  if (!canReadActions(repo)) {
+    const message = document.createElement("div");
+    message.className = "empty-state build-empty";
+    const title = document.createElement("strong");
+    title.textContent = "无法读取构建历史";
+    const detail = document.createElement("span");
+    detail.textContent = "GitHub App 需要 Actions 读取权限。";
+    message.append(title, detail);
+    $("recent-build-runs").replaceChildren(message.cloneNode(true));
+    $("build-runs").replaceChildren(message);
     return;
   }
 
   await loadBuildRuns();
-}
-
-function markSelectedProfile(profileId) {
-  const root = $("profiles");
-  for (const item of root.querySelectorAll(".profile-item")) {
-    const selected = item.dataset.profileId === profileId;
-    item.classList.toggle("selected", selected);
-    if (selected) item.setAttribute("aria-current", "true");
-    else item.removeAttribute("aria-current");
-  }
-}
-
-async function selectProfileForBuild(repo, profileId, options = {}) {
-  markSelectedProfile(profileId);
-  await setupBuildControl(repo, profileId);
-  if (options.activateNavigation) {
-    setActiveNavigation("builder");
-  }
-  if (options.scroll) {
-    scrollToPanel($("build-card"));
-  }
 }
 
 async function openProfile(repo, profileId, options = {}) {
@@ -913,8 +934,6 @@ async function openProfile(repo, profileId, options = {}) {
   showWriteResult();
   $("new-profile-card").hidden = true;
   invalidateNewProfilePreview();
-  markSelectedProfile(profileId);
-  await setupBuildControl(repo, profileId);
 
   const data = await request(
     `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}`
@@ -935,7 +954,7 @@ async function openProfile(repo, profileId, options = {}) {
   }
 
   $("editor-card").hidden = false;
-  $("editor-title").textContent = `编辑 ${profileId}`;
+  $("editor-title").textContent = `编辑配置 · ${profileId}`;
   $("editor-meta").textContent =
     `基线：${data.defaultBranch}@${data.baseRefSha.slice(0, 12)} · 保存时只创建新分支和 Pull Request`;
 
@@ -958,7 +977,9 @@ async function openProfile(repo, profileId, options = {}) {
   $("editor-content").readOnly = !writeReady;
   $("create-pr").disabled = true;
   $("preview-card").hidden = true;
+
   if (options.activateNavigation !== false) {
+    showControlPlaneView("profiles");
     setActiveNavigation("profiles");
   }
   if (options.scroll !== false) {
@@ -976,6 +997,7 @@ async function loadProfiles(repo) {
   $("editor-card").hidden = true;
   $("new-profile-card").hidden = true;
   updateRepositoryContext(repo);
+  showControlPlaneView("workspace");
   setActiveNavigation("workspace");
 
   $("new-profile-open").disabled = !canWriteRepo(repo);
@@ -988,26 +1010,7 @@ async function loadProfiles(repo) {
   );
 
   $("profile-card").hidden = false;
-  $("profile-title").textContent = "Profiles";
-
-  buildState.repo = repo;
-  buildState.profileId = "";
-  $("build-card").hidden = false;
-  $("build-title").textContent = "最近构建";
-  $("build-meta").textContent = data.profiles.length
-    ? "选择一个 Profile 后显示构建记录。"
-    : "当前仓库还没有 Profile。";
-  $("publish-release").checked = false;
-  $("build-detail").hidden = true;
-  $("trigger-build").disabled = true;
-  $("refresh-builds").disabled = true;
-  $("actions-permission").textContent = canRunRepo(repo)
-    ? "Actions 可调度"
-    : canReadActions(repo)
-      ? "Actions 只读"
-      : "需 Actions 权限";
-  const buildRoot = $("build-runs");
-  buildRoot.replaceChildren();
+  $("profile-title").textContent = "配置";
 
   const root = $("profiles");
   root.replaceChildren();
@@ -1016,82 +1019,58 @@ async function loadProfiles(repo) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
     const title = document.createElement("strong");
-    title.textContent = "还没有 Profile";
+    title.textContent = "还没有配置";
     const detail = document.createElement("span");
-    detail.textContent = "先新建一套标准构建配置。";
+    detail.textContent = "新建一套标准 Profile 配置后即可开始构建。";
     empty.append(title, detail);
     root.appendChild(empty);
-
-    const buildEmpty = document.createElement("div");
-    buildEmpty.className = "empty-state build-empty";
-    const buildTitle = document.createElement("strong");
-    buildTitle.textContent = "暂无可构建配置";
-    const buildText = document.createElement("span");
-    buildText.textContent = "创建 Profile 后，这里会显示构建操作与最近运行。";
-    buildEmpty.append(buildTitle, buildText);
-    buildRoot.appendChild(buildEmpty);
-    return;
-  }
-
-  for (const profile of data.profiles) {
-    const row = document.createElement("div");
-    row.className = "profile-item";
-    row.dataset.profileId = profile.id;
-
-    const openButton = document.createElement("button");
-    openButton.type = "button";
-    openButton.className = "profile-open";
-
-    const leading = document.createElement("span");
-    leading.className = "list-leading";
-    const icon = document.createElement("span");
-    icon.className = "list-icon";
-    icon.innerHTML = iconSvg("profile");
-    const copy = document.createElement("span");
-    copy.className = "list-copy";
-    const strong = document.createElement("strong");
-    strong.textContent = profile.id;
-    const meta = document.createElement("small");
-    meta.textContent = profile.path;
-    copy.append(strong, meta);
-    leading.append(icon, copy);
-
-    const arrow = document.createElement("span");
-    arrow.className = "profile-open-arrow";
-    arrow.innerHTML = iconSvg("arrow");
-    openButton.append(leading, arrow);
-    openButton.addEventListener("click", () => {
-      openProfile(repo, profile.id).catch((error) => showError(error));
-    });
-
-    const buildButton = document.createElement("button");
-    buildButton.type = "button";
-    buildButton.className = "profile-build-action";
-    buildButton.textContent = "构建";
-    buildButton.title = `选择 ${profile.id} 并进入构建面板`;
-    buildButton.addEventListener("click", () => {
-      selectProfileForBuild(repo, profile.id, {
-        scroll: true,
-        activateNavigation: true
-      }).catch((error) => showError(error));
-    });
-
-    row.append(openButton, buildButton);
-    root.appendChild(row);
-  }
-
-  if (data.profiles.length === 1) {
-    await selectProfileForBuild(repo, data.profiles[0].id);
   } else {
-    const empty = document.createElement("div");
-    empty.className = "empty-state build-empty";
-    const title = document.createElement("strong");
-    title.textContent = "选择一个 Profile";
-    const detail = document.createElement("span");
-    detail.textContent = "选择后会在这里显示最近构建和构建操作。";
-    empty.append(title, detail);
-    buildRoot.appendChild(empty);
+    for (const profile of data.profiles) {
+      const row = document.createElement("div");
+      row.className = "profile-item";
+      row.dataset.profileId = profile.id;
+
+      const openButton = document.createElement("button");
+      openButton.type = "button";
+      openButton.className = "profile-open";
+
+      const leading = document.createElement("span");
+      leading.className = "list-leading";
+      const icon = document.createElement("span");
+      icon.className = "list-icon";
+      icon.innerHTML = iconSvg("profile");
+      const copy = document.createElement("span");
+      copy.className = "list-copy";
+      const strong = document.createElement("strong");
+      strong.textContent = profile.id;
+      const meta = document.createElement("small");
+      meta.textContent = profile.path;
+      copy.append(strong, meta);
+      leading.append(icon, copy);
+
+      const arrow = document.createElement("span");
+      arrow.className = "profile-open-arrow";
+      arrow.innerHTML = iconSvg("arrow");
+      openButton.append(leading, arrow);
+      openButton.addEventListener("click", () => {
+        openProfile(repo, profile.id).catch((error) => showError(error));
+      });
+
+      const buildButton = document.createElement("button");
+      buildButton.type = "button";
+      buildButton.className = "profile-build-action";
+      buildButton.textContent = "构建";
+      buildButton.title = `构建 ${profile.id}`;
+      buildButton.addEventListener("click", () => {
+        openBuildDialog(repo, profile.id).catch((error) => showError(error));
+      });
+
+      row.append(openButton, buildButton);
+      root.appendChild(row);
+    }
   }
+
+  await setupBuildHistory(repo);
 }
 
 async function selectRepository(repo) {
@@ -1219,6 +1198,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     $("account-dropdown").hidden = true;
     $("user-box").setAttribute("aria-expanded", "false");
+    if (!$("build-dialog").hidden) closeBuildDialog();
   }
 });
 
@@ -1227,8 +1207,8 @@ $("new-profile-open").addEventListener("click", openNewProfileForm);
 $("new-profile-close").addEventListener("click", () => {
   $("new-profile-card").hidden = true;
   invalidateNewProfilePreview();
-  if (buildState.repo) $("build-card").hidden = false;
-  setActiveNavigation("workspace");
+  showControlPlaneView("profiles");
+  setActiveNavigation("profiles");
   scrollToPanel($("profile-card"));
 });
 
@@ -1421,50 +1401,46 @@ $("create-pr").addEventListener("click", async () => {
 });
 
 $("trigger-build").addEventListener("click", async () => {
-  const repo = buildState.repo;
-  if (!repo || !buildState.profileId || !canRunRepo(repo)) return;
+  const repo = buildDialogState.repo;
+  const profileId = buildDialogState.profileId;
+  if (!repo || !profileId || !canRunRepo(repo)) return;
 
   const button = $("trigger-build");
   button.disabled = true;
   button.textContent = "正在提交…";
   showError();
-  showBuildResult();
+  setBuildDialogStatus();
 
   try {
     const result = await request(
-      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(buildState.profileId)}/builds`,
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}/builds`,
       {
         method: "POST",
         body: JSON.stringify({
-          publishRelease: $("publish-release").checked
+          publishRelease:
+            buildDialogState.releaseAllowed && $("publish-release").checked
         })
       }
     );
 
-    buildState.requestId = result.requestId;
-    buildState.activeRunId = Number(result.runId || 0);
+    buildState.repo = repo;
+    buildState.requestId = result.requestId || "";
     buildState.pollAttempts = 0;
+    closeBuildDialog();
 
-    if (buildState.activeRunId) {
-      showBuildResult(
-        `GitHub 已创建 Run ${buildState.activeRunId}，正在读取运行状态…`
-      );
-      await pollActiveBuild();
-    } else {
-      showBuildResult(
-        `已提交 Builder 请求 ${result.requestId}，正在等待 GitHub 建立运行记录…`
-      );
-      await loadBuildRuns({ requestId: result.requestId });
-    }
+    await loadBuildRuns({ requestId: result.requestId || "" });
   } catch (error) {
     if (error.code === "build_already_active" && error.body?.activeRun) {
       const run = error.body.activeRun;
-      showError(
-        `这个 Profile 已有构建 #${run.runNumber} 正在${buildStatusLabel(run)}，不会重复触发。`
+      setBuildDialogStatus(
+        `这个 Profile 已有构建 #${run.runNumber} 正在${buildStatusLabel(run)}，不会重复触发。`,
+        true
       );
-      await loadBuildDetail(run.id);
+      buildState.repo = repo;
+      buildState.requestId = "";
+      await loadBuildRuns();
     } else {
-      showError(error);
+      setBuildDialogStatus(friendlyError(error), true);
     }
   } finally {
     button.textContent = "开始构建";
@@ -1472,11 +1448,19 @@ $("trigger-build").addEventListener("click", async () => {
   }
 });
 
-$("refresh-builds").addEventListener("click", () => {
-  clearBuildPolling();
-  buildState.requestId = "";
-  buildState.pollAttempts = 0;
-  loadBuildRuns().catch((error) => showError(error));
+for (const id of ["refresh-builds", "refresh-recent-builds"]) {
+  $(id).addEventListener("click", () => {
+    clearBuildPolling();
+    buildState.requestId = "";
+    buildState.pollAttempts = 0;
+    loadBuildRuns().catch((error) => showError(error));
+  });
+}
+
+$("build-dialog-close").addEventListener("click", closeBuildDialog);
+$("build-dialog-cancel").addEventListener("click", closeBuildDialog);
+$("build-dialog").addEventListener("click", (event) => {
+  if (event.target === $("build-dialog")) closeBuildDialog();
 });
 
 $("logout").addEventListener("click", async () => {

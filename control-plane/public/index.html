@@ -25,7 +25,7 @@
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h6l1.5 2H20v11H4z"/><path d="M4 9h16"/></svg>
           <span>工作区</span>
         </button>
-        <button class="nav-item" type="button" data-nav="profiles" aria-controls="editor-card">
+        <button class="nav-item" type="button" data-nav="profiles" aria-controls="profile-card">
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10l3 3v13H4V7z"/><path d="M8 11h8M8 15h8"/></svg>
           <span>配置</span>
         </button>
@@ -37,7 +37,7 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.9.1</small>
+        <small>Control Plane 0.10.0</small>
       </div>
     </aside>
 
@@ -118,13 +118,13 @@
           </div>
         </section>
 
-        <section class="content-grid">
+        <section class="content-grid" id="workspace-grid">
           <div class="content-primary">
             <section class="panel profile-panel" id="profile-card" hidden>
               <div class="panel-header">
                 <div>
-                  <h2 id="profile-title">Profiles</h2>
-                  <p class="panel-description">选择一个构建配置查看详情，或直接进入构建。</p>
+                  <h2 id="profile-title">配置</h2>
+                  <p class="panel-description">管理 Profile；点击行查看配置，点击“构建”发起一次构建。</p>
                 </div>
                 <button class="button ghost secondary-action" id="new-profile-open" type="button">
                   <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -137,8 +137,8 @@
             <section class="panel create-panel" id="new-profile-card" hidden>
               <div class="panel-header">
                 <div>
-                  <p class="eyebrow">New Profile</p>
-                  <h2 id="new-profile-title">新建 Profile</h2>
+                  <p class="eyebrow">配置</p>
+                  <h2 id="new-profile-title">新建配置</h2>
                   <p class="panel-description">服务端生成固定 6 个标准文件，并通过独立分支 + Pull Request 安全写入。</p>
                 </div>
                 <button class="icon-button" id="new-profile-close" type="button" aria-label="关闭">×</button>
@@ -284,8 +284,8 @@
             <section class="panel" id="editor-card" hidden>
               <div class="panel-header">
                 <div>
-                  <p class="eyebrow">Profile Editor</p>
-                  <h2 id="editor-title">编辑 Profile</h2>
+                  <p class="eyebrow">配置</p>
+                  <h2 id="editor-title">编辑配置</h2>
                   <p class="panel-description" id="editor-meta"></p>
                 </div>
                 <span class="permission-pill" id="write-permission"></span>
@@ -327,47 +327,83 @@
           </div>
 
           <aside class="content-secondary">
-            <section class="panel build-panel" id="build-card" hidden>
-              <div class="panel-header">
+            <section class="panel recent-build-panel" id="recent-build-card" hidden>
+              <div class="panel-header compact-panel-header">
                 <div>
-                  <h2 id="build-title">最近构建</h2>
-                  <p class="panel-description" id="build-meta">选择一个 Profile 后显示构建记录。</p>
+                  <h2>最近构建</h2>
+                  <p class="panel-description">当前仓库最近 5 次构建。</p>
                 </div>
-                <span class="permission-pill" id="actions-permission"></span>
+                <button class="icon-button refresh-icon-button" id="refresh-recent-builds" type="button" aria-label="刷新最近构建" title="刷新">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+                </button>
               </div>
-
-              <label class="check-row release-check">
-                <input id="publish-release" type="checkbox">
-                <span>
-                  <strong>发布 Release</strong>
-                  <small>默认关闭；仍受 Profile 配置控制</small>
-                </span>
-              </label>
-
-              <div class="form-actions">
-                <button class="button primary" id="trigger-build" type="button">开始构建</button>
-                <button class="button ghost" id="refresh-builds" type="button">刷新</button>
-              </div>
-
-              <p class="success" id="build-result" aria-live="polite" hidden></p>
-              <div id="build-runs" class="build-list"></div>
-
-              <div id="build-detail" class="build-detail" hidden>
-                <div class="preview-header">
-                  <div>
-                    <span class="preview-kicker">Run details</span>
-                    <h3 id="build-detail-title">运行详情</h3>
-                  </div>
-                  <a class="text-link" id="build-summary-link" href="#" target="_blank" rel="noreferrer">打开 Summary ↗</a>
-                </div>
-                <div id="build-jobs" class="build-sublist"></div>
-                <div id="build-artifacts" class="build-sublist"></div>
-                <div id="build-release" class="build-sublist"></div>
-              </div>
+              <div id="recent-build-runs" class="build-list compact-build-list"></div>
             </section>
-
           </aside>
         </section>
+
+        <section class="panel build-history-panel" id="build-card" hidden>
+          <div class="panel-header compact-panel-header">
+            <div>
+              <h2 id="build-title">构建</h2>
+              <p class="panel-description">完整构建历史、运行详情与固件产物。</p>
+            </div>
+            <button class="icon-button refresh-icon-button" id="refresh-builds" type="button" aria-label="刷新构建历史" title="刷新">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+            </button>
+          </div>
+
+          <p class="success" id="build-result" aria-live="polite" hidden></p>
+          <div id="build-runs" class="build-list build-history-list"></div>
+
+          <div id="build-detail" class="build-detail" hidden>
+            <div class="preview-header">
+              <div>
+                <span class="preview-kicker">构建详情</span>
+                <h3 id="build-detail-title">运行详情</h3>
+              </div>
+              <a class="text-link" id="build-summary-link" href="#" target="_blank" rel="noreferrer">打开 Actions ↗</a>
+            </div>
+            <div id="build-jobs" class="build-sublist"></div>
+            <div id="build-artifacts" class="build-sublist"></div>
+            <div id="build-release" class="build-sublist"></div>
+          </div>
+        </section>
+      </main>
+
+      <div class="build-dialog-backdrop" id="build-dialog" hidden>
+        <section class="build-dialog" role="dialog" aria-modal="true" aria-labelledby="build-dialog-title">
+          <div class="build-dialog-handle" aria-hidden="true"></div>
+          <div class="panel-header build-dialog-header">
+            <div>
+              <p class="eyebrow">本次构建</p>
+              <h2 id="build-dialog-title">构建</h2>
+              <p class="panel-description" id="build-dialog-repo"></p>
+            </div>
+            <button class="icon-button" id="build-dialog-close" type="button" aria-label="关闭构建选项">×</button>
+          </div>
+
+          <div class="build-target">
+            <span>目标 Profile</span>
+            <strong id="build-dialog-profile">—</strong>
+          </div>
+
+          <label class="check-row release-check build-release-option">
+            <input id="publish-release" type="checkbox">
+            <span>
+              <strong>本次构建同时发布 Release</strong>
+              <small id="publish-release-help">正在读取 Profile 发布策略…</small>
+            </span>
+          </label>
+
+          <p class="build-dialog-status" id="build-dialog-status" aria-live="polite" hidden></p>
+
+          <div class="form-actions build-dialog-actions">
+            <button class="button ghost" id="build-dialog-cancel" type="button">取消</button>
+            <button class="button primary" id="trigger-build" type="button">开始构建</button>
+          </div>
+        </section>
+      </div>
       </main>
     </div>
   </div>
