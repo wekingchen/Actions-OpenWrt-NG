@@ -1912,7 +1912,7 @@ function configStudioDependencyConditionMatches(condition) {
 
   const compact = source.replace(/\s+/g, "");
   const tokens = compact.match(
-    /&&|\|\||!|\(|\)|[A-Za-z_][A-Za-z0-9_]*/g
+    /&&|\|\||!|\(|\)|[A-Za-z_][A-Za-z0-9_.+@/-]*/g
   );
   if (!tokens || tokens.join("") !== compact) return false;
 
@@ -1926,7 +1926,7 @@ function configStudioDependencyConditionMatches(condition) {
       index += 1;
       return value;
     }
-    if (!token || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(token)) {
+    if (!token || !/^[A-Za-z_][A-Za-z0-9_.+@/-]*$/.test(token)) {
       throw new Error("dependency expression");
     }
     index += 1;
