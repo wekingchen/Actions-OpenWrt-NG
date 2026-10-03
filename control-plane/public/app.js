@@ -2074,6 +2074,9 @@ function renderConfigStudioDependencySummary() {
   const locks = configStudioState.dependencyLocks;
   const total = locks.size;
 
+  if (!total && configStudioState.dependencyOnly) {
+    configStudioState.dependencyOnly = false;
+  }
   node.hidden = total === 0;
   count.textContent =
     total +
@@ -2631,10 +2634,17 @@ function renderConfigStudioPackages() {
       y: "编入固件",
       m: "仅编译模块"
     };
-    const assignable =
+    const baseAssignable =
       Array.isArray(pkg.assignable) && pkg.assignable.length
         ? pkg.assignable
         : ["n", "m", "y"];
+    const assignable = lock
+      ? baseAssignable.filter(
+          (value) =>
+            configStudioTristateRank(value) >=
+            configStudioTristateRank(lock.value)
+        )
+      : baseAssignable;
     for (const value of assignable) {
       const option = document.createElement("option");
       option.value = value;
@@ -2649,11 +2659,16 @@ function renderConfigStudioPackages() {
       select.appendChild(option);
     }
     select.value = displayValue;
-    select.disabled = Boolean(lock || baselineLocked);
-    if (select.disabled) {
-      select.title = lock
-        ? "该软件包由已选择项目的必需依赖锁定，不能取消"
-        : "该软件包当前由 OpenWrt Kconfig 固定，不能手动修改";
+    select.disabled = Boolean(
+      baselineLocked || (lock && assignable.length <= 1)
+    );
+    if (lock) {
+      select.title =
+        "该软件包由必需依赖锁定，不能低于 " +
+        (lock.value === "y" ? "编入固件" : "仅编译模块") +
+        "；可用范围与最终值仍由 OpenWrt Kconfig 确认";
+    } else if (baselineLocked) {
+      select.title = "该软件包当前由 OpenWrt Kconfig 固定，不能手动修改";
     }
     select.addEventListener("change", () => {
       const scrollTop = root.scrollTop;
