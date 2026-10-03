@@ -851,6 +851,7 @@ async function loadProfiles(repo) {
   createState.repo = repo;
   repositoryState.selectedFullName = repo.fullName;
   $("current-repo-label").textContent = repo.fullName;
+  $("repo-panel-title").textContent = "当前仓库";
   $("repo-switcher").value = repo.fullName;
   setMetric(
     "metric-build-status",
@@ -978,6 +979,12 @@ async function init() {
   avatar.width = 32;
   avatar.height = 32;
   avatar.referrerPolicy = "no-referrer";
+  avatar.addEventListener("error", () => {
+    const fallback = document.createElement("span");
+    fallback.className = "user-avatar-fallback";
+    fallback.textContent = session.user.login.slice(0, 1).toUpperCase();
+    avatar.replaceWith(fallback);
+  }, { once: true });
   const login = document.createElement("strong");
   login.textContent = session.user.login;
   const caret = document.createElement("span");
