@@ -1446,6 +1446,84 @@ function setConfigStudioStatus(title, detail = "") {
   $("config-studio-status-detail").textContent = detail;
 }
 
+function configStudioElapsed(startedAt) {
+  const started = Date.parse(String(startedAt || ""));
+  if (!Number.isFinite(started)) return "";
+  const seconds = Math.max(0, Math.floor((Date.now() - started) / 1000));
+  if (seconds < 60) return `已用时 ${seconds} 秒`;
+  const minutes = Math.floor(seconds / 60);
+  const remain = seconds % 60;
+  return `已用时 ${minutes} 分 ${String(remain).padStart(2, "0")} 秒`;
+}
+
+function resetConfigStudioProgress(mode = "catalog") {
+  const resolving = mode === "resolve";
+  $("config-studio-progress-title").textContent = resolving
+    ? "等待依赖检查任务"
+    : "等待 GitHub Runner";
+  $("config-studio-progress-detail").textContent = resolving
+    ? "正在等待新的 resolve Action 建立运行记录。"
+    : "正在建立本次配置任务，随后会显示真实 Action 步骤。";
+  $("config-studio-progress-count").textContent = "准备中";
+  $("config-studio-progress-elapsed").textContent = "";
+  $("config-studio-progress-bar").style.width = "0%";
+  $("config-studio-progress-track").setAttribute("aria-valuenow", "0");
+  $("config-studio-progress-steps").replaceChildren();
+}
+
+function renderConfigStudioProgress(progress, run, mode = "catalog") {
+  if (!progress || !Array.isArray(progress.steps) || !progress.steps.length) {
+    resetConfigStudioProgress(mode);
+    if (run?.startedAt) {
+      $("config-studio-progress-elapsed").textContent =
+        configStudioElapsed(run.startedAt);
+    }
+    return;
+  }
+
+  const current = progress.failed || progress.current || "处理中";
+  $("config-studio-progress-title").textContent = current;
+  $("config-studio-progress-detail").textContent = progress.failed
+    ? "后台步骤失败，请展开“后台运行详情”查看 Actions 日志。"
+    : current === "更新 Feeds" || current === "安装 Feeds"
+      ? "Feeds 数量较多时这一阶段通常最久；页面会继续自动更新。"
+      : "进度来自当前 GitHub Actions 的真实 job steps。";
+  $("config-studio-progress-count").textContent =
+    `已完成 ${progress.completed} / ${progress.total} 步`;
+  $("config-studio-progress-elapsed").textContent =
+    configStudioElapsed(run?.startedAt);
+
+  const percent = Math.max(
+    0,
+    Math.min(100, Number(progress.percent || 0))
+  );
+  $("config-studio-progress-bar").style.width = percent + "%";
+  $("config-studio-progress-track").setAttribute(
+    "aria-valuenow",
+    String(percent)
+  );
+
+  const root = $("config-studio-progress-steps");
+  root.replaceChildren();
+  for (const step of progress.steps) {
+    const node = document.createElement("div");
+    node.className = "config-studio-progress-step";
+    if (
+      step.status === "completed" &&
+      step.conclusion &&
+      !["success", "skipped", "neutral"].includes(step.conclusion)
+    ) {
+      node.classList.add("failed");
+    } else if (step.status === "completed") {
+      node.classList.add("done");
+    } else if (step.status === "in_progress") {
+      node.classList.add("running");
+    }
+    node.textContent = step.name;
+    root.appendChild(node);
+  }
+}
+
 function setConfigStudioStep(step) {
   for (const node of document.querySelectorAll("[data-config-step]")) {
     const value = Number(node.dataset.configStep || 0);
@@ -2065,6 +2143,11 @@ async function pollConfigStudio(generation) {
     }
 
     const status = data.status?.status || "preparing";
+    renderConfigStudioProgress(
+      data.progress,
+      data.run,
+      data.status?.mode || (status === "resolving" ? "resolve" : "catalog")
+    );
     if (status === "failed") {
       setConfigStudioStatus(
         "配置环境生成失败",
@@ -2178,6 +2261,7 @@ async function startConfigStudio(repo, options) {
     : repo.fullName + " · " + options.sourceRepo + " @ " + options.sourceBranch;
   $("config-studio-loading").hidden = false;
   $("config-studio-workbench").hidden = true;
+  resetConfigStudioProgress("catalog");
   $("config-studio-result").hidden = true;
   $("config-studio-run-link").hidden = true;
   $("config-studio-resolve").hidden = false;
@@ -2275,6 +2359,7 @@ async function resolveConfigStudio() {
     configStudioState.pollAttempts = 0;
     $("config-studio-loading").hidden = false;
     $("config-studio-workbench").hidden = true;
+    resetConfigStudioProgress("resolve");
     setConfigStudioStatus(
       "Kconfig 正在解析选择",
       "正在运行 make defconfig；依赖变化会在完成后逐项展示。"

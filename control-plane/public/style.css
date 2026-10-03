@@ -2455,21 +2455,24 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   line-height: 1.5;
 }
 .config-studio-loading {
-  min-height: 180px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 28px;
+  min-height: 220px;
+  display: grid;
+  gap: 18px;
+  padding: 22px;
   border: 1px dashed var(--border);
   border-radius: 14px;
   color: var(--muted);
   text-align: left;
 }
-.config-studio-loading > div {
+.config-studio-loading-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.config-studio-loading-head > div {
   display: grid;
   gap: 4px;
-  max-width: 520px;
+  min-width: 0;
 }
 .config-studio-loading strong {
   color: var(--text);
@@ -2478,6 +2481,73 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 .config-studio-loading span {
   font-size: 11px;
   line-height: 1.6;
+}
+.config-studio-progress {
+  display: grid;
+  gap: 10px;
+}
+.config-studio-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 10px;
+}
+.config-studio-progress-meta strong {
+  font-size: 10px;
+}
+.config-studio-progress-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-soft);
+  border: 1px solid var(--border);
+}
+.config-studio-progress-track > span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width .25s ease;
+}
+.config-studio-progress-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.config-studio-progress-step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: var(--panel-soft);
+  border: 1px solid var(--border);
+  font-size: 9px;
+}
+.config-studio-progress-step::before {
+  content: "○";
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+.config-studio-progress-step.running {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.config-studio-progress-step.running::before {
+  content: "●";
+  color: var(--accent);
+}
+.config-studio-progress-step.done::before {
+  content: "✓";
+  color: var(--accent-strong);
+}
+.config-studio-progress-step.failed {
+  color: var(--danger, #b42318);
+}
+.config-studio-progress-step.failed::before {
+  content: "×";
 }
 .config-studio-spinner {
   width: 24px;
@@ -2493,6 +2563,12 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
   .config-studio-spinner { animation: none; border-top-color: var(--border); }
+  .config-studio-progress-track > span { transition: none; }
+}
+@media (max-width: 640px) {
+  .config-studio-progress-steps {
+    grid-template-columns: 1fr;
+  }
 }
 
 .config-studio-workbench {

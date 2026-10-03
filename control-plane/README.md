@@ -342,7 +342,7 @@ profiles/<id>/feeds.conf
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
 
-V2.0E 解决“创建 `.config` 仍必须在本地搭建编译环境并执行 `make menuconfig`”的问题。0.13.0 延续“源码 → 额外 feeds → 生成菜单 → 选择配置 → 检查依赖 → 确认”的向导，并增加 feed 优先级/同名包覆盖语义。额外 feeds 保存为 `profiles/<id>/feeds.conf`，Config Studio 与正式 Builder 都在 `feeds update -a` 前应用它；带 `--force` 的 feed 由 OpenWrt 在 `feeds install` 阶段覆盖 core/default 同名包。
+V2.0E 解决“创建 `.config` 仍必须在本地搭建编译环境并执行 `make menuconfig`”的问题。0.14.0 延续“源码 → 额外 feeds → 生成菜单 → 选择配置 → 检查依赖 → 确认”的向导，并增加真实 GitHub Actions step 进度显示；feed 优先级/同名包覆盖语义保持不变。额外 feeds 保存为 `profiles/<id>/feeds.conf`，Config Studio 与正式 Builder 都在 `feeds update -a` 前应用它；带 `--force` 的 feed 由 OpenWrt 在 `feeds install` 阶段覆盖 core/default 同名包。
 
 用户仍然亲自决定：
 
@@ -357,6 +357,8 @@ Control Plane 不自己计算依赖。用户提交选择后，Action 实际运�
 - 用户请求被原样接受的选项。
 - 因依赖条件被 Kconfig 调整或取消的选项。
 - Kconfig 自动加入 / 移除的软件包。
+
+Config Studio Workflow 已拆成可观察阶段：读取请求、安装解析工具、加载 Profile、准备 OpenWrt 源码、应用额外 Feeds、更新 Feeds、安装 Feeds、运行 Kconfig、生成菜单、上传结果。Session API 会读取当前 run 的 jobs/steps，前端每轮轮询同步“已完成 X/Y 步”、当前步骤和已用时。Feeds update/install 阶段会明确提示通常耗时较长；不提供虚假的剩余分钟数。
 
 每次 resolve 后会重新生成菜单目录，因此切换 Target 或设备后点击“返回修改”，看到的是新目标上下文下的真实菜单。关闭 Config Studio、按 Esc 或点击遮罩默认只暂存 session；同一源码、feeds 与基础配置再次打开时直接恢复，不再重复触发 catalog Action。只有“放弃本次配置”会删除 session branch。
 

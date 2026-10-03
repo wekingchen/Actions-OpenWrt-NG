@@ -103,13 +103,16 @@ jobs:
           } >> "$GITHUB_ENV"
         fi
 
-    - name: 准备真实 OpenWrt 配置环境
+    - name: 准备 OpenWrt 源码
       run: |
         set -Eeuo pipefail
         "$ADAPTER_SCRIPT" install-deps
         "$ADAPTER_SCRIPT" prepare
         [ -d openwrt ] || { echo 'ERROR: Adapter 未生成 openwrt build root' >&2; exit 1; }
 
+    - name: 应用源码预处理与额外 Feeds
+      run: |
+        set -Eeuo pipefail
         if [ -n "${DIY_PART1:-}" ]; then
           (cd openwrt && bash "$DIY_PART1")
         fi
@@ -121,10 +124,18 @@ jobs:
           printf '%s\n' "$extra_feeds" > "$extra_feeds_file"
         fi
         scripts/apply-extra-feeds.sh "$GITHUB_WORKSPACE/openwrt" "$extra_feeds_file"
+
+    - name: 更新 Feeds
+      run: |
+        set -Eeuo pipefail
         (cd openwrt && ./scripts/feeds update -a)
         if [ -n "${POST_FEEDS_SCRIPT:-}" ]; then
           (cd openwrt && bash "$POST_FEEDS_SCRIPT")
         fi
+
+    - name: 安装 Feeds
+      run: |
+        set -Eeuo pipefail
         bash scripts/install-feeds.sh "$GITHUB_WORKSPACE/openwrt" "$RUNNER_TEMP/openwrt-ng-feeds-install.log"
 
     - name: 由 Kconfig 生成最终配置

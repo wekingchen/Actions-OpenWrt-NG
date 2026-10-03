@@ -154,6 +154,12 @@ jobs:
         grep -q 'id="new-feed-passwall"' control-plane/public/index.html
         grep -q '继续图形配置' control-plane/public/app.js
         grep -q 'id="config-studio-dialog"' control-plane/public/index.html
+        grep -q 'name: 准备 OpenWrt 源码' .github/workflows/config-studio.yml
+        grep -q 'name: 更新 Feeds' .github/workflows/config-studio.yml
+        grep -q 'name: 安装 Feeds' .github/workflows/config-studio.yml
+        grep -q 'configStudioProgressFromJobs' control-plane/lib/github.mjs
+        grep -q 'id="config-studio-progress-bar"' control-plane/public/index.html
+        grep -q 'renderConfigStudioProgress' control-plane/public/app.js
         grep -q 'function renderConfigStudioPackages' control-plane/public/app.js
         grep -q 'friendlyError' control-plane/public/app.js
         grep -q 'Profile 可读取' control-plane/public/app.js
