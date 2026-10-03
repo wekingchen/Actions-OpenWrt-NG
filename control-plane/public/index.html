@@ -21,100 +21,74 @@
       </div>
 
       <nav class="sidebar-nav" aria-label="主导航">
-        <a class="nav-item active" href="#overview">
-          <span class="nav-icon" aria-hidden="true">⌂</span>
-          <span>概览</span>
+        <a class="nav-item active" href="#repo-card" data-nav="workspace">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h6l1.5 2H20v11H4z"/><path d="M4 9h16"/></svg>
+          <span>工作区</span>
         </a>
-        <a class="nav-item" href="#repo-card">
-          <span class="nav-icon" aria-hidden="true">◫</span>
-          <span>仓库</span>
-        </a>
-        <a class="nav-item" href="#profile-card">
-          <span class="nav-icon" aria-hidden="true">◇</span>
+        <a class="nav-item" href="#profile-card" data-nav="profiles">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10l3 3v13H4V7z"/><path d="M8 11h8M8 15h8"/></svg>
           <span>Profiles</span>
         </a>
-        <a class="nav-item" href="#build-card">
-          <span class="nav-icon" aria-hidden="true">▶</span>
+        <a class="nav-item" href="#build-card" data-nav="builder">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg>
           <span>Builder</span>
         </a>
       </nav>
 
       <div class="sidebar-spacer"></div>
-
-      <div class="sidebar-info">
-        <div class="sidebar-orb" aria-hidden="true"></div>
-        <p>安全地构建、管理并交付你的 OpenWrt 固件。</p>
-        <span>V2 Control Plane</span>
+      <div class="sidebar-footer">
+        <span class="sidebar-status-dot" aria-hidden="true"></span>
+        <div>
+          <strong>服务正常</strong>
+          <small>Control Plane 0.8.0</small>
+        </div>
       </div>
     </aside>
 
     <div class="app-main">
       <header class="topbar">
-        <div class="topbar-title">
-          <p class="eyebrow">OpenWrt NG · Control Plane</p>
-          <h1>构建控制台</h1>
+        <div class="topbar-leading">
+          <div class="mobile-brand" aria-hidden="true">
+            <div class="brand-mark compact"><span></span><span></span><span></span><span></span></div>
+          </div>
+          <div class="topbar-title">
+            <span class="breadcrumb-root">工作台</span>
+            <span class="breadcrumb-separator" aria-hidden="true">/</span>
+            <strong id="current-repo-label">选择仓库</strong>
+          </div>
+          <label class="repo-switcher-wrap" id="repo-switcher-wrap" hidden>
+            <span class="sr-only">切换仓库</span>
+            <select id="repo-switcher" class="repo-switcher" aria-label="切换仓库"></select>
+          </label>
         </div>
 
         <div class="topbar-actions">
-          <div class="connection-badge">
+          <div class="connection-badge" title="Control Plane 服务可用">
             <span class="status-dot"></span>
-            <span>Control Plane</span>
+            <span>服务正常</span>
           </div>
-          <div id="user-box" class="user-box"></div>
+          <div class="account-menu" id="account-menu">
+            <button class="user-box" id="user-box" type="button" aria-haspopup="menu" aria-expanded="false" hidden></button>
+            <div class="account-dropdown" id="account-dropdown" role="menu" hidden>
+              <div class="account-dropdown-head">
+                <strong id="account-login">GitHub</strong>
+                <small>账户与授权</small>
+              </div>
+              <a class="account-action" id="install-app" href="#" role="menuitem" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18"/></svg>
+                调整 GitHub App
+              </a>
+              <button class="account-action danger-action" id="logout" type="button" role="menuitem">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10"/></svg>
+                退出登录
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
       <main class="workspace">
         <p class="error" id="error" role="alert" aria-live="assertive" hidden></p>
-
-        <section class="hero" id="overview">
-          <div class="hero-copy">
-            <span class="hero-kicker">BUILD · MANAGE · AUTOMATE</span>
-            <h2>让 OpenWrt 构建真正变得可管理。</h2>
-            <p>Profile、Pull Request、Builder、Artifact 与 Release 都在同一个控制面完成。</p>
-          </div>
-          <div class="hero-visual" aria-hidden="true">
-            <div class="signal signal-a"></div>
-            <div class="signal signal-b"></div>
-            <div class="signal signal-c"></div>
-            <div class="hero-chip">NG</div>
-          </div>
-        </section>
-
-        <section class="metrics-grid" aria-label="系统概览">
-          <article class="metric-card">
-            <div class="metric-icon mint">◫</div>
-            <div>
-              <span class="metric-label">已授权仓库</span>
-              <strong class="metric-value" id="metric-repo-count">—</strong>
-              <small id="metric-repo-caption">等待 GitHub 连接</small>
-            </div>
-          </article>
-          <article class="metric-card">
-            <div class="metric-icon blue">◇</div>
-            <div>
-              <span class="metric-label">Profiles</span>
-              <strong class="metric-value" id="metric-profile-count">—</strong>
-              <small id="metric-profile-caption">选择仓库后统计</small>
-            </div>
-          </article>
-          <article class="metric-card">
-            <div class="metric-icon violet">↗</div>
-            <div>
-              <span class="metric-label">最近构建</span>
-              <strong class="metric-value metric-value-text" id="metric-build-status">—</strong>
-              <small id="metric-build-caption">暂无运行状态</small>
-            </div>
-          </article>
-          <article class="metric-card">
-            <div class="metric-icon amber">✓</div>
-            <div>
-              <span class="metric-label">仓库能力</span>
-              <strong class="metric-value metric-value-text" id="metric-capability">—</strong>
-              <small id="metric-capability-caption">读取权限后展示</small>
-            </div>
-          </article>
-        </section>
 
         <section class="login-panel" id="login-card">
           <div class="login-visual">
@@ -125,7 +99,7 @@
             </div>
           </div>
           <div class="login-content">
-            <p class="eyebrow">Secure Connection</p>
+            <p class="eyebrow">安全连接</p>
             <h2>连接你的 GitHub</h2>
             <p class="muted">授权信息仅保存在 Control Plane 服务端；浏览器不会获得 GitHub access token。</p>
             <p class="setup-status" id="setup-status">正在检查 GitHub App 配置…</p>
@@ -135,19 +109,51 @@
           </div>
         </section>
 
-        <section class="panel" id="repo-card" hidden>
-          <div class="panel-header">
+        <section class="panel repo-panel" id="repo-card" hidden>
+          <div class="panel-header repo-panel-header">
             <div>
-              <p class="eyebrow">Repositories</p>
-              <h2>已授权仓库</h2>
-              <p class="panel-description">选择一个仓库进入 Profile 与 Builder 工作区。</p>
-            </div>
-            <div class="header-actions">
-              <a class="button ghost" id="install-app" href="#" hidden>调整 GitHub App</a>
-              <button class="button ghost" id="logout" type="button">退出登录</button>
+              <h2>选择仓库</h2>
+              <p class="panel-description">进入仓库后即可管理 Profile、发起构建并查看产物。</p>
             </div>
           </div>
           <div id="repositories" class="repo-list"></div>
+          <div class="repo-security-note">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.9 8.2 7 10 4.1-1.8 7-5.4 7-10V6z"/><path d="m9.5 12 1.7 1.7 3.6-4"/></svg>
+            <span>Profile 的创建与修改只生成独立分支和 Pull Request，不直接写入默认分支。</span>
+          </div>
+        </section>
+
+        <section class="summary-grid" id="summary-grid" aria-label="当前仓库概览" hidden>
+          <article class="summary-card">
+            <div class="summary-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10l3 3v13H4V7z"/><path d="M8 11h8M8 15h8"/></svg>
+            </div>
+            <div>
+              <span class="summary-label">Profiles</span>
+              <strong class="summary-value" id="metric-profile-count">—</strong>
+              <small id="metric-profile-caption">选择仓库后统计</small>
+            </div>
+          </article>
+          <article class="summary-card">
+            <div class="summary-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg>
+            </div>
+            <div>
+              <span class="summary-label">最近构建</span>
+              <strong class="summary-value summary-value-text" id="metric-build-status">—</strong>
+              <small id="metric-build-caption">选择 Profile 后显示</small>
+            </div>
+          </article>
+          <article class="summary-card">
+            <div class="summary-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.9 8.2 7 10 4.1-1.8 7-5.4 7-10V6z"/><path d="m9.5 12 1.7 1.7 3.6-4"/></svg>
+            </div>
+            <div>
+              <span class="summary-label">仓库能力</span>
+              <strong class="summary-value summary-value-text" id="metric-capability">—</strong>
+              <small id="metric-capability-caption">读取权限后展示</small>
+            </div>
+          </article>
         </section>
 
         <section class="content-grid">
@@ -399,13 +405,6 @@
               </div>
             </section>
 
-            <section class="side-note">
-              <span class="side-note-icon">↗</span>
-              <div>
-                <strong>安全写入</strong>
-                <p>Profile 的创建与修改只会生成独立分支和 Pull Request，默认分支不会被直接修改。</p>
-              </div>
-            </section>
           </aside>
         </section>
       </main>
