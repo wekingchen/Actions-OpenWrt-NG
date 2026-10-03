@@ -37,7 +37,7 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.19.0</small>
+        <small>Control Plane 0.19.1</small>
       </div>
     </aside>
 
@@ -216,7 +216,7 @@
                     <span>额外 feeds</span>
                     <textarea id="new-extra-feeds" class="editor feeds-editor" spellcheck="false"
                               placeholder="src-git my_feed https://github.com/example/openwrt-packages.git;main"></textarea>
-                    <small>这些源会在 <code>./scripts/feeds update -a</code> 前插入。“常用源”都会标记为第三方优先；它们之间出现同名 source package 时自动选择版本最高者，版本相同才按列表顺序稳定择一。修改后需要重新生成配置菜单。</small>
+                    <small>这些源会在 <code>./scripts/feeds update -a</code> 前插入。与源码默认 feed 名称重复时自动保留这里的第三方源；额外 feeds 自己重名则保留第一条。“常用源”都会标记为第三方优先；不同 feed 提供同名 source package 时仍按版本最高者择优。修改后需要重新生成配置菜单。</small>
                   </label>
                 </div>
 
