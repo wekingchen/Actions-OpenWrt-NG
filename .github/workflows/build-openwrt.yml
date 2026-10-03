@@ -615,6 +615,8 @@ jobs:
 
         release_tag="$(date +'%Y.%m.%d-%H%M')-${GITHUB_RUN_NUMBER}"
         mapfile -t assets < <(find release-bundle/assets -maxdepth 1 -type f -print | sort)
+        publish_notes="release-bundle/release.publish.txt"
+        cp release-bundle/release.txt "$publish_notes"
 
         cleanup_release() {
           release_id="$(
@@ -634,16 +636,52 @@ jobs:
             --silent || true
         }
 
-        published=false
-        for attempt in 1 2 3; do
-          echo "创建 Release（第 $attempt/3 次）"
-
-          if gh release create "$release_tag" "${assets[@]}" \
+        publish_exact_target() {
+          local error_file="$1"
+          gh release create "$release_tag" "${assets[@]}" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "$release_tag" \
-            --notes-file release-bundle/release.txt; then
+            --notes-file "$publish_notes" \
+            2> >(tee "$error_file" >&2)
+        }
+
+        publish_default_target() {
+          local error_file="$1"
+          gh release create "$release_tag" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$release_tag" \
+            --notes-file "$publish_notes" \
+            2> >(tee "$error_file" >&2)
+        }
+
+        published=false
+        target_mode="build-commit"
+
+        for attempt in 1 2 3; do
+          error_file="$RUNNER_TEMP/release-create-exact-$attempt.log"
+          : > "$error_file"
+          echo "创建 Release（精确构建提交，第 $attempt/3 次）"
+
+          if publish_exact_target "$error_file"; then
             published=true
+            break
+          fi
+
+          if grep -Fq "Resource not accessible by integration" "$error_file"; then
+            echo "::warning::GitHub 拒绝在历史 workflow commit 上创建 Release；切换为当前默认分支 tag，固件来源仍记录原 Build commit。"
+            cleanup_release
+            target_mode="default-branch-fallback"
+
+            cp release-bundle/release.txt "$publish_notes"
+            cat >> "$publish_notes" <<EOF
+
+        发布目标说明：
+        - 实际固件来源 Workflow Run: #$GITHUB_RUN_NUMBER
+        - 实际固件来源 Commit: $GITHUB_SHA
+        - Release tag target: 当前默认分支
+        - 原因: GitHub Actions GITHUB_TOKEN 无法对与当前默认分支存在 workflow 差异的历史 commit 创建 Release。
+        EOF
             break
           fi
 
@@ -652,13 +690,31 @@ jobs:
           sleep "$((attempt * 3))"
         done
 
+        if [ "$published" != true ] && [ "$target_mode" = "default-branch-fallback" ]; then
+          for attempt in 1 2 3; do
+            error_file="$RUNNER_TEMP/release-create-fallback-$attempt.log"
+            : > "$error_file"
+            echo "创建 Release（当前默认分支 fallback，第 $attempt/3 次）"
+
+            if publish_default_target "$error_file"; then
+              published=true
+              break
+            fi
+
+            echo "fallback 发布失败，清理可能残留的 Release/tag 后重试" >&2
+            cleanup_release
+            sleep "$((attempt * 3))"
+          done
+        fi
+
         [ "$published" = true ] || {
-          echo "ERROR: Release 连续 3 次发布失败" >&2
+          echo "ERROR: Release 连续发布失败" >&2
           exit 1
         }
 
-        echo "发布完成：$release_tag"
+        echo "发布完成：$release_tag（target_mode=$target_mode）"
         echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
+        echo "target_mode=$target_mode" >> "$GITHUB_OUTPUT"
         echo "status=success" >> "$GITHUB_OUTPUT"
 
     - name: 清理旧 Releases
@@ -690,6 +746,7 @@ jobs:
       if: always() && !cancelled()
       env:
         RELEASE_TAG: ${{ steps.release-upload.outputs.tag }}
+        RELEASE_TARGET_MODE: ${{ steps.release-upload.outputs.target_mode }}
         RELEASE_OUTCOME: ${{ steps.release-upload.outcome }}
       run: |
         set -Eeuo pipefail
@@ -708,6 +765,7 @@ jobs:
           echo "|---|---|"
           echo "| 发布状态 | ${RELEASE_OUTCOME:-unknown} |"
           echo "| Release Tag | ${RELEASE_TAG:-未生成} |"
+          echo "| Tag Target 模式 | ${RELEASE_TARGET_MODE:-unknown} |"
           echo "| 附件 | $asset_count 个 · $asset_bytes bytes |"
           echo "| Workflow Run | #$GITHUB_RUN_NUMBER · ${GITHUB_SHA:0:12} |"
           echo

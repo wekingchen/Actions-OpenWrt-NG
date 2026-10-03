@@ -72,6 +72,10 @@ jobs:
         grep -q 'CCACHE_MAXSIZE: 2G' .github/workflows/build-openwrt.yml
         grep -q 'CCACHE_DIR="$PWD/.ccache"' scripts/compile.sh
         grep -q 'ccache 本轮 Hits' scripts/write-summary.sh
+        grep -q 'Resource not accessible by integration' .github/workflows/build-openwrt.yml
+        grep -q 'default-branch-fallback' .github/workflows/build-openwrt.yml
+        grep -q 'target_mode=' .github/workflows/build-openwrt.yml
+        grep -q 'Tag Target 模式' .github/workflows/build-openwrt.yml
         grep -q 'return_run_details: true' control-plane/lib/github.mjs
         grep -q 'friendlyError' control-plane/public/app.js
         grep -q 'Profile 可读取' control-plane/public/app.js
