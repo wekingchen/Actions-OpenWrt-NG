@@ -1010,6 +1010,7 @@ async function openProfile(repo, profileId, options = {}) {
   showError();
   showWriteResult();
   $("new-profile-card").hidden = true;
+  $("editor-card").hidden = true;
   invalidateNewProfilePreview();
 
   const loadVersion = editorState.loadVersion + 1;
@@ -1091,9 +1092,32 @@ async function loadProfiles(repo, selectionVersion) {
     ? "通过 Pull Request 新建标准 Profile"
     : "需要 Contents 与 Pull requests 写权限";
 
-  const data = await request(
-    `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles`
+  $("profile-card").hidden = false;
+  $("profile-title").textContent = "配置";
+  const root = $("profiles");
+  root.replaceChildren(
+    buildStateMessage("正在读取配置", "正在从当前仓库读取 Profile…")
   );
+
+  let data;
+  try {
+    data = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles`
+    );
+  } catch (error) {
+    if (
+      selectionVersion !== repositoryState.selectionVersion ||
+      repositoryState.selectedFullName !== repo.fullName
+    ) {
+      return;
+    }
+    root.replaceChildren(
+      buildStateMessage("配置暂时不可用", friendlyError(error))
+    );
+    await setupBuildHistory(repo);
+    return;
+  }
+
   if (
     selectionVersion !== repositoryState.selectionVersion ||
     repositoryState.selectedFullName !== repo.fullName
@@ -1101,10 +1125,6 @@ async function loadProfiles(repo, selectionVersion) {
     return;
   }
 
-  $("profile-card").hidden = false;
-  $("profile-title").textContent = "配置";
-
-  const root = $("profiles");
   root.replaceChildren();
 
   if (!data.profiles.length) {
