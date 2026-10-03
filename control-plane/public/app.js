@@ -505,7 +505,22 @@ function resetNewProfileForm() {
   $("new-extra-feeds").value = "";
   $("new-required-packages").value = "";
   $("new-watch-sources").value = "";
+
   createState.configStudioDraft = loadNewConfigStudioDraft(createState.repo);
+  const draft = createState.configStudioDraft;
+  if (draft?.requestId) {
+    $("new-source-repo").value = draft.sourceRepo || $("new-source-repo").value;
+    $("new-source-branch").value =
+      draft.sourceBranch || $("new-source-branch").value;
+    $("new-adapter").value = draft.adapter || "direct-openwrt";
+    $("new-extra-feeds").value = draft.extraFeeds || "";
+    $("new-config-text").value = draft.baseConfig || "";
+    const match = Object.entries(SOURCE_PRESETS).find(([, preset]) =>
+      preset.repo === $("new-source-repo").value.trim() &&
+      preset.branch === $("new-source-branch").value.trim()
+    );
+    $("new-source-preset").value = match?.[0] || "custom";
+  }
   renderNewConfigStudioState();
   invalidateNewProfilePreview();
 }
@@ -2120,7 +2135,12 @@ async function startConfigStudio(repo, options) {
     if (!existing) {
       saveNewConfigStudioDraft(repo, {
         requestId: result.requestId,
-        fingerprint: options.fingerprint || ""
+        fingerprint: options.fingerprint || "",
+        sourceRepo: options.sourceRepo || "",
+        sourceBranch: options.sourceBranch || "",
+        adapter: options.adapter || "direct-openwrt",
+        extraFeeds: options.extraFeeds || "",
+        baseConfig: options.baseConfig || ""
       });
       renderNewConfigStudioState();
     }
