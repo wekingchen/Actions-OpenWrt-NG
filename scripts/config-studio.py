@@ -61,7 +61,8 @@ def encode_config_value(symbol: str, value: Any) -> str:
 
 
 def conf_name(value: str) -> str:
-    return value.replace("/", "_").replace(".", "_")
+    # 与 OpenWrt scripts/metadata.pm::confstr() 保持一致：/ . - 都转成下划线。
+    return value.replace("/", "_").replace(".", "_").replace("-", "_")
 
 
 def parse_targetinfo(path: Path, config: dict[str, str]) -> list[dict[str, Any]]:
