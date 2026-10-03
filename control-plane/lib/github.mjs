@@ -1645,11 +1645,15 @@ export class GitHubAppClient {
       const number = Number(pull?.number || 0);
       const branchName = String(pull?.head?.ref || "");
       const headRepo = String(pull?.head?.repo?.full_name || "").toLowerCase();
+      const title = String(pull?.title || "");
+      const body = String(pull?.body || "");
       if (
         !Number.isInteger(number) ||
         number <= 0 ||
         !branchName.startsWith(prefix) ||
-        (headRepo && headRepo !== repoFullName)
+        (headRepo && headRepo !== repoFullName) ||
+        !title.startsWith("profile(" + profileId + "): ") ||
+        !body.startsWith("由 OpenWrt NG Control Plane 创建。")
       ) {
         continue;
       }

@@ -208,7 +208,7 @@ https://...workers.dev/api/v1/health
 5. 做一次无害编辑，预览差异后保存；确认 Control Plane 创建 PR、自动 squash 合并，并清理临时分支。若仓库规则阻止合并，应保留 PR 并在页面提供入口。
 6. 在目标配置行点击“构建”，在确认弹层中保持“本次构建同时发布 Release”关闭后开始构建；确认工作区“最近构建”自动更新，构建页能查看完整历史、Artifact / Release / Actions 出口。
 7. 再测试一次“新建 Profile”：服务端预览应只生成标准 7 文件，保存后 PR 应自动合并到默认分支并清理临时分支。
-8. 验证通过后关闭测试 PR、清理临时分支，再在自己的模板实例启用 Pages Control Plane 入口。
+8. 验证结束后确认没有遗留的 Open Profile PR 与 `openwrt-ng/profile-*` 临时分支，再在自己的模板实例启用 Pages Control Plane 入口。
 
 这套验证覆盖当前 V2.0A / V2.0B / V2.0C / V2.0D 的核心链路。首次测试建议关闭 Release，避免测试仓库留下无意义发布物。
 
