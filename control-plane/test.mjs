@@ -307,7 +307,7 @@ const createdNewProfilePr = await profileClient.createNewProfilePullRequest(
   profileFilesObject(controlPlaneTemplateFiles)
 );
 assert.equal(createdNewProfilePr.action, "create");
-assert.equal(createdNewProfilePr.changedFiles.length, 6);
+assert.equal(createdNewProfilePr.changedFiles.length, 7);
 assert.equal(createdNewProfilePr.pullRequest.number, 17);
 
 const createTreeCall = [...profileCalls].reverse().find(
