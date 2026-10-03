@@ -550,6 +550,37 @@ export function createControlPlaneHandler({ config, store, github }) {
         }
       }
 
+      const artifactDownloadMatch = url.pathname.match(
+        /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/builds\/(\d+)\/artifacts\/(\d+)\/download$/
+      );
+      if (req.method === "GET" && artifactDownloadMatch) {
+        const session = await authenticatedSession(req);
+        if (!session) return json(res, 401, { error: "authentication_required" });
+        const owner = decodeURIComponent(artifactDownloadMatch[1]);
+        const repo = decodeURIComponent(artifactDownloadMatch[2]);
+        try {
+          const location = await github.getBuilderArtifactDownloadUrl(
+            session.accessToken,
+            owner,
+            repo,
+            artifactDownloadMatch[3],
+            artifactDownloadMatch[4]
+          );
+          return redirect(res, location);
+        } catch (error) {
+          if (error instanceof BuildControlError) {
+            return json(res, error.status, { error: error.code });
+          }
+          if (error?.name === "GitHubRequestError") {
+            return json(res, 502, {
+              error: "github_artifact_download_failed",
+              reason: githubErrorReason(error)
+            });
+          }
+          throw error;
+        }
+      }
+
       const buildDetailMatch = url.pathname.match(
         /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/builds\/(\d+)$/
       );
