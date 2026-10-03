@@ -1875,7 +1875,7 @@ function renderConfigStudioResult() {
   $("config-studio-use").hidden = existing;
   setConfigStudioStatus(
     "Kconfig 解析完成",
-    "请检查依赖调整；确认后再生成 Profile PR 或带回新 Profile。"
+    "依赖检查完成。确认无误后，点击右下角的确认按钮进入下一步。"
   );
 }
 
@@ -2218,7 +2218,7 @@ async function applyConfigStudioToProfile() {
     setConfigStudioError(error);
     button.disabled = false;
   } finally {
-    button.textContent = "生成 Profile PR";
+    button.textContent = "确认并创建 Profile PR";
   }
 }
 
