@@ -287,12 +287,12 @@ Builder 增加一个可选的 `control_plane_request_id` 输入。手动运行�
 
 - **工作区**：显示配置摘要与当前仓库最近 5 次构建，不保存“当前 Profile”构建状态。
 - **配置**：管理 Profile；每一行唯一的“构建”入口会打开确认弹层，明确显示本次目标 Profile。
-- **构建**：显示当前仓库完整构建历史、运行详情与产物，不再放置第二个“开始构建”入口。
+- **构建**：显示当前仓库最近 100 次构建、运行详情与产物，不再放置第二个“开始构建”入口。
 - 构建确认弹层里的“本次构建同时发布 Release”只控制本次运行；若目标 Profile 的 `UPLOAD_RELEASE=false`，该开关直接禁用并说明原因。
-- 活动 Run 会自动轮询；手动刷新仅作为小图标补充操作。
+- 活动 Run 会自动轮询；手动刷新仅作为小图标补充操作。切换仓库、快速切换 Profile 或关闭构建弹层时，旧异步响应会被版本隔离，不会覆盖当前视图。
 - 成功记录提供产物入口和 GitHub Actions 链接；详情中展示 Artifact 下载入口、匹配的 Release 和 Job 状态。
 
-Artifact 链接使用 GitHub 自身的登录态，不把 GitHub access token 暴露给浏览器。
+Artifact 下载先经过 Control Plane 会话鉴权，再由服务端使用 GitHub user token 获取短时下载重定向；浏览器不会获得 GitHub access token，也不依赖浏览器是否已单独登录 GitHub。
 
 同一 Profile 已经存在活动构建时，Control Plane 返回 `409 build_already_active`，不会再次排队。
 
