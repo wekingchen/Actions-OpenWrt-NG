@@ -382,6 +382,42 @@ const profileFetch = async (url, options = {}) => {
       html_url: "https://github.com/acme/router/pull/17"
     }, { status: 201 });
   }
+  if (method === "PUT" && path === "/pulls/17/merge") {
+    return Response.json({
+      sha: "d".repeat(40),
+      merged: true,
+      message: "Pull Request successfully merged"
+    });
+  }
+  if (
+    method === "GET" &&
+    path === "/pulls" &&
+    parsed.searchParams.get("state") === "open"
+  ) {
+    return Response.json([
+      {
+        number: 9,
+        title: "profile(default): update via Control Plane",
+        body: "由 OpenWrt NG Control Plane 创建。\n\n旧配置。",
+        head: {
+          ref: "openwrt-ng/profile-default-stale",
+          repo: { full_name: "acme/router" }
+        }
+      },
+      {
+        number: 10,
+        title: "profile(other): update via Control Plane",
+        body: "由 OpenWrt NG Control Plane 创建。\n\n其他配置。",
+        head: {
+          ref: "openwrt-ng/profile-other-stale",
+          repo: { full_name: "acme/router" }
+        }
+      }
+    ]);
+  }
+  if (method === "PATCH" && path === "/pulls/9") {
+    return Response.json({ number: 9, state: "closed" });
+  }
   if (method === "DELETE" && path.startsWith("/git/refs/heads/")) {
     return new Response(null, { status: 204 });
   }
@@ -424,6 +460,13 @@ const createdProfilePr = await profileClient.createProfilePullRequest(
   }
 );
 assert.equal(createdProfilePr.pullRequest.number, 17);
+assert.equal(createdProfilePr.pullRequest.merged, true);
+assert.equal(createdProfilePr.pullRequest.mergeCommitSha, "d".repeat(40));
+assert.equal(createdProfilePr.cleanup.branchDeleted, true);
+assert.deepEqual(
+  createdProfilePr.cleanup.supersededPullRequests.map((item) => item.number),
+  [9]
+);
 assert.deepEqual(createdProfilePr.changedFiles, [".config"]);
 const createdNewProfilePr = await profileClient.createNewProfilePullRequest(
   "ghu_profile",
@@ -435,6 +478,7 @@ const createdNewProfilePr = await profileClient.createNewProfilePullRequest(
 assert.equal(createdNewProfilePr.action, "create");
 assert.equal(createdNewProfilePr.changedFiles.length, 7);
 assert.equal(createdNewProfilePr.pullRequest.number, 17);
+assert.equal(createdNewProfilePr.pullRequest.merged, true);
 
 const createTreeCall = [...profileCalls].reverse().find(
   (call) => call.method === "POST" && call.path === "/git/trees"
@@ -544,6 +588,65 @@ assert.ok(
   profileCalls.some((call) =>
     call.method === "POST" && call.path === "/pulls"
   )
+);
+assert.ok(
+  profileCalls.some((call) =>
+    call.method === "PUT" && call.path === "/pulls/17/merge"
+  )
+);
+assert.ok(
+  profileCalls.some((call) =>
+    call.method === "PATCH" && call.path === "/pulls/9"
+  )
+);
+assert.ok(
+  profileCalls.some((call) =>
+    call.method === "DELETE" &&
+    call.path.startsWith("/git/refs/heads/openwrt-ng/profile-default-")
+  )
+);
+
+const deleteCallsBeforeBlockedMerge = profileCalls.filter(
+  (call) => call.method === "DELETE"
+).length;
+const blockedMergeClient = new GitHubAppClient(
+  {
+    clientId: "Iv1.profile-blocked",
+    clientSecret: "profile-blocked-secret",
+    redirectUri: "https://example.test/api/v1/auth/callback"
+  },
+  async (url, options = {}) => {
+    const parsed = new URL(String(url));
+    const method = String(options.method || "GET").toUpperCase();
+    if (
+      method === "PUT" &&
+      parsed.pathname === "/repos/acme/router/pulls/17/merge"
+    ) {
+      return Response.json(
+        { message: "Merge cannot be performed" },
+        { status: 405 }
+      );
+    }
+    return profileFetch(url, options);
+  }
+);
+const blockedProfilePr = await blockedMergeClient.createProfilePullRequest(
+  "ghu_profile",
+  "acme",
+  "router",
+  "default",
+  {
+    baseRefSha: profileBaseSha,
+    files: changedProfileFiles
+  }
+);
+assert.equal(blockedProfilePr.pullRequest.merged, false);
+assert.equal(blockedProfilePr.pullRequest.mergeReason, "github_http_405");
+assert.equal(blockedProfilePr.cleanup.branchDeleted, false);
+assert.equal(blockedProfilePr.cleanup.supersededPullRequests.length, 0);
+assert.equal(
+  profileCalls.filter((call) => call.method === "DELETE").length,
+  deleteCallsBeforeBlockedMerge
 );
 
 await assert.rejects(

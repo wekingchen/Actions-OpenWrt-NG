@@ -285,7 +285,8 @@
         "branch",
         "commitSha",
         "changedFiles",
-        "pullRequest"
+        "pullRequest",
+        "cleanup"
       ],
       "additionalProperties": false,
       "properties": {
@@ -307,7 +308,10 @@
           "type": "object",
           "required": [
             "number",
-            "url"
+            "url",
+            "merged",
+            "mergeCommitSha",
+            "mergeReason"
           ],
           "additionalProperties": false,
           "properties": {
@@ -317,6 +321,53 @@
             },
             "url": {
               "type": "string"
+            },
+            "merged": {
+              "type": "boolean"
+            },
+            "mergeCommitSha": {
+              "type": "string"
+            },
+            "mergeReason": {
+              "type": "string"
+            }
+          }
+        },
+        "cleanup": {
+          "type": "object",
+          "required": [
+            "branchDeleted",
+            "supersededPullRequests"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "branchDeleted": {
+              "type": "boolean"
+            },
+            "supersededPullRequests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "number",
+                  "branch",
+                  "branchDeleted"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "number": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "branch": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "branchDeleted": {
+                    "type": "boolean"
+                  }
+                }
+              }
             }
           }
         }
@@ -778,8 +829,8 @@
         },
         "files": {
           "type": "array",
-          "minItems": 6,
-          "maxItems": 6,
+          "minItems": 7,
+          "maxItems": 7,
           "items": {
             "$ref": "#/$defs/profileTemplatePreviewFile"
           }
@@ -794,7 +845,8 @@
         "commitSha",
         "changedFiles",
         "action",
-        "pullRequest"
+        "pullRequest",
+        "cleanup"
       ],
       "additionalProperties": false,
       "properties": {
@@ -812,8 +864,8 @@
         },
         "changedFiles": {
           "type": "array",
-          "minItems": 6,
-          "maxItems": 6,
+          "minItems": 7,
+          "maxItems": 7,
           "items": {
             "type": "string"
           }
@@ -825,7 +877,10 @@
           "type": "object",
           "required": [
             "number",
-            "url"
+            "url",
+            "merged",
+            "mergeCommitSha",
+            "mergeReason"
           ],
           "additionalProperties": false,
           "properties": {
@@ -835,6 +890,53 @@
             },
             "url": {
               "type": "string"
+            },
+            "merged": {
+              "type": "boolean"
+            },
+            "mergeCommitSha": {
+              "type": "string"
+            },
+            "mergeReason": {
+              "type": "string"
+            }
+          }
+        },
+        "cleanup": {
+          "type": "object",
+          "required": [
+            "branchDeleted",
+            "supersededPullRequests"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "branchDeleted": {
+              "type": "boolean"
+            },
+            "supersededPullRequests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "number",
+                  "branch",
+                  "branchDeleted"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "number": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "branch": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "branchDeleted": {
+                    "type": "boolean"
+                  }
+                }
+              }
             }
           }
         }

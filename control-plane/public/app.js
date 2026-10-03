@@ -491,6 +491,46 @@ function showNewProfileResult(message = "", url = "") {
   }
 }
 
+function profileWriteResultMessage(result, subject = "Profile") {
+  const pull = result?.pullRequest || {};
+  const number = Number(pull.number || 0);
+  if (pull.merged) {
+    const staleCount = Array.isArray(result?.cleanup?.supersededPullRequests)
+      ? result.cleanup.supersededPullRequests.length
+      : 0;
+    const branchNote =
+      result?.cleanup?.branchDeleted === false
+        ? "；当前临时分支清理未完成"
+        : "；临时分支已清理";
+    const staleNote = staleCount
+      ? "；同时清理 " + staleCount + " 个已被本次保存取代的旧 PR"
+      : "";
+    return (
+      subject +
+      " 已通过 PR #" +
+      number +
+      " 自动合并到默认分支" +
+      branchNote +
+      staleNote +
+      "。"
+    );
+  }
+
+  const reason =
+    pull.mergeReason === "github_http_405" ||
+    pull.mergeReason === "github_http_409"
+      ? "仓库规则、必需检查或分支状态暂时阻止了自动合并"
+      : "自动合并未完成";
+  return (
+    subject +
+    " 已创建 PR #" +
+    number +
+    "，但" +
+    reason +
+    "。PR 与临时分支已保留，请打开 PR 处理。"
+  );
+}
+
 async function request(path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
   const headers = {
@@ -1352,7 +1392,7 @@ async function openProfile(repo, profileId, options = {}) {
   $("editor-card").hidden = false;
   $("editor-title").textContent = `编辑配置 · ${profileId}`;
   $("editor-meta").textContent =
-    `基线：${data.defaultBranch}@${data.baseRefSha.slice(0, 12)} · 保存时只创建新分支和 Pull Request`;
+    `基线：${data.defaultBranch}@${data.baseRefSha.slice(0, 12)} · 保存时创建独立 PR 并自动合并；受仓库规则阻止时保留 PR`;
 
   const select = $("file-select");
   select.replaceChildren();
@@ -2572,7 +2612,7 @@ async function applyConfigStudioToProfile() {
 
   const button = $("config-studio-apply");
   button.disabled = true;
-  button.textContent = "正在创建 PR…";
+  button.textContent = "正在保存…";
   setConfigStudioError();
 
   try {
@@ -2588,7 +2628,7 @@ async function applyConfigStudioToProfile() {
     hideConfigStudioDialog();
     resetConfigStudioState();
     showWriteResult(
-      "图形配置已生成独立分支；默认分支未被直接修改。",
+      profileWriteResultMessage(result, "图形配置"),
       result.pullRequest?.url || ""
     );
     $("preview-card").hidden = true;
@@ -2598,7 +2638,7 @@ async function applyConfigStudioToProfile() {
     setConfigStudioError(error);
     button.disabled = false;
   } finally {
-    button.textContent = "确认并创建 Profile PR";
+    button.textContent = "确认并保存配置";
   }
 }
 
@@ -2938,13 +2978,13 @@ $("new-profile-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!createState.repo || !canWriteRepo(createState.repo)) return;
   if (!createState.previewValid) {
-    showError("内容已经变化，请重新预览标准文件后再创建 Pull Request。");
+    showError("内容已经变化，请重新预览标准文件后再保存。");
     return;
   }
 
   const button = $("new-profile-create");
   button.disabled = true;
-  button.textContent = "正在创建…";
+  button.textContent = "正在保存…";
   showError();
   showNewProfileResult();
 
@@ -2958,7 +2998,7 @@ $("new-profile-form").addEventListener("submit", async (event) => {
       }
     );
     showNewProfileResult(
-      `已为 Profile ${result.profileId} 创建独立分支；默认分支未被直接修改。`,
+      profileWriteResultMessage(result, "Profile " + result.profileId),
       result.pullRequest.url
     );
     createState.previewValid = false;
@@ -2967,7 +3007,7 @@ $("new-profile-form").addEventListener("submit", async (event) => {
     showError(error);
     button.disabled = false;
   } finally {
-    button.textContent = "创建分支并发起 PR";
+    button.textContent = "完成：保存并应用";
   }
 });
 
@@ -3011,13 +3051,13 @@ $("preview-change").addEventListener("click", () => {
 $("create-pr").addEventListener("click", async () => {
   saveCurrentEditorFile();
   if (!editorState.previewValid) {
-    showError("内容已变化，请重新预览后再创建 Pull Request。");
+    showError("内容已变化，请重新预览后再保存。");
     return;
   }
 
   const button = $("create-pr");
   button.disabled = true;
-  button.textContent = "正在创建…";
+  button.textContent = "正在保存…";
   showError();
   showWriteResult();
 
@@ -3034,16 +3074,29 @@ $("create-pr").addEventListener("click", async () => {
       }
     );
     showWriteResult(
-      `已创建分支 ${result.branch}，默认分支未被直接修改。`,
+      profileWriteResultMessage(result, "Profile " + editorState.profileId),
       result.pullRequest.url
     );
+    if (result.pullRequest?.merged) {
+      editorState.baseRefSha =
+        result.pullRequest.mergeCommitSha || editorState.baseRefSha;
+      for (const name of PROFILE_FILES) {
+        editorState.original[name] = editorState.files[name];
+      }
+      $("editor-meta").textContent =
+        "基线：" +
+        repo.defaultBranch +
+        "@" +
+        editorState.baseRefSha.slice(0, 12) +
+        " · 已自动合并，可继续编辑";
+    }
     editorState.previewValid = false;
     $("preview-card").hidden = true;
   } catch (error) {
     showError(error);
     button.disabled = false;
   } finally {
-    button.textContent = "创建分支并发起 PR";
+    button.textContent = "保存并应用";
   }
 });
 
