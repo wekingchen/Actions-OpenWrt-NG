@@ -11,6 +11,10 @@ diagnostic_timeout="${DIAGNOSTIC_TIMEOUT:-20m}"
 
 cd "$build_root"
 
+# OpenWrt 内核构建内部使用 FILES_DIR 指向 target/linux/<target>/files。
+# 不允许 Profile 或外部环境变量覆盖它，否则平台内核附加文件不会复制进构建树。
+unset FILES_DIR
+
 make_env=()
 if [ -n "${MAKE_LD_LIBRARY_PATH_RELATIVE:-}" ]; then
   host_lib="$build_root/$MAKE_LD_LIBRARY_PATH_RELATIVE"
