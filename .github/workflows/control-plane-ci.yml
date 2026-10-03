@@ -72,6 +72,7 @@ jobs:
         python3 scripts/test-config-studio.py
         bash -n scripts/compile.sh
         bash -n scripts/apply-extra-feeds.sh
+        bash -n scripts/install-feeds.sh
         bash -n scripts/cleanup-workflow-runs.sh
         bash -n scripts/write-summary.sh
         python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
@@ -137,6 +138,12 @@ jobs:
         grep -q 'extraFeeds // ""' .github/workflows/config-studio.yml
         grep -q 'config-studio-request.json' .github/workflows/config-studio.yml
         grep -q 'apply-extra-feeds.sh' .github/workflows/build-openwrt.yml
+        grep -q 'install-feeds.sh' .github/workflows/config-studio.yml
+        grep -q 'install-feeds.sh' .github/workflows/build-openwrt.yml
+        grep -q 'id="new-feed-fw876"' control-plane/public/index.html
+        grep -q 'id="new-feed-sbwml"' control-plane/public/index.html
+        grep -q -- '--force helloworld https://github.com/fw876/helloworld.git' control-plane/public/app.js
+        grep -q -- '--force sbwml_helloworld https://github.com/sbwml/openwrt_helloworld.git;v5' control-plane/public/app.js
         grep -q 'EXTRA_FEEDS_FILE' scripts/profile.sh
         grep -q 'id="new-extra-feeds"' control-plane/public/index.html
         grep -q 'id="new-feed-passwall"' control-plane/public/index.html
