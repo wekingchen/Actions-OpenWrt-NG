@@ -1,0 +1,36 @@
+name: Cleanup Config Studio hotfix branch
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/cleanup-config-studio-hotfix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: 删除修复分支
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/fix/config-studio-progress-track-id"
+
+      - name: 检出 main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: 删除一次性清理 Workflow
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm ".github/workflows/cleanup-config-studio-hotfix.yml"
+          git commit -m "chore: remove Config Studio hotfix cleanup helper"
+          git push origin HEAD:main
