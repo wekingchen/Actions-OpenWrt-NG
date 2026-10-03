@@ -20,6 +20,22 @@ fi
 
 started_at="${BUILD_STARTED_AT:-$(date +%s)}"
 
+ccache_bin=""
+if [ -x staging_dir/host/bin/ccache ]; then
+  ccache_bin="staging_dir/host/bin/ccache"
+elif command -v ccache >/dev/null 2>&1; then
+  ccache_bin="$(command -v ccache)"
+fi
+
+if [ -n "$ccache_bin" ]; then
+  mkdir -p .ccache
+  echo "=== OpenWrt ccache 编译前状态 ==="
+  echo "CCACHE_DIR=$PWD/.ccache"
+  du -sh .ccache 2>/dev/null || true
+  CCACHE_DIR="$PWD/.ccache" "$ccache_bin" -s || true
+  CCACHE_DIR="$PWD/.ccache" "$ccache_bin" -z || true
+fi
+
 echo "并行编译：$jobs 线程"
 echo "心跳周期：$heartbeat_seconds 秒"
 
@@ -60,15 +76,12 @@ if [ "$build_status" -eq 0 ]; then
   echo "build.log 最后 40 行："
   tail -n 40 "$log_file" || true
 
-  if [ -x staging_dir/host/bin/ccache ]; then
-    echo "=== OpenWrt ccache 统计 ==="
-    for cache_dir in staging_dir/host/ccache staging_dir/target-*/ccache; do
-      [ -d "$cache_dir" ] || continue
-      echo "--- $cache_dir ---"
-      CCACHE_DIR="$cache_dir" staging_dir/host/bin/ccache -s || true
-    done
-  elif command -v ccache >/dev/null 2>&1; then
-    ccache -s || true
+  if [ -n "$ccache_bin" ]; then
+    echo "=== OpenWrt ccache 本轮统计 ==="
+    echo "CCACHE_DIR=$PWD/.ccache"
+    du -sh .ccache 2>/dev/null || true
+    CCACHE_DIR="$PWD/.ccache" "$ccache_bin" -s |
+      tee "${GITHUB_WORKSPACE:-$PWD}/ccache-stats.txt" || true
   fi
 
   exit 0
