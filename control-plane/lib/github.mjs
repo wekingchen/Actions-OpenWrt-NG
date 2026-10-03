@@ -87,6 +87,29 @@ export class ConfigStudioError extends Error {
   }
 }
 
+function configStudioRunMode(run) {
+  const title = String(run?.display_title || run?.name || "");
+  return title.includes("Config · resolve ·") ? "resolve" : "catalog";
+}
+
+export function selectConfigStudioRun(
+  runs,
+  requestId,
+  expectedMode = "catalog",
+  afterRunId = 0
+) {
+  const safeRuns = Array.isArray(runs) ? runs : [];
+  const threshold = Number(afterRunId || 0);
+  return safeRuns.find((item) => {
+    const title = String(item?.display_title || item?.name || "");
+    return (
+      title.includes(`cs:${requestId}`) &&
+      configStudioRunMode(item) === expectedMode &&
+      Number(item?.id || 0) > threshold
+    );
+  });
+}
+
 export function githubErrorReason(error) {
   const code =
     error && typeof error.githubError === "string"
@@ -1039,7 +1062,9 @@ export class GitHubAppClient {
       baseConfig,
       extraFeeds,
       baseRefSha: state.baseRefSha,
-      selection: { values: {} }
+      selection: { values: {} },
+      pendingMode: "catalog",
+      afterRunId: 0
     };
     const root = `.openwrt-ng/config-studio/${requestId}`;
     try {
@@ -1117,17 +1142,26 @@ export class GitHubAppClient {
     const runs = Array.isArray(runsBody.workflow_runs)
       ? runsBody.workflow_runs
       : [];
-    const run = runs.find((item) =>
-      String(item.display_title || item.name || "").includes(`cs:${requestId}`)
+    const expectedMode =
+      request.pendingMode === "resolve" ? "resolve" : "catalog";
+    const afterRunId = Number(request.afterRunId || 0);
+    const run = selectConfigStudioRun(
+      runs,
+      requestId,
+      expectedMode,
+      afterRunId
     );
 
-    let status = { status: "preparing", mode: "catalog", requestId };
+    let status = {
+      status: expectedMode === "resolve" ? "resolving" : "preparing",
+      mode: expectedMode,
+      requestId
+    };
     let catalog = null;
     let result = null;
 
     if (run) {
-      const title = String(run.display_title || run.name || "");
-      const mode = title.includes("Config · resolve ·") ? "resolve" : "catalog";
+      const mode = configStudioRunMode(run);
       if (run.status !== "completed") {
         status = {
           status: mode === "resolve" ? "resolving" : "preparing",
@@ -1164,8 +1198,8 @@ export class GitHubAppClient {
           result = parsed.result;
         } else {
           status = {
-            status: mode === "resolve" ? "resolving" : "preparing",
-            mode,
+            status: expectedMode === "resolve" ? "resolving" : "preparing",
+            mode: expectedMode,
             requestId
           };
         }
@@ -1258,7 +1292,10 @@ export class GitHubAppClient {
     ) {
       request.baseConfig = current.result.finalConfig;
     }
+    const previousRequest = { ...request };
     request.selection = { values: Object.fromEntries(entries) };
+    request.pendingMode = "resolve";
+    request.afterRunId = Number(current.run?.id || request.afterRunId || 0);
 
     await this.commitConfigStudioFiles(
       token,
@@ -1271,15 +1308,34 @@ export class GitHubAppClient {
       `config-studio(${requestId}): submit selection`
     );
     const state = await this.repositoryState(token, owner, repo);
-    const dispatched = await this.dispatchConfigStudio(
-      token,
-      owner,
-      repo,
-      state.defaultBranch,
-      "resolve",
-      requestId,
-      branchName
-    );
+    let dispatched;
+    try {
+      dispatched = await this.dispatchConfigStudio(
+        token,
+        owner,
+        repo,
+        state.defaultBranch,
+        "resolve",
+        requestId,
+        branchName
+      );
+    } catch (error) {
+      try {
+        await this.commitConfigStudioFiles(
+          token,
+          owner,
+          repo,
+          branchName,
+          {
+            [`${root}/request.json`]: JSON.stringify(previousRequest)
+          },
+          `config-studio(${requestId}): rollback failed resolve dispatch`
+        );
+      } catch (rollbackError) {
+        console.error("Failed to rollback Config Studio request", rollbackError);
+      }
+      throw error;
+    }
     return {
       accepted: true,
       requestId,
