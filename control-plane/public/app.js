@@ -71,7 +71,8 @@ const configStudioState = {
   pollAttempts: 0,
   generation: 0,
   restoreFocus: null,
-  newFingerprint: ""
+  newFingerprint: "",
+  resumeUi: null
 };
 
 const MAX_CONFIG_STUDIO_POLL_ATTEMPTS = 600;
@@ -233,6 +234,58 @@ function saveNewConfigStudioDraft(repo, draft) {
       localStorage.removeItem(configStudioDraftStorageKey(repo));
     }
   } catch {}
+}
+
+function configStudioUiSnapshot() {
+  return {
+    targetId: configStudioState.targetId || "",
+    subtargetId: configStudioState.subtargetId || "",
+    deviceProfileId: configStudioState.deviceProfileId || "",
+    modifiedValues: Object.fromEntries(configStudioState.modifiedValues)
+  };
+}
+
+function persistNewConfigStudioUi() {
+  if (
+    configStudioState.context !== "new" ||
+    !configStudioState.repo ||
+    !configStudioState.requestId
+  ) {
+    return;
+  }
+  const draft =
+    createState.configStudioDraft ||
+    loadNewConfigStudioDraft(configStudioState.repo) ||
+    {};
+  if (draft.requestId !== configStudioState.requestId) return;
+  saveNewConfigStudioDraft(configStudioState.repo, {
+    ...draft,
+    ui: configStudioUiSnapshot()
+  });
+}
+
+function restoreNewConfigStudioUi() {
+  const ui = configStudioState.resumeUi;
+  if (!ui || typeof ui !== "object") return false;
+  if (ui.targetId) configStudioState.targetId = String(ui.targetId);
+  if (ui.subtargetId) configStudioState.subtargetId = String(ui.subtargetId);
+  if (ui.deviceProfileId) {
+    configStudioState.deviceProfileId = String(ui.deviceProfileId);
+  }
+  if (
+    ui.modifiedValues &&
+    typeof ui.modifiedValues === "object" &&
+    !Array.isArray(ui.modifiedValues)
+  ) {
+    configStudioState.modifiedValues = new Map(
+      Object.entries(ui.modifiedValues).map(([key, value]) => [
+        key,
+        String(value)
+      ])
+    );
+  }
+  configStudioState.resumeUi = null;
+  return true;
 }
 
 function renderNewConfigStudioState() {
@@ -1491,6 +1544,7 @@ function configStudioOptionValue(symbol, fallback = "n") {
 function setConfigStudioModifiedValue(symbol, value) {
   configStudioState.modifiedValues.set(symbol, String(value));
   updateConfigStudioChangeCount();
+  persistNewConfigStudioUi();
 }
 
 function updateConfigStudioChangeCount() {
@@ -1912,6 +1966,7 @@ function resetConfigStudioState() {
   configStudioState.pollAttempts = 0;
   configStudioState.restoreFocus = null;
   configStudioState.newFingerprint = "";
+  configStudioState.resumeUi = null;
 }
 
 function hideConfigStudioDialog() {
@@ -1941,9 +1996,11 @@ async function closeConfigStudio({ cleanup = true } = {}) {
   const context = configStudioState.context;
   const requestId = configStudioState.requestId;
   const repo = configStudioState.repo;
+  const shouldCleanup = cleanup || context !== "new";
+  if (!shouldCleanup) persistNewConfigStudioUi();
   configStudioState.generation += 1;
   clearConfigStudioPolling();
-  if (cleanup) {
+  if (shouldCleanup) {
     await deleteConfigStudioSession();
     if (
       context === "new" &&
@@ -2002,10 +2059,13 @@ async function pollConfigStudio(generation) {
     if (status === "ready" && data.catalog) {
       setConfigStudioStep(1);
       setConfigStudioStatus(
-        "配置目录已就绪",
-        "现在由你选择设备、软件包和特性；下一步交给 OpenWrt Kconfig 校验依赖。"
+        "配置菜单已就绪",
+        "选择设备、App 和编译特性；完成后点击“下一步：检查依赖”。"
       );
       renderConfigStudioCatalog(true);
+      if (restoreNewConfigStudioUi()) {
+        renderConfigStudioCatalog(false);
+      }
       return;
     }
 
@@ -2080,6 +2140,7 @@ async function startConfigStudio(repo, options) {
   configStudioState.profileId = options.profileId || "";
   configStudioState.context = existing ? "existing" : "new";
   configStudioState.newFingerprint = options.fingerprint || "";
+  configStudioState.resumeUi = options.resumeUi || null;
   configStudioState.restoreFocus =
     document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -2435,7 +2496,8 @@ $("new-config-studio").addEventListener("click", async () => {
         baseConfig: $("new-config-text").value,
         extraFeeds,
         fingerprint,
-        resumeRequestId: draft.requestId
+        resumeRequestId: draft.requestId,
+        resumeUi: draft.ui || null
       });
       return;
     } catch (error) {
@@ -2788,6 +2850,7 @@ $("config-studio-target").addEventListener("change", () => {
   configStudioState.deviceProfileId = device?.profileId || "";
   renderConfigStudioTargetSelectors();
   updateConfigStudioChangeCount();
+  persistNewConfigStudioUi();
 });
 
 $("config-studio-subtarget").addEventListener("change", () => {
@@ -2800,11 +2863,13 @@ $("config-studio-subtarget").addEventListener("change", () => {
   configStudioState.deviceProfileId = device?.profileId || "";
   renderConfigStudioTargetSelectors();
   updateConfigStudioChangeCount();
+  persistNewConfigStudioUi();
 });
 
 $("config-studio-device").addEventListener("change", () => {
   configStudioState.deviceProfileId = $("config-studio-device").value;
   updateConfigStudioChangeCount();
+  persistNewConfigStudioUi();
 });
 
 for (const id of [
@@ -2856,11 +2921,13 @@ $("config-studio-back").addEventListener("click", () => {
   configStudioState.baselineSubtargetId = configStudioState.subtargetId;
   configStudioState.baselineDeviceProfileId =
     configStudioState.deviceProfileId;
+  setConfigStudioStep(1);
   setConfigStudioStatus(
-    "继续调整",
-    "以上一轮 make defconfig 的真实结果作为新的起点。"
+    "返回修改",
+    "以上一轮依赖检查结果作为新的起点；修改后可再次检查依赖。"
   );
   renderConfigStudioCatalog(false);
+  persistNewConfigStudioUi();
 });
 
 $("config-studio-apply").addEventListener("click", () => {
