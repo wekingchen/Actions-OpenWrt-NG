@@ -796,35 +796,17 @@ jobs:
     timeout-minutes: 10
     permissions:
       actions: write
+      contents: read
 
     steps:
-    - name: 清理旧 Workflow 运行记录
+    - name: 检出清理脚本
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 清理 Workflow 历史
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        set -Eeuo pipefail
-        cutoff_epoch="$(date -u -d '30 days ago' +%s)"
-
-        gh api --paginate           "repos/${GITHUB_REPOSITORY}/actions/workflows?per_page=100"           --jq '.workflows[].id' |
-        while read -r workflow_id; do
-          [ -n "$workflow_id" ] || continue
-
-          mapfile -t runs < <(
-            gh api --paginate               "repos/${GITHUB_REPOSITORY}/actions/workflows/$workflow_id/runs?per_page=100"               --jq '.workflow_runs[] | [.id, .created_at] | @tsv'
-          )
-
-          index=0
-          for row in "${runs[@]}"; do
-            index=$((index + 1))
-            [ "$index" -le 10 ] && continue
-
-            run_id="$(printf '%s\n' "$row" | cut -f1)"
-            created_at="$(printf '%s\n' "$row" | cut -f2)"
-            created_epoch="$(date -u -d "$created_at" +%s)"
-
-            [ "$created_epoch" -lt "$cutoff_epoch" ] || continue
-
-            echo "删除 Workflow run：$run_id（$created_at）"
-            gh api -X DELETE               "repos/${GITHUB_REPOSITORY}/actions/runs/$run_id"               --silent
-          done
-        done
+        WORKFLOW_RETENTION_DAYS: "30"
+        WORKFLOW_KEEP_MINIMUM_RUNS: "10"
+      run: bash scripts/cleanup-workflow-runs.sh
