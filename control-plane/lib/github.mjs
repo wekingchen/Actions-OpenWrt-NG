@@ -105,43 +105,141 @@ const CONFIG_STUDIO_PROGRESS_LABELS = Object.freeze({
   "上传受控配置结果": "上传配置结果"
 });
 
+const SUCCESSFUL_ACTION_CONCLUSIONS = new Set([
+  "success",
+  "skipped",
+  "neutral"
+]);
+
+function summarizeActionSteps(steps, currentDetail = "") {
+  const safeSteps = Array.isArray(steps) ? steps : [];
+  if (!safeSteps.length) return null;
+
+  const completed = safeSteps.filter(
+    (step) => step.status === "completed"
+  ).length;
+  const currentIndex = safeSteps.findIndex(
+    (step) => step.status !== "completed"
+  );
+  const current =
+    currentIndex >= 0 ? safeSteps[currentIndex] : safeSteps[safeSteps.length - 1];
+  const failed = safeSteps.find(
+    (step) =>
+      step.status === "completed" &&
+      step.conclusion &&
+      !SUCCESSFUL_ACTION_CONCLUSIONS.has(step.conclusion)
+  );
+  const percent = failed
+    ? Math.floor((Math.max(0, completed - 1) / safeSteps.length) * 100)
+    : Math.floor((completed / safeSteps.length) * 100);
+
+  return {
+    completed,
+    total: safeSteps.length,
+    percent: Math.max(0, Math.min(100, percent)),
+    current: failed?.name || current?.name || "",
+    currentDetail: failed?.detail || currentDetail || current?.detail || "",
+    failed: failed?.name || "",
+    steps: safeSteps
+  };
+}
+
 export function configStudioProgressFromJobs(jobs) {
   const safeJobs = Array.isArray(jobs) ? jobs : [];
-  const job = safeJobs.find((item) => item?.name === "解析 OpenWrt 配置") || safeJobs[0];
+  const job =
+    safeJobs.find((item) => item?.name === "解析 OpenWrt 配置") ||
+    safeJobs[0];
   const rawSteps = Array.isArray(job?.steps) ? job.steps : [];
   const steps = rawSteps
     .filter((step) => CONFIG_STUDIO_PROGRESS_LABELS[step?.name])
     .map((step) => ({
       name: CONFIG_STUDIO_PROGRESS_LABELS[step.name],
+      detail: String(step.name || ""),
       status: String(step.status || "pending"),
       conclusion: String(step.conclusion || "")
     }));
-  if (!steps.length) return null;
+  const rawCurrent =
+    rawSteps.find((step) => step?.status === "in_progress") ||
+    rawSteps.find(
+      (step) =>
+        step?.status === "completed" &&
+        step?.conclusion &&
+        !SUCCESSFUL_ACTION_CONCLUSIONS.has(String(step.conclusion))
+    );
+  return summarizeActionSteps(steps, String(rawCurrent?.name || ""));
+}
 
-  const completed = steps.filter((step) => step.status === "completed").length;
-  const currentIndex = steps.findIndex((step) => step.status !== "completed");
-  const current =
-    currentIndex >= 0
-      ? steps[currentIndex]
-      : steps[steps.length - 1];
-  const failed = steps.find(
-    (step) =>
-      step.status === "completed" &&
-      step.conclusion &&
-      !["success", "skipped", "neutral"].includes(step.conclusion)
+const BUILDER_PROGRESS_STAGES = Object.freeze([
+  ["构建前快速预检", "静态预检", "预检 Profile"],
+  ["编译 OpenWrt 固件", "准备 OpenWrt 源码", "准备 OpenWrt 源码"],
+  ["编译 OpenWrt 固件", "更新 Feeds", "更新 Feeds"],
+  ["编译 OpenWrt 固件", "安装 Feeds", "安装 Feeds"],
+  ["编译 OpenWrt 固件", "恢复编译缓存", "恢复编译缓存"],
+  ["编译 OpenWrt 固件", "下载软件包源码", "下载软件包源码"],
+  ["编译 OpenWrt 固件", "编译固件", "编译固件"],
+  ["编译 OpenWrt 固件", "校验固件 Manifest", "校验固件"],
+  ["编译 OpenWrt 固件", "上传固件目录", "上传固件产物"],
+  ["发布 OpenWrt 固件", "发布固件到 Release", "发布 Release"],
+  ["清理旧 Workflow 运行记录", "清理 Workflow 历史", "清理运行记录"]
+]);
+
+export function builderProgressFromJobs(jobs) {
+  const safeJobs = Array.isArray(jobs) ? jobs : [];
+  const jobMap = new Map(
+    safeJobs.map((job) => [String(job?.name || ""), job])
   );
-  const percent = failed
-    ? Math.floor((Math.max(0, completed - 1) / steps.length) * 100)
-    : Math.floor((completed / steps.length) * 100);
+  const steps = BUILDER_PROGRESS_STAGES.map(
+    ([jobName, stepName, label]) => {
+      const job = jobMap.get(jobName);
+      const rawSteps = Array.isArray(job?.steps) ? job.steps : [];
+      const step = rawSteps.find((item) => item?.name === stepName);
+      if (step) {
+        return {
+          name: label,
+          detail: String(step.name || ""),
+          status: String(step.status || "pending"),
+          conclusion: String(step.conclusion || "")
+        };
+      }
+      if (job?.status === "completed" && job?.conclusion === "skipped") {
+        return {
+          name: label,
+          detail: stepName,
+          status: "completed",
+          conclusion: "skipped"
+        };
+      }
+      return {
+        name: label,
+        detail: stepName,
+        status: "pending",
+        conclusion: ""
+      };
+    }
+  );
 
-  return {
-    completed,
-    total: steps.length,
-    percent: Math.max(0, Math.min(100, percent)),
-    current: failed?.name || current?.name || "",
-    failed: failed?.name || "",
-    steps
-  };
+  const rawCurrent = safeJobs
+    .flatMap((job) => (Array.isArray(job?.steps) ? job.steps : []))
+    .find((step) => step?.status === "in_progress");
+  const rawFailed = safeJobs
+    .flatMap((job) => (Array.isArray(job?.steps) ? job.steps : []))
+    .find(
+      (step) =>
+        step?.status === "completed" &&
+        step?.conclusion &&
+        !SUCCESSFUL_ACTION_CONCLUSIONS.has(String(step.conclusion))
+    );
+  const summary = summarizeActionSteps(
+    steps,
+    String(rawFailed?.name || rawCurrent?.name || "")
+  );
+  if (!summary) return null;
+  if (rawFailed) {
+    summary.failed = String(rawFailed.name || summary.failed || "构建步骤");
+    summary.current = summary.failed;
+    summary.currentDetail = summary.failed;
+  }
+  return summary;
 }
 
 export function selectConfigStudioRun(
@@ -787,6 +885,7 @@ export class GitHubAppClient {
       runStartedAt: run.run_started_at || "",
       url: run.html_url || "",
       summaryUrl: run.html_url || "",
+      progress: builderProgressFromJobs(jobs),
       jobs: jobs.map((job) => ({
         id: Number(job.id),
         name: job.name || "",
@@ -794,7 +893,12 @@ export class GitHubAppClient {
         conclusion: job.conclusion || "",
         startedAt: job.started_at || "",
         completedAt: job.completed_at || "",
-        url: job.html_url || ""
+        url: job.html_url || "",
+        steps: (Array.isArray(job.steps) ? job.steps : []).map((step) => ({
+          name: step.name || "",
+          status: step.status || "unknown",
+          conclusion: step.conclusion || ""
+        }))
       })),
       artifacts: artifacts.map((artifact) => ({
         id: Number(artifact.id),
