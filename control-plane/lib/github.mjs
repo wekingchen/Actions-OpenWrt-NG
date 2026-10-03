@@ -325,6 +325,27 @@ export class GitHubAppClient {
     return body;
   }
 
+  async apiBytes(path, token) {
+    const response = await this.fetchImpl(GITHUB_API + path, {
+      method: "GET",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: "Bearer " + token,
+        "X-GitHub-Api-Version": this.apiVersion,
+        "User-Agent": "OpenWrt-NG-Control-Plane"
+      },
+      redirect: "follow"
+    });
+    if (!response.ok) {
+      let body = {};
+      try {
+        body = await response.json();
+      } catch {}
+      throw asJsonError(response, body);
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
   getUser(token) {
     return this.api("/user", token);
   }
