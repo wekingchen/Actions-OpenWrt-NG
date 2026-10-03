@@ -3932,19 +3932,24 @@ $("config-studio-device").addEventListener("change", () => {
   persistNewConfigStudioUi();
 });
 
-$("config-studio-search").addEventListener("input", renderConfigStudioPackages);
+$("config-studio-search").addEventListener("input", () => {
+  configStudioState.dependencyOnly = false;
+  renderConfigStudioPackages();
+});
 
 $("config-studio-category").addEventListener("change", () => {
+  configStudioState.dependencyOnly = false;
   renderConfigStudioPackageSubmenus();
   renderConfigStudioPackages();
 });
 
-$("config-studio-submenu").addEventListener(
-  "change",
-  renderConfigStudioPackages
-);
+$("config-studio-submenu").addEventListener("change", () => {
+  configStudioState.dependencyOnly = false;
+  renderConfigStudioPackages();
+});
 
 $("config-studio-luci-only").addEventListener("change", () => {
+  configStudioState.dependencyOnly = false;
   if (
     $("config-studio-luci-only").checked &&
     !$("config-studio-category").value &&
@@ -3955,6 +3960,11 @@ $("config-studio-luci-only").addEventListener("change", () => {
     $("config-studio-category").value = "LuCI";
     renderConfigStudioPackageSubmenus();
   }
+  renderConfigStudioPackages();
+});
+
+$("config-studio-show-dependencies").addEventListener("click", () => {
+  configStudioState.dependencyOnly = !configStudioState.dependencyOnly;
   renderConfigStudioPackages();
 });
 
