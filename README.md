@@ -323,6 +323,7 @@ cleanup
 - checkout 不持久化仓库凭据。
 - build 不拥有仓库写权限。
 - Release 使用独立 job。
+- 正常情况下 Release tag 精确指向本次构建 commit；如果 GitHub 因历史 commit 与当前默认分支存在 workflow 差异而返回 `403 Resource not accessible by integration`，才自动降级为当前默认分支 tag，并在 Release 说明中保留真实 Build Run / commit。
 - 没有成功构建和验收，不创建 Release。
 - 旧 Release 只在新 Release 成功后清理。
 - Workflow 历史由独立最小权限 job 清理。
