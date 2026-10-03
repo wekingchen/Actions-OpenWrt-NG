@@ -122,6 +122,18 @@ case "$mode" in
       compile_seconds="$((BUILD_FINISHED_AT - BUILD_STARTED_AT))"
     fi
 
+    ccache_hits="unknown"
+    ccache_misses="unknown"
+    ccache_size="unknown"
+    if [ -s ccache-stats.txt ]; then
+      ccache_hits="$(sed -n 's/^[[:space:]]*Hits:[[:space:]]*//p' ccache-stats.txt | head -n1)"
+      ccache_misses="$(sed -n 's/^[[:space:]]*Misses:[[:space:]]*//p' ccache-stats.txt | head -n1)"
+      ccache_size="$(sed -n 's/^[[:space:]]*Cache size (GB):[[:space:]]*//p' ccache-stats.txt | head -n1)"
+      [ -n "$ccache_hits" ] || ccache_hits="unknown"
+      [ -n "$ccache_misses" ] || ccache_misses="unknown"
+      [ -n "$ccache_size" ] || ccache_size="unknown"
+    fi
+
     {
       echo "| 项目 | 当前值 |"
       echo "|---|---|"
@@ -131,6 +143,9 @@ case "$mode" in
       printf '| Adapter | %s |\n' "$(md_escape "${ADAPTER:-unknown}")"
       printf '| dl 缓存 | %s |\n' "$(cache_text "${DL_CACHE_HIT:-}")"
       printf '| 编译缓存 | %s |\n' "$(cache_text "${BUILD_CACHE_HIT:-}")"
+      printf '| ccache 本轮 Hits | %s |\n' "$(md_escape "$ccache_hits")"
+      printf '| ccache 本轮 Misses | %s |\n' "$(md_escape "$ccache_misses")"
+      printf '| ccache 大小 | %s |\n' "$(md_escape "$ccache_size")"
       if [ -n "$compile_seconds" ]; then
         printf '| 编译耗时 | %dm %02ds |\n'           "$((compile_seconds / 60))" "$((compile_seconds % 60))"
       fi
