@@ -282,7 +282,7 @@ def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], str]:
         with tempfile.TemporaryDirectory(prefix="openwrt-ng-kconfig-") as raw:
             binary = Path(raw) / "config-studio-kconfig"
             compile_cmd = [
-                os.environ.get("CC", "cc"),
+                "cc",
                 "-O2",
                 "-I",
                 str(config_dir),
