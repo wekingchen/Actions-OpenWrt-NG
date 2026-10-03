@@ -147,31 +147,34 @@ jobs:
         grep -q 'async function init' /tmp/control-plane-app.js
         grep -q 'preview-change' /tmp/control-plane-app.js
         grep -q 'loadBuildRuns' /tmp/control-plane-app.js
-        grep -q 'pollActiveBuild' /tmp/control-plane-app.js
+        grep -q 'openBuildDialog' /tmp/control-plane-app.js
+        grep -q 'parseProfileReleasePolicy' /tmp/control-plane-app.js
+        grep -q 'renderBuildRows' /tmp/control-plane-app.js
         grep -q 'result.runId' /tmp/control-plane-app.js
         grep -q 'build_already_active' /tmp/control-plane-app.js
         grep -q 'readNewProfileInput' /tmp/control-plane-app.js
         grep -q '/api/v1/profile-templates/preview' /tmp/control-plane-app.js
         grep -q 'profile_already_exists' /tmp/control-plane-app.js
         grep -q 'updateRepositoryContext' /tmp/control-plane-app.js
-        grep -q 'updateBuildOverview' /tmp/control-plane-app.js
         grep -q 'data.repositories.length === 1' /tmp/control-plane-app.js
-        grep -q 'data.profiles.length === 1' /tmp/control-plane-app.js
         grep -q 'profile-build-action' /tmp/control-plane-app.js
         grep -q 'function navigateControlPlane' /tmp/control-plane-app.js
-        grep -q 'function currentProfileId' /tmp/control-plane-app.js
+        grep -q 'function showControlPlaneView' /tmp/control-plane-app.js
         grep -q 'function setActiveNavigation' /tmp/control-plane-app.js
-        grep -q 'activateNavigation: true' /tmp/control-plane-app.js
         grep -q 'data-nav="workspace"' /tmp/control-plane-index.html
         grep -q 'data-nav="profiles"' /tmp/control-plane-index.html
         grep -q 'data-nav="builder"' /tmp/control-plane-index.html
         grep -q 'aria-controls="profile-card"' /tmp/control-plane-index.html
-        grep -q 'aria-controls="editor-card"' /tmp/control-plane-index.html
         grep -q 'aria-controls="build-card"' /tmp/control-plane-index.html
+        grep -q 'id="build-dialog"' /tmp/control-plane-index.html
+        grep -q 'id="recent-build-runs"' /tmp/control-plane-index.html
+        grep -q 'id="publish-release-help"' /tmp/control-plane-index.html
         grep -q 'account-dropdown' /tmp/control-plane-app.js
         grep -q '.app-shell' /tmp/control-plane-style.css
         grep -q '.content-grid' /tmp/control-plane-style.css
         grep -q '.profile-build-action' /tmp/control-plane-style.css
+        grep -q '.build-dialog-backdrop' /tmp/control-plane-style.css
+        grep -q '.build-record' /tmp/control-plane-style.css
         grep -q 'display: grid !important' /tmp/control-plane-style.css
         if grep -q 'class="hero"' /tmp/control-plane-index.html; then
           echo "ERROR: 登录后工作台不应重新引入营销 Hero" >&2
@@ -203,6 +206,29 @@ jobs:
           echo "ERROR: 工作区导航必须使用真实操作按钮" >&2
           exit 1
         fi
+        if grep -q 'buildState.profileId' /tmp/control-plane-app.js || \
+           grep -q 'setupBuildControl' /tmp/control-plane-app.js || \
+           grep -q 'updateBuildOverview' /tmp/control-plane-app.js; then
+          echo "ERROR: 构建历史不应依赖隐式当前 Profile 状态" >&2
+          exit 1
+        fi
+        if grep -q 'id="actions-permission"' /tmp/control-plane-index.html || \
+           grep -q 'Actions 可调度' /tmp/control-plane-app.js; then
+          echo "ERROR: Actions 能力不应在构建历史区重复展示" >&2
+          exit 1
+        fi
+        python3 - <<'PY'
+from pathlib import Path
+html = Path("/tmp/control-plane-index.html").read_text()
+start = html.index('id="build-card"')
+end = html.index('</section>', start)
+block = html[start:end]
+if 'id="trigger-build"' in block or 'id="publish-release"' in block:
+    raise SystemExit("ERROR: 完整构建历史区不能包含构建入口或 Release 开关")
+dialog = html[html.index('id="build-dialog"'):]
+if 'id="trigger-build"' not in dialog or 'id="publish-release"' not in dialog:
+    raise SystemExit("ERROR: 构建入口与 Release 开关必须位于构建确认弹层")
+PY
 
     - name: 构建可选自托管容器
       run: |
