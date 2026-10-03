@@ -35,6 +35,8 @@ const buildState = {
   pollTimer: null,
   pollAttempts: 0,
   hasActiveRuns: false,
+  activeRunId: 0,
+  detailRunId: 0,
   generation: 0
 };
 
@@ -1019,11 +1021,23 @@ async function loadBuildDetail(runId) {
   );
   if (!isCurrentBuildContext(repo, generation)) return null;
   const run = data.run;
+  buildState.detailRunId = Number(run.id || runId || 0);
 
   $("build-detail").hidden = false;
   $("build-detail-title").textContent =
     `#${run.runNumber} ${buildProfileId(run)} · ${buildStatusLabel(run)}`;
   $("build-summary-link").href = run.summaryUrl || run.url;
+  renderActionProgressCard(
+    "build-detail-progress",
+    run.progress,
+    run,
+    {
+      runningTitle: "构建进行中",
+      runningDetail: "进度来自本次 GitHub Actions 的真实步骤。",
+      waitingTitle: "等待构建步骤",
+      waitingDetail: "GitHub Job 建立后会自动显示实际构建阶段。"
+    }
+  );
 
   const jobs = $("build-jobs");
   jobs.replaceChildren();
@@ -1154,7 +1168,9 @@ async function loadBuildRuns(options = {}) {
   }
 
   const requestId = options.requestId || buildState.requestId || "";
-  if (requestId) {
+  let requestedRunId = Number(options.runId || buildState.activeRunId || 0);
+
+  if (requestId && !requestedRunId) {
     const lookup = await request(
       `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds?request_id=${encodeURIComponent(requestId)}&limit=1`
     );
@@ -1163,11 +1179,22 @@ async function loadBuildRuns(options = {}) {
     if (!lookup.runs.length) {
       buildState.requestId = requestId;
       buildState.hasActiveRuns = true;
+      renderActionProgressCard(
+        "recent-build-progress",
+        null,
+        null,
+        {
+          force: true,
+          waitingTitle: "等待 GitHub 建立运行记录",
+          waitingDetail: "构建请求已经提交；运行记录出现后会自动切换到真实步骤进度。"
+        }
+      );
       showBuildResult("构建请求已提交，正在等待 GitHub 建立运行记录。");
       buildState.pollAttempts += 1;
       scheduleBuildPoll(2500, generation);
       return;
     }
+    requestedRunId = Number(lookup.runs[0]?.id || 0);
     buildState.requestId = "";
   }
 
@@ -1179,17 +1206,73 @@ async function loadBuildRuns(options = {}) {
   renderBuildRows($("recent-build-runs"), data.runs, { compact: true });
   renderBuildRows($("build-runs"), data.runs);
 
-  buildState.hasActiveRuns = data.runs.some((run) =>
-    ACTIVE_BUILD_STATUSES.has(run.status)
+  const requestedRun = requestedRunId
+    ? data.runs.find((run) => Number(run.id) === requestedRunId) || null
+    : null;
+
+  if (requestId && requestedRunId && !requestedRun) {
+    buildState.requestId = requestId;
+    buildState.activeRunId = requestedRunId;
+    buildState.hasActiveRuns = true;
+    renderActionProgressCard(
+      "recent-build-progress",
+      null,
+      { id: requestedRunId, url: options.runUrl || "" },
+      {
+        force: true,
+        waitingTitle: "等待 GitHub 同步运行记录",
+        waitingDetail: "已经拿到 Run ID；GitHub 列表接口同步后会自动显示真实构建步骤。"
+      }
+    );
+    showBuildResult("构建已建立，正在等待 GitHub 同步运行详情。");
+    buildState.pollAttempts += 1;
+    scheduleBuildPoll(2500, generation);
+    return;
+  }
+
+  if (requestedRun) {
+    buildState.requestId = "";
+  }
+
+  const activeRun =
+    requestedRun ||
+    data.runs.find((run) => ACTIVE_BUILD_STATUSES.has(run.status)) ||
+    null;
+
+  buildState.hasActiveRuns = Boolean(
+    activeRun && ACTIVE_BUILD_STATUSES.has(activeRun.status)
   );
+  buildState.activeRunId = buildState.hasActiveRuns
+    ? Number(activeRun.id || 0)
+    : 0;
   buildState.pollAttempts = options.polling
     ? buildState.pollAttempts + 1
     : 0;
 
-  if (buildState.hasActiveRuns) {
-    showBuildResult("有构建正在运行，状态会自动刷新。");
-    scheduleBuildPoll(15000, generation);
+  if (buildState.hasActiveRuns && activeRun) {
+    const detailData = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds/${activeRun.id}`
+    );
+    if (!isCurrentBuildContext(repo, generation)) return;
+    const detailedRun = detailData.run;
+    renderActionProgressCard(
+      "recent-build-progress",
+      detailedRun.progress,
+      detailedRun,
+      {
+        runningTitle: "构建进行中",
+        runningDetail: "当前页面会持续读取本次 GitHub Actions 的真实构建步骤。"
+      }
+    );
+    if (buildState.detailRunId === Number(activeRun.id)) {
+      await loadBuildDetail(activeRun.id);
+    }
+    showBuildResult("构建正在运行，真实步骤进度会自动刷新。");
+    scheduleBuildPoll(5000, generation);
   } else {
+    buildState.requestId = "";
+    buildState.activeRunId = 0;
+    renderActionProgressCard("recent-build-progress", null, null);
     showBuildResult();
     clearBuildPolling();
   }
@@ -1203,10 +1286,14 @@ async function setupBuildHistory(repo) {
   buildState.requestId = "";
   buildState.pollAttempts = 0;
   buildState.hasActiveRuns = false;
+  buildState.activeRunId = 0;
+  buildState.detailRunId = 0;
 
   $("recent-build-card").hidden = false;
   $("build-card").hidden = true;
   $("build-detail").hidden = true;
+  renderActionProgressCard("recent-build-progress", null, null);
+  renderActionProgressCard("build-detail-progress", null, null);
   showBuildResult();
   renderBuildHistoryState("正在读取构建历史", "正在从 GitHub Actions 获取运行记录…");
 
@@ -1446,7 +1533,7 @@ function setConfigStudioStatus(title, detail = "") {
   $("config-studio-status-detail").textContent = detail;
 }
 
-function configStudioElapsed(startedAt) {
+function actionElapsed(startedAt) {
   const started = Date.parse(String(startedAt || ""));
   if (!Number.isFinite(started)) return "";
   const seconds = Math.max(0, Math.floor((Date.now() - started) / 1000));
@@ -1476,7 +1563,7 @@ function renderConfigStudioProgress(progress, run, mode = "catalog") {
     resetConfigStudioProgress(mode);
     if (run?.startedAt) {
       $("config-studio-progress-elapsed").textContent =
-        configStudioElapsed(run.startedAt);
+        actionElapsed(run.startedAt);
     }
     return;
   }
@@ -1491,7 +1578,7 @@ function renderConfigStudioProgress(progress, run, mode = "catalog") {
   $("config-studio-progress-count").textContent =
     `已完成 ${progress.completed} / ${progress.total} 步`;
   $("config-studio-progress-elapsed").textContent =
-    configStudioElapsed(run?.startedAt);
+    actionElapsed(run?.startedAt);
 
   const percent = Math.max(
     0,
@@ -1522,6 +1609,110 @@ function renderConfigStudioProgress(progress, run, mode = "catalog") {
     node.textContent = step.name;
     root.appendChild(node);
   }
+}
+
+function renderActionProgressCard(rootId, progress, run, options = {}) {
+  const root = $(rootId);
+  if (!root) return;
+
+  const hasProgress =
+    progress && Array.isArray(progress.steps) && progress.steps.length;
+  if (!hasProgress && !run && !options.force) {
+    root.hidden = true;
+    root.replaceChildren();
+    return;
+  }
+
+  root.hidden = false;
+  root.replaceChildren();
+
+  const head = document.createElement("div");
+  head.className = "action-progress-head";
+  const copy = document.createElement("div");
+  copy.className = "action-progress-copy";
+  const title = document.createElement("strong");
+  const detail = document.createElement("span");
+
+  if (hasProgress) {
+    title.textContent =
+      progress.failed || progress.current || options.runningTitle || "处理中";
+    if (progress.failed) {
+      detail.textContent =
+        `失败步骤：${progress.currentDetail || progress.failed}。可打开 Actions 查看日志。`;
+    } else if (progress.currentDetail && progress.currentDetail !== progress.current) {
+      detail.textContent = `当前 GitHub 步骤：${progress.currentDetail}`;
+    } else {
+      detail.textContent =
+        options.runningDetail || "进度来自当前 GitHub Actions 的真实步骤。";
+    }
+  } else {
+    title.textContent = options.waitingTitle || "等待 GitHub Runner";
+    detail.textContent =
+      options.waitingDetail || "运行记录建立后会自动显示真实步骤。";
+  }
+  copy.append(title, detail);
+  head.appendChild(copy);
+
+  if (run?.url) {
+    const link = document.createElement("a");
+    link.className = "text-link action-progress-link";
+    link.href = run.url;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.textContent = "Actions ↗";
+    head.appendChild(link);
+  }
+  root.appendChild(head);
+
+  const progressBox = document.createElement("div");
+  progressBox.className = "config-studio-progress";
+  const meta = document.createElement("div");
+  meta.className = "config-studio-progress-meta";
+  const count = document.createElement("strong");
+  const elapsed = document.createElement("span");
+  count.textContent = hasProgress
+    ? `已完成 ${progress.completed} / ${progress.total} 步`
+    : "准备中";
+  elapsed.textContent = actionElapsed(run?.startedAt || run?.runStartedAt);
+  meta.append(count, elapsed);
+
+  const track = document.createElement("div");
+  track.className = "config-studio-progress-track";
+  track.setAttribute("role", "progressbar");
+  track.setAttribute("aria-valuemin", "0");
+  track.setAttribute("aria-valuemax", "100");
+  const percent = hasProgress
+    ? Math.max(0, Math.min(100, Number(progress.percent || 0)))
+    : 0;
+  track.setAttribute("aria-valuenow", String(percent));
+  const bar = document.createElement("span");
+  bar.style.width = percent + "%";
+  track.appendChild(bar);
+
+  const steps = document.createElement("div");
+  steps.className = "config-studio-progress-steps";
+  if (hasProgress) {
+    for (const step of progress.steps) {
+      const node = document.createElement("div");
+      node.className = "config-studio-progress-step";
+      if (
+        step.status === "completed" &&
+        step.conclusion &&
+        !["success", "skipped", "neutral"].includes(step.conclusion)
+      ) {
+        node.classList.add("failed");
+      } else if (step.status === "completed") {
+        node.classList.add("done");
+      } else if (step.status === "in_progress") {
+        node.classList.add("running");
+      }
+      node.textContent = step.name;
+      steps.appendChild(node);
+    }
+  }
+
+  progressBox.append(meta, track, steps);
+  root.appendChild(progressBox);
 }
 
 function setConfigStudioStep(step) {
@@ -2883,14 +3074,32 @@ $("trigger-build").addEventListener("click", async () => {
     if (currentRepository()?.fullName !== repo.fullName) return;
 
     buildState.requestId = result.requestId || "";
+    buildState.activeRunId = Number(result.runId || 0);
     buildState.pollAttempts = 0;
     const generation = buildState.generation;
     if (requestVersion === buildDialogState.requestVersion) {
       closeBuildDialog();
     }
 
+    renderActionProgressCard(
+      "recent-build-progress",
+      null,
+      result.runId
+        ? { id: Number(result.runId), url: result.runUrl || "" }
+        : null,
+      {
+        force: true,
+        waitingTitle: result.runId
+          ? "构建运行已建立"
+          : "等待 GitHub 建立运行记录",
+        waitingDetail: "正在获取本次构建的真实 Job / Step 进度。"
+      }
+    );
+
     await loadBuildRuns({
       requestId: result.requestId || "",
+      runId: Number(result.runId || 0),
+      runUrl: result.runUrl || "",
       generation
     });
   } catch (error) {
@@ -2908,7 +3117,11 @@ $("trigger-build").addEventListener("click", async () => {
         );
       }
       buildState.requestId = "";
-      await loadBuildRuns({ generation: buildState.generation });
+      buildState.activeRunId = Number(run.id || 0);
+      await loadBuildRuns({
+        runId: Number(run.id || 0),
+        generation: buildState.generation
+      });
     } else if (
       requestVersion === buildDialogState.requestVersion &&
       !$("build-dialog").hidden

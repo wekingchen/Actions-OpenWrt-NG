@@ -3081,3 +3081,53 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
     width: 100%;
   }
 }
+
+/* Shared GitHub Actions progress surface */
+.action-progress-panel {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+.action-progress-panel[hidden] {
+  display: none;
+}
+.action-progress-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.action-progress-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.action-progress-copy strong {
+  color: var(--text);
+  font-size: 12px;
+}
+.action-progress-copy span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.action-progress-link {
+  flex: 0 0 auto;
+  font-size: 9px;
+}
+.action-progress-panel .config-studio-progress-steps {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 640px) {
+  .action-progress-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .action-progress-panel .config-studio-progress-steps {
+    grid-template-columns: 1fr;
+  }
+}
