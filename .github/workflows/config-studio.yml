@@ -45,6 +45,24 @@ jobs:
       with:
         persist-credentials: false
 
+    - name: 同步主仓运行时脚本
+      if: github.repository != 'wekingchen/Actions-OpenWrt-NG'
+      run: |
+        set -Eeuo pipefail
+
+        runtime="$RUNNER_TEMP/openwrt-ng-runtime"
+        rm -rf "$runtime"
+        git clone --depth=1 --branch main \
+          https://github.com/wekingchen/Actions-OpenWrt-NG.git \
+          "$runtime"
+
+        rm -rf scripts adapters
+        cp -a "$runtime/scripts" "$GITHUB_WORKSPACE/scripts"
+        cp -a "$runtime/adapters" "$GITHUB_WORKSPACE/adapters"
+
+        echo "已同步主仓最新运行时：wekingchen/Actions-OpenWrt-NG@main"
+        echo "  commit: $(git -C "$runtime" rev-parse HEAD)"
+
     - name: 校验会话并读取请求
       env:
         GH_TOKEN: ${{ github.token }}
