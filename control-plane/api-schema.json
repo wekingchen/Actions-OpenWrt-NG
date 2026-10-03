@@ -832,7 +832,21 @@
         "baseConfig": {
           "type": "string"
         }
-      }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "profileId"
+          ]
+        },
+        {
+          "required": [
+            "sourceRepo",
+            "sourceBranch",
+            "adapter"
+          ]
+        }
+      ]
     },
     "configStudioDispatchResponse": {
       "type": "object",
@@ -890,22 +904,16 @@
         "values": {
           "type": "object",
           "maxProperties": 20000,
-          "patternProperties": {
-            "^CONFIG_[A-Za-z0-9_.+@/-]+$": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "boolean"
-                }
-              ]
-            }
+          "propertyNames": {
+            "pattern": "^CONFIG_[A-Za-z0-9_.+@/-]+$"
           },
-          "additionalProperties": false
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
         }
       }
     },
@@ -985,6 +993,181 @@
         "requestId": {
           "type": "string",
           "pattern": "^[0-9a-f]{16}$"
+        }
+      }
+    },
+    "configStudioStartResponse": {
+      "type": "object",
+      "required": [
+        "accepted",
+        "requestId",
+        "branch",
+        "profileId",
+        "sourceRepo",
+        "sourceBranch",
+        "adapter",
+        "ref",
+        "runId",
+        "runUrl"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "const": true
+        },
+        "requestId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "branch": {
+          "type": "string",
+          "pattern": "^openwrt-ng/config-session-[0-9a-f]{16}$"
+        },
+        "profileId": {
+          "type": "string"
+        },
+        "sourceRepo": {
+          "type": "string"
+        },
+        "sourceBranch": {
+          "type": "string"
+        },
+        "adapter": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "runUrl": {
+          "type": "string"
+        }
+      }
+    },
+    "configStudioStatus": {
+      "type": "object",
+      "required": [
+        "status",
+        "mode",
+        "requestId"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "status": {
+          "enum": [
+            "preparing",
+            "ready",
+            "resolving",
+            "resolved",
+            "failed"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "catalog",
+            "resolve"
+          ]
+        },
+        "requestId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "sourceCommit": {
+          "type": "string"
+        }
+      }
+    },
+    "configStudioSessionResponse": {
+      "type": "object",
+      "required": [
+        "requestId",
+        "branch",
+        "profileId",
+        "sourceRepo",
+        "sourceBranch",
+        "adapter",
+        "status",
+        "run",
+        "catalog",
+        "result"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "branch": {
+          "type": "string",
+          "pattern": "^openwrt-ng/config-session-[0-9a-f]{16}$"
+        },
+        "profileId": {
+          "type": "string"
+        },
+        "sourceRepo": {
+          "type": "string"
+        },
+        "sourceBranch": {
+          "type": "string"
+        },
+        "adapter": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/configStudioStatus"
+        },
+        "run": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "id",
+                "status",
+                "conclusion",
+                "url",
+                "updatedAt"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "status": {
+                  "type": "string"
+                },
+                "conclusion": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "catalog": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "result": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
         }
       }
     }
