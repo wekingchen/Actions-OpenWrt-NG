@@ -55,6 +55,7 @@ PROFILE_FILES_DIR="$(resolve_path "${PROFILE_FILES_DIR:-$legacy_files_dir}")"
 unset FILES_DIR
 REQUIRED_PACKAGES_FILE="$(resolve_path "${REQUIRED_PACKAGES_FILE:-}")"
 WATCH_SOURCES_FILE="$(resolve_path "${WATCH_SOURCES_FILE:-}")"
+EXTRA_FEEDS_FILE="$(resolve_path "${EXTRA_FEEDS_FILE:-}")"
 ADAPTER_SCRIPT="$root/adapters/$ADAPTER.sh"
 MAKE_LD_LIBRARY_PATH_RELATIVE="${MAKE_LD_LIBRARY_PATH_RELATIVE:-}"
 PROFILE_NAME="${PROFILE_NAME:-$profile_id}"
@@ -83,6 +84,11 @@ done
 
 if [ -n "$WATCH_SOURCES_FILE" ] && [ ! -f "$WATCH_SOURCES_FILE" ]; then
   echo "ERROR: watch sources file not found: $WATCH_SOURCES_FILE" >&2
+  exit 1
+fi
+
+if [ -n "$EXTRA_FEEDS_FILE" ] && [ ! -f "$EXTRA_FEEDS_FILE" ]; then
+  echo "ERROR: extra feeds file not found: $EXTRA_FEEDS_FILE" >&2
   exit 1
 fi
 
@@ -140,6 +146,7 @@ case "$command_name" in
     emit_env PROFILE_FILES_DIR "$PROFILE_FILES_DIR"
     emit_env REQUIRED_PACKAGES_FILE "$REQUIRED_PACKAGES_FILE"
     emit_env WATCH_SOURCES_FILE "$WATCH_SOURCES_FILE"
+    emit_env EXTRA_FEEDS_FILE "$EXTRA_FEEDS_FILE"
     emit_env AUTO_UPDATE "$AUTO_UPDATE"
     emit_env MAKE_LD_LIBRARY_PATH_RELATIVE "$MAKE_LD_LIBRARY_PATH_RELATIVE"
     emit_env MAXIMIZE_BUILD_SPACE "$MAXIMIZE_BUILD_SPACE"
