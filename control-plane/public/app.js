@@ -1944,7 +1944,11 @@ function renderConfigStudioPackageSubmenus() {
   const values = [
     ...new Set(
       (configStudioState.catalog?.packages || [])
-        .filter((pkg) => !category || pkg.category === category)
+        .filter(
+          (pkg) =>
+            (pkg.visible || pkg.selected) &&
+            (!category || pkg.category === category)
+        )
         .map((pkg) => String(pkg.submenu || "").trim())
         .filter(Boolean)
     )
