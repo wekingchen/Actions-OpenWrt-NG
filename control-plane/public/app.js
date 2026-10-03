@@ -2215,10 +2215,34 @@ document.addEventListener("keydown", (event) => {
     $("account-dropdown").hidden = true;
     $("user-box").setAttribute("aria-expanded", "false");
     if (!$("build-dialog").hidden) closeBuildDialog();
+    if (!$("config-studio-dialog").hidden) {
+      closeConfigStudio({ cleanup: true }).catch((error) => showError(error));
+    }
   }
 });
 
 $("new-profile-open").addEventListener("click", openNewProfileForm);
+
+$("new-config-studio").addEventListener("click", () => {
+  const repo = createState.repo;
+  const sourceRepo = $("new-source-repo").value.trim();
+  const sourceBranch = $("new-source-branch").value.trim();
+  const adapter = $("new-adapter").value;
+  if (!repo) {
+    showError("请先选择仓库。");
+    return;
+  }
+  if (!sourceRepo || !sourceBranch) {
+    showError("请先填写源码仓库与分支 / Tag，再打开图形配置。");
+    return;
+  }
+  startConfigStudio(repo, {
+    sourceRepo,
+    sourceBranch,
+    adapter,
+    baseConfig: $("new-config-text").value
+  }).catch((error) => showError(error));
+});
 
 $("new-profile-close").addEventListener("click", () => {
   $("new-profile-card").hidden = true;
@@ -2355,6 +2379,14 @@ $("file-select").addEventListener("change", () => {
 });
 
 $("editor-content").addEventListener("input", setPreviewStale);
+
+$("editor-config-studio").addEventListener("click", () => {
+  if (!editorState.repo || !editorState.profileId) return;
+  startConfigStudio(editorState.repo, {
+    profileId: editorState.profileId
+  }).catch((error) => showError(error));
+});
+
 
 $("preview-change").addEventListener("click", () => {
   const names = changedFiles();
@@ -2501,8 +2533,117 @@ $("build-dialog").addEventListener("click", (event) => {
   if (event.target === $("build-dialog")) closeBuildDialog();
 });
 
+$("config-studio-target").addEventListener("change", () => {
+  configStudioState.targetId = $("config-studio-target").value;
+  const target = currentConfigStudioTarget();
+  const subtarget =
+    (target?.subtargets || []).find((item) => item.selected) ||
+    target?.subtargets?.[0] ||
+    null;
+  configStudioState.subtargetId = subtarget?.id || "";
+  const device =
+    (subtarget?.devices || []).find((item) => item.selected) ||
+    subtarget?.devices?.find((item) => !item.broken) ||
+    null;
+  configStudioState.deviceProfileId = device?.profileId || "";
+  renderConfigStudioTargetSelectors();
+  updateConfigStudioChangeCount();
+});
+
+$("config-studio-subtarget").addEventListener("change", () => {
+  configStudioState.subtargetId = $("config-studio-subtarget").value;
+  const subtarget = currentConfigStudioSubtarget();
+  const device =
+    (subtarget?.devices || []).find((item) => item.selected) ||
+    subtarget?.devices?.find((item) => !item.broken) ||
+    null;
+  configStudioState.deviceProfileId = device?.profileId || "";
+  renderConfigStudioTargetSelectors();
+  updateConfigStudioChangeCount();
+});
+
+$("config-studio-device").addEventListener("change", () => {
+  configStudioState.deviceProfileId = $("config-studio-device").value;
+  updateConfigStudioChangeCount();
+});
+
+for (const id of [
+  "config-studio-search",
+  "config-studio-category",
+  "config-studio-luci-only"
+]) {
+  $(id).addEventListener("input", renderConfigStudioPackages);
+  $(id).addEventListener("change", renderConfigStudioPackages);
+}
+
+$("config-studio-feature-search").addEventListener(
+  "input",
+  renderConfigStudioFeatures
+);
+
+function setConfigStudioTab(tab) {
+  const packages = tab === "packages";
+  $("config-studio-tab-packages").classList.toggle("active", packages);
+  $("config-studio-tab-packages").setAttribute(
+    "aria-selected",
+    String(packages)
+  );
+  $("config-studio-tab-features").classList.toggle("active", !packages);
+  $("config-studio-tab-features").setAttribute(
+    "aria-selected",
+    String(!packages)
+  );
+  $("config-studio-packages-panel").hidden = !packages;
+  $("config-studio-features-panel").hidden = packages;
+}
+
+$("config-studio-tab-packages").addEventListener("click", () => {
+  setConfigStudioTab("packages");
+});
+$("config-studio-tab-features").addEventListener("click", () => {
+  setConfigStudioTab("features");
+});
+
+$("config-studio-resolve").addEventListener("click", () => {
+  resolveConfigStudio().catch((error) => setConfigStudioError(error));
+});
+
+$("config-studio-back").addEventListener("click", () => {
+  configStudioState.result = null;
+  setConfigStudioStatus(
+    "继续调整",
+    "菜单目录已经按上一次 Kconfig 解析结果刷新。"
+  );
+  renderConfigStudioCatalog(true);
+});
+
+$("config-studio-apply").addEventListener("click", () => {
+  applyConfigStudioToProfile().catch((error) => setConfigStudioError(error));
+});
+
+$("config-studio-use").addEventListener("click", () => {
+  useConfigStudioForNewProfile().catch((error) => setConfigStudioError(error));
+});
+
+for (const id of ["config-studio-close", "config-studio-cancel"]) {
+  $(id).addEventListener("click", () => {
+    closeConfigStudio({ cleanup: true }).catch((error) => showError(error));
+  });
+}
+
+$("config-studio-dialog").addEventListener("click", (event) => {
+  if (event.target === $("config-studio-dialog")) {
+    closeConfigStudio({ cleanup: true }).catch((error) => showError(error));
+  }
+});
+
+
 $("logout").addEventListener("click", async () => {
   clearBuildPolling();
+  clearConfigStudioPolling();
+  if (!$("config-studio-dialog").hidden) {
+    await closeConfigStudio({ cleanup: true });
+  }
   await request("/api/v1/logout", { method: "POST" });
   location.reload();
 });
