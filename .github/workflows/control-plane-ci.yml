@@ -165,6 +165,9 @@ jobs:
         grep -q 'data-nav="workspace"' /tmp/control-plane-index.html
         grep -q 'data-nav="profiles"' /tmp/control-plane-index.html
         grep -q 'data-nav="builder"' /tmp/control-plane-index.html
+        grep -q 'aria-controls="profile-card"' /tmp/control-plane-index.html
+        grep -q 'aria-controls="editor-card"' /tmp/control-plane-index.html
+        grep -q 'aria-controls="build-card"' /tmp/control-plane-index.html
         grep -q 'account-dropdown' /tmp/control-plane-app.js
         grep -q '.app-shell' /tmp/control-plane-style.css
         grep -q '.content-grid' /tmp/control-plane-style.css
