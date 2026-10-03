@@ -265,9 +265,9 @@ make defconfig
 
 安全边界：
 
-- 每次配置使用 `openwrt-ng/config-session-<id>` 临时分支保存会话，默认分支不被直接修改。
-- 真正执行外部 OpenWrt 源码 / feeds 的 Config Studio Job 只有 `contents: read`。
-- 写回会话结果由单独 Job 完成，才拥有 `contents: write`，避免第三方源码在执行阶段拿到仓库写权限。
+- 每次配置使用 `openwrt-ng/config-session-<id>` 临时分支只保存请求状态，默认分支不被直接修改。
+- 真正执行外部 OpenWrt 源码 / feeds 的 Config Studio Workflow 全程只有 `contents: read`，不拥有仓库写权限。
+- catalog / result 只作为 1 天短期 Actions Artifact 返回；Control Plane 使用当前登录用户的受控会话读取并解压，不再由 Action 写回仓库。
 - 完成或取消配置后清理临时会话分支。
 - 原 `.config` 上传 / 文本编辑继续保留，作为高级兼容方式。
 - SSH / tmate 不作为正式配置入口；未来若增加，只作为高级排障模式。
