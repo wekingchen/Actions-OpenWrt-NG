@@ -589,19 +589,31 @@ function setBuildDialogStatus(message = "", isError = false) {
 }
 
 function closeBuildDialog() {
+  buildDialogState.requestVersion += 1;
+  const restoreFocus = buildDialogState.restoreFocus;
   $("build-dialog").hidden = true;
   document.body.classList.remove("dialog-open");
   buildDialogState.repo = null;
   buildDialogState.profileId = "";
   buildDialogState.releaseAllowed = false;
+  buildDialogState.restoreFocus = null;
   setBuildDialogStatus();
+  if (restoreFocus?.isConnected && typeof restoreFocus.focus === "function") {
+    restoreFocus.focus();
+  }
 }
 
 async function openBuildDialog(repo, profileId) {
   showError();
+  const requestVersion = buildDialogState.requestVersion + 1;
+  buildDialogState.requestVersion = requestVersion;
   buildDialogState.repo = repo;
   buildDialogState.profileId = profileId;
   buildDialogState.releaseAllowed = false;
+  buildDialogState.restoreFocus =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
 
   $("build-dialog-profile").textContent = profileId;
   $("build-dialog-title").textContent = `构建 ${profileId}`;
@@ -613,11 +625,21 @@ async function openBuildDialog(repo, profileId) {
   setBuildDialogStatus();
   $("build-dialog").hidden = false;
   document.body.classList.add("dialog-open");
+  $("build-dialog-close").focus();
 
   try {
     const data = await request(
       `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}`
     );
+    if (
+      requestVersion !== buildDialogState.requestVersion ||
+      buildDialogState.repo?.fullName !== repo.fullName ||
+      buildDialogState.profileId !== profileId ||
+      $("build-dialog").hidden
+    ) {
+      return;
+    }
+
     const profileEnv = data.profile.files["profile.env"]?.content || "";
     const releaseAllowed = parseProfileReleasePolicy(profileEnv);
     buildDialogState.releaseAllowed = releaseAllowed;
@@ -633,6 +655,12 @@ async function openBuildDialog(repo, profileId) {
       $("trigger-build").disabled = false;
     }
   } catch (error) {
+    if (
+      requestVersion !== buildDialogState.requestVersion ||
+      $("build-dialog").hidden
+    ) {
+      return;
+    }
     $("trigger-build").disabled = true;
     setBuildDialogStatus(friendlyError(error), true);
   }
