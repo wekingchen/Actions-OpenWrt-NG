@@ -928,8 +928,6 @@ async function openProfile(repo, profileId, options = {}) {
   showWriteResult();
   $("new-profile-card").hidden = true;
   invalidateNewProfilePreview();
-  markSelectedProfile(profileId);
-  await setupBuildControl(repo, profileId);
 
   const data = await request(
     `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}`
@@ -950,7 +948,7 @@ async function openProfile(repo, profileId, options = {}) {
   }
 
   $("editor-card").hidden = false;
-  $("editor-title").textContent = `编辑 ${profileId}`;
+  $("editor-title").textContent = `编辑配置 · ${profileId}`;
   $("editor-meta").textContent =
     `基线：${data.defaultBranch}@${data.baseRefSha.slice(0, 12)} · 保存时只创建新分支和 Pull Request`;
 
@@ -973,7 +971,9 @@ async function openProfile(repo, profileId, options = {}) {
   $("editor-content").readOnly = !writeReady;
   $("create-pr").disabled = true;
   $("preview-card").hidden = true;
+
   if (options.activateNavigation !== false) {
+    showControlPlaneView("profiles");
     setActiveNavigation("profiles");
   }
   if (options.scroll !== false) {
@@ -991,6 +991,7 @@ async function loadProfiles(repo) {
   $("editor-card").hidden = true;
   $("new-profile-card").hidden = true;
   updateRepositoryContext(repo);
+  showControlPlaneView("workspace");
   setActiveNavigation("workspace");
 
   $("new-profile-open").disabled = !canWriteRepo(repo);
@@ -1003,26 +1004,7 @@ async function loadProfiles(repo) {
   );
 
   $("profile-card").hidden = false;
-  $("profile-title").textContent = "Profiles";
-
-  buildState.repo = repo;
-  buildState.profileId = "";
-  $("build-card").hidden = false;
-  $("build-title").textContent = "最近构建";
-  $("build-meta").textContent = data.profiles.length
-    ? "选择一个 Profile 后显示构建记录。"
-    : "当前仓库还没有 Profile。";
-  $("publish-release").checked = false;
-  $("build-detail").hidden = true;
-  $("trigger-build").disabled = true;
-  $("refresh-builds").disabled = true;
-  $("actions-permission").textContent = canRunRepo(repo)
-    ? "Actions 可调度"
-    : canReadActions(repo)
-      ? "Actions 只读"
-      : "需 Actions 权限";
-  const buildRoot = $("build-runs");
-  buildRoot.replaceChildren();
+  $("profile-title").textContent = "配置";
 
   const root = $("profiles");
   root.replaceChildren();
@@ -1031,82 +1013,58 @@ async function loadProfiles(repo) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
     const title = document.createElement("strong");
-    title.textContent = "还没有 Profile";
+    title.textContent = "还没有配置";
     const detail = document.createElement("span");
-    detail.textContent = "先新建一套标准构建配置。";
+    detail.textContent = "新建一套标准 Profile 配置后即可开始构建。";
     empty.append(title, detail);
     root.appendChild(empty);
-
-    const buildEmpty = document.createElement("div");
-    buildEmpty.className = "empty-state build-empty";
-    const buildTitle = document.createElement("strong");
-    buildTitle.textContent = "暂无可构建配置";
-    const buildText = document.createElement("span");
-    buildText.textContent = "创建 Profile 后，这里会显示构建操作与最近运行。";
-    buildEmpty.append(buildTitle, buildText);
-    buildRoot.appendChild(buildEmpty);
-    return;
-  }
-
-  for (const profile of data.profiles) {
-    const row = document.createElement("div");
-    row.className = "profile-item";
-    row.dataset.profileId = profile.id;
-
-    const openButton = document.createElement("button");
-    openButton.type = "button";
-    openButton.className = "profile-open";
-
-    const leading = document.createElement("span");
-    leading.className = "list-leading";
-    const icon = document.createElement("span");
-    icon.className = "list-icon";
-    icon.innerHTML = iconSvg("profile");
-    const copy = document.createElement("span");
-    copy.className = "list-copy";
-    const strong = document.createElement("strong");
-    strong.textContent = profile.id;
-    const meta = document.createElement("small");
-    meta.textContent = profile.path;
-    copy.append(strong, meta);
-    leading.append(icon, copy);
-
-    const arrow = document.createElement("span");
-    arrow.className = "profile-open-arrow";
-    arrow.innerHTML = iconSvg("arrow");
-    openButton.append(leading, arrow);
-    openButton.addEventListener("click", () => {
-      openProfile(repo, profile.id).catch((error) => showError(error));
-    });
-
-    const buildButton = document.createElement("button");
-    buildButton.type = "button";
-    buildButton.className = "profile-build-action";
-    buildButton.textContent = "构建";
-    buildButton.title = `选择 ${profile.id} 并进入构建面板`;
-    buildButton.addEventListener("click", () => {
-      selectProfileForBuild(repo, profile.id, {
-        scroll: true,
-        activateNavigation: true
-      }).catch((error) => showError(error));
-    });
-
-    row.append(openButton, buildButton);
-    root.appendChild(row);
-  }
-
-  if (data.profiles.length === 1) {
-    await selectProfileForBuild(repo, data.profiles[0].id);
   } else {
-    const empty = document.createElement("div");
-    empty.className = "empty-state build-empty";
-    const title = document.createElement("strong");
-    title.textContent = "选择一个 Profile";
-    const detail = document.createElement("span");
-    detail.textContent = "选择后会在这里显示最近构建和构建操作。";
-    empty.append(title, detail);
-    buildRoot.appendChild(empty);
+    for (const profile of data.profiles) {
+      const row = document.createElement("div");
+      row.className = "profile-item";
+      row.dataset.profileId = profile.id;
+
+      const openButton = document.createElement("button");
+      openButton.type = "button";
+      openButton.className = "profile-open";
+
+      const leading = document.createElement("span");
+      leading.className = "list-leading";
+      const icon = document.createElement("span");
+      icon.className = "list-icon";
+      icon.innerHTML = iconSvg("profile");
+      const copy = document.createElement("span");
+      copy.className = "list-copy";
+      const strong = document.createElement("strong");
+      strong.textContent = profile.id;
+      const meta = document.createElement("small");
+      meta.textContent = profile.path;
+      copy.append(strong, meta);
+      leading.append(icon, copy);
+
+      const arrow = document.createElement("span");
+      arrow.className = "profile-open-arrow";
+      arrow.innerHTML = iconSvg("arrow");
+      openButton.append(leading, arrow);
+      openButton.addEventListener("click", () => {
+        openProfile(repo, profile.id).catch((error) => showError(error));
+      });
+
+      const buildButton = document.createElement("button");
+      buildButton.type = "button";
+      buildButton.className = "profile-build-action";
+      buildButton.textContent = "构建";
+      buildButton.title = `构建 ${profile.id}`;
+      buildButton.addEventListener("click", () => {
+        openBuildDialog(repo, profile.id).catch((error) => showError(error));
+      });
+
+      row.append(openButton, buildButton);
+      root.appendChild(row);
+    }
   }
+
+  await setupBuildHistory(repo);
 }
 
 async function selectRepository(repo) {
@@ -1234,6 +1192,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     $("account-dropdown").hidden = true;
     $("user-box").setAttribute("aria-expanded", "false");
+    if (!$("build-dialog").hidden) closeBuildDialog();
   }
 });
 
@@ -1436,50 +1395,53 @@ $("create-pr").addEventListener("click", async () => {
 });
 
 $("trigger-build").addEventListener("click", async () => {
-  const repo = buildState.repo;
-  if (!repo || !buildState.profileId || !canRunRepo(repo)) return;
+  const repo = buildDialogState.repo;
+  const profileId = buildDialogState.profileId;
+  if (!repo || !profileId || !canRunRepo(repo)) return;
 
   const button = $("trigger-build");
   button.disabled = true;
   button.textContent = "正在提交…";
   showError();
-  showBuildResult();
+  setBuildDialogStatus();
 
   try {
     const result = await request(
-      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(buildState.profileId)}/builds`,
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}/builds`,
       {
         method: "POST",
         body: JSON.stringify({
-          publishRelease: $("publish-release").checked
+          publishRelease:
+            buildDialogState.releaseAllowed && $("publish-release").checked
         })
       }
     );
 
-    buildState.requestId = result.requestId;
+    buildState.repo = repo;
+    buildState.requestId = result.requestId || "";
     buildState.activeRunId = Number(result.runId || 0);
     buildState.pollAttempts = 0;
+    closeBuildDialog();
 
-    if (buildState.activeRunId) {
-      showBuildResult(
-        `GitHub 已创建 Run ${buildState.activeRunId}，正在读取运行状态…`
-      );
-      await pollActiveBuild();
-    } else {
-      showBuildResult(
-        `已提交 Builder 请求 ${result.requestId}，正在等待 GitHub 建立运行记录…`
-      );
-      await loadBuildRuns({ requestId: result.requestId });
-    }
+    showBuildResult(
+      result.runId
+        ? "构建已提交，状态会自动刷新。"
+        : "构建请求已提交，正在等待 GitHub 建立运行记录。"
+    );
+
+    await loadBuildRuns({ requestId: result.requestId || "" });
   } catch (error) {
     if (error.code === "build_already_active" && error.body?.activeRun) {
       const run = error.body.activeRun;
-      showError(
-        `这个 Profile 已有构建 #${run.runNumber} 正在${buildStatusLabel(run)}，不会重复触发。`
+      setBuildDialogStatus(
+        `这个 Profile 已有构建 #${run.runNumber} 正在${buildStatusLabel(run)}，不会重复触发。`,
+        true
       );
-      await loadBuildDetail(run.id);
+      buildState.repo = repo;
+      buildState.requestId = "";
+      await loadBuildRuns();
     } else {
-      showError(error);
+      setBuildDialogStatus(friendlyError(error), true);
     }
   } finally {
     button.textContent = "开始构建";
@@ -1487,11 +1449,19 @@ $("trigger-build").addEventListener("click", async () => {
   }
 });
 
-$("refresh-builds").addEventListener("click", () => {
-  clearBuildPolling();
-  buildState.requestId = "";
-  buildState.pollAttempts = 0;
-  loadBuildRuns().catch((error) => showError(error));
+for (const id of ["refresh-builds", "refresh-recent-builds"]) {
+  $(id).addEventListener("click", () => {
+    clearBuildPolling();
+    buildState.requestId = "";
+    buildState.pollAttempts = 0;
+    loadBuildRuns().catch((error) => showError(error));
+  });
+}
+
+$("build-dialog-close").addEventListener("click", closeBuildDialog);
+$("build-dialog-cancel").addEventListener("click", closeBuildDialog);
+$("build-dialog").addEventListener("click", (event) => {
+  if (event.target === $("build-dialog")) closeBuildDialog();
 });
 
 $("logout").addEventListener("click", async () => {
