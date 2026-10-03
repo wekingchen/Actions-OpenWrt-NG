@@ -2258,8 +2258,9 @@ async function useConfigStudioForNewProfile() {
   setActiveNavigation("profiles");
   scrollToPanel($("new-profile-card"));
   showNewProfileResult(
-    "已使用真实 Kconfig 解析后的 .config；请预览标准文件后创建 Profile PR。"
+    "图形配置已完成，正在自动生成 Profile 预览。最后检查后点击“完成：创建 Profile PR”。"
   );
+  $("new-profile-preview").click();
 }
 
 async function init() {
@@ -2570,7 +2571,7 @@ $("new-profile-preview").addEventListener("click", async () => {
     showError(error);
   } finally {
     button.disabled = false;
-    button.textContent = "预览标准文件";
+    button.textContent = "下一步：预览 Profile";
   }
 });
 
