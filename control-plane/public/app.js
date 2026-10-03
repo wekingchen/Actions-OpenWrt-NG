@@ -32,7 +32,6 @@ const buildState = {
   requestId: "",
   pollTimer: null,
   pollAttempts: 0,
-  activeRunId: 0,
   hasActiveRuns: false
 };
 
@@ -865,6 +864,7 @@ async function loadBuildRuns(options = {}) {
     if (!lookup.runs.length) {
       buildState.requestId = requestId;
       buildState.hasActiveRuns = true;
+      showBuildResult("构建请求已提交，正在等待 GitHub 建立运行记录。");
       if (!$("recent-build-runs").querySelector(".build-record")) {
         renderBuildRows($("recent-build-runs"), [], { compact: true });
       }
@@ -893,8 +893,10 @@ async function loadBuildRuns(options = {}) {
     : 0;
 
   if (buildState.hasActiveRuns) {
+    showBuildResult("有构建正在运行，状态会自动刷新。");
     scheduleBuildPoll(15000);
   } else {
+    showBuildResult();
     clearBuildPolling();
   }
 }
@@ -904,7 +906,6 @@ async function setupBuildHistory(repo) {
   buildState.repo = repo;
   buildState.requestId = "";
   buildState.pollAttempts = 0;
-  buildState.activeRunId = 0;
   buildState.hasActiveRuns = false;
 
   $("recent-build-card").hidden = false;
@@ -1424,15 +1425,8 @@ $("trigger-build").addEventListener("click", async () => {
 
     buildState.repo = repo;
     buildState.requestId = result.requestId || "";
-    buildState.activeRunId = Number(result.runId || 0);
     buildState.pollAttempts = 0;
     closeBuildDialog();
-
-    showBuildResult(
-      result.runId
-        ? "构建已提交，状态会自动刷新。"
-        : "构建请求已提交，正在等待 GitHub 建立运行记录。"
-    );
 
     await loadBuildRuns({ requestId: result.requestId || "" });
   } catch (error) {
