@@ -59,7 +59,8 @@ def main() -> None:
 
         data = json.loads(report.read_text(encoding="utf-8"))
         assert data["priorityFeeds"] == ["alpha", "beta"]
-        assert data["collisionCount"] == 2
+        assert data["priorityCollisionCount"] == 2
+        assert data["defaultShadowCount"] == 1
 
         decisions = {item["source"]: item for item in data["decisions"]}
         assert decisions["xray-core"]["winner"]["feed"] == "alpha"
@@ -76,8 +77,11 @@ def main() -> None:
         assert "Source-Makefile: feeds/demo/xray-core/Makefile" not in beta
         assert "Source-Makefile: feeds/demo/demo-tool/Makefile" in beta
 
-        # Non-priority feeds are not candidates even if their version is higher.
-        assert "99.0.0-r1" in normal
+        # Priority/common feeds always shadow default/non-priority feeds,
+        # even when the default feed happens to advertise a higher version.
+        assert "99.0.0-r1" not in normal
+        assert decisions["xray-core"]["droppedDefault"][0]["feed"] == "normal"
+        assert decisions["xray-core"]["droppedDefault"][0]["version"] == "99.0.0-r1"
 
 
 if __name__ == "__main__":
