@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Read-only Kconfig exporter for OpenWrt NG Config Studio.
  *
@@ -170,7 +170,9 @@ static void emit_menu(struct menu *menu)
 			print_menu_path(child);
 			fputs(",\"help\":", stdout);
 			json_string(menu_get_help(child));
-			fputs("}\n", stdout);
+			fputs(",\"source\":", stdout);
+			json_string(child->file && child->file->name ? child->file->name : "");
+			printf(",\"line\":%d}\n", child->lineno);
 		}
 
 		emit_menu(child);
