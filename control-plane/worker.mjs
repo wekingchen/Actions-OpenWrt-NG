@@ -620,6 +620,37 @@ export async function handleControlPlaneRequest(
       }
     }
 
+    const artifactDownloadMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/builds\/(\d+)\/artifacts\/(\d+)\/download$/
+    );
+    if (request.method === "GET" && artifactDownloadMatch) {
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+      const owner = decodeURIComponent(artifactDownloadMatch[1]);
+      const repo = decodeURIComponent(artifactDownloadMatch[2]);
+      try {
+        const location = await deps.github.getBuilderArtifactDownloadUrl(
+          session.accessToken,
+          owner,
+          repo,
+          artifactDownloadMatch[3],
+          artifactDownloadMatch[4]
+        );
+        return redirect(location);
+      } catch (error) {
+        if (error instanceof BuildControlError) {
+          return json(error.status, { error: error.code });
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_artifact_download_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
+    }
+
     const buildDetailMatch = url.pathname.match(
       /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/builds\/(\d+)$/
     );
