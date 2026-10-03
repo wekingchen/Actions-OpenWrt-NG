@@ -11,6 +11,7 @@ on:
       - ".github/workflows/deploy-control-plane.yml"
       - ".github/workflows/build-openwrt.yml"
       - "scripts/compile.sh"
+      - "scripts/cleanup-workflow-runs.sh"
       - "scripts/write-summary.sh"
   pull_request:
     paths:
@@ -19,6 +20,7 @@ on:
       - ".github/workflows/deploy-control-plane.yml"
       - ".github/workflows/build-openwrt.yml"
       - "scripts/compile.sh"
+      - "scripts/cleanup-workflow-runs.sh"
       - "scripts/write-summary.sh"
 
 permissions:
@@ -61,6 +63,7 @@ jobs:
         node --check control-plane/public/app.js
         node --check control-plane/test.mjs
         bash -n scripts/compile.sh
+        bash -n scripts/cleanup-workflow-runs.sh
         bash -n scripts/write-summary.sh
         python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
         python3 -m json.tool control-plane/api-schema.json >/dev/null
@@ -80,6 +83,10 @@ jobs:
         grep -q 'default-branch-fallback' .github/workflows/build-openwrt.yml
         grep -q 'target_mode=' .github/workflows/build-openwrt.yml
         grep -q 'Tag Target 模式' .github/workflows/build-openwrt.yml
+        grep -q 'scripts/cleanup-workflow-runs.sh' .github/workflows/build-openwrt.yml
+        grep -q 'contents/.github/workflows?ref=' scripts/cleanup-workflow-runs.sh
+        grep -q 'actions/runs?per_page=100' scripts/cleanup-workflow-runs.sh
+        grep -q '已无对应 yml/yaml' scripts/cleanup-workflow-runs.sh
         grep -q 'return_run_details: true' control-plane/lib/github.mjs
         grep -q 'friendlyError' control-plane/public/app.js
         grep -q 'Profile 可读取' control-plane/public/app.js
