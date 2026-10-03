@@ -460,7 +460,8 @@ function readNewProfileInput() {
     maximizeSpace: $("new-maximize-space").checked,
     streamLog: $("new-stream-log").checked,
     requiredPackages: $("new-required-packages").value,
-    watchSources: $("new-watch-sources").value
+    watchSources: $("new-watch-sources").value,
+    extraFeeds: $("new-extra-feeds").value
   };
 }
 
@@ -501,8 +502,11 @@ function resetNewProfileForm() {
   $("new-stream-log").checked = true;
   $("new-config-file").value = "";
   $("new-config-text").value = "";
+  $("new-extra-feeds").value = "";
   $("new-required-packages").value = "";
   $("new-watch-sources").value = "";
+  createState.configStudioDraft = loadNewConfigStudioDraft(createState.repo);
+  renderNewConfigStudioState();
   invalidateNewProfilePreview();
 }
 
