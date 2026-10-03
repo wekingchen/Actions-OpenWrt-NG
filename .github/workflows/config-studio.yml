@@ -125,7 +125,7 @@ jobs:
         if [ -n "${POST_FEEDS_SCRIPT:-}" ]; then
           (cd openwrt && bash "$POST_FEEDS_SCRIPT")
         fi
-        (cd openwrt && ./scripts/feeds install -a)
+        bash scripts/install-feeds.sh "$GITHUB_WORKSPACE/openwrt" "$RUNNER_TEMP/openwrt-ng-feeds-install.log"
 
     - name: 由 Kconfig 生成最终配置
       run: |
