@@ -13,6 +13,32 @@ export function normalizeLines(value) {
     .join("\n");
 }
 
+export function feedNameFromLine(line) {
+  const match = String(line ?? "").trim().match(
+    /^src-git(?:-full)?(?:\s+--force)?\s+([A-Za-z0-9._-]+)\s+([^\s]+)$/
+  );
+  return match?.[1] || "";
+}
+
+export function normalizeFeedLines(value) {
+  const lines = normalizeLines(value);
+  if (!lines) return "";
+
+  const seen = new Set();
+  const output = [];
+  for (const line of lines.split("\n")) {
+    if (line.startsWith("#")) {
+      output.push(line);
+      continue;
+    }
+    const name = feedNameFromLine(line);
+    if (name && seen.has(name)) continue;
+    if (name) seen.add(name);
+    output.push(line);
+  }
+  return output.join("\n");
+}
+
 export function validateProfileInput(input) {
   const errors = [];
   const profileId = String(input.profileId ?? "");
@@ -43,7 +69,6 @@ export function validateProfileInput(input) {
     }
   }
 
-  const feedNames = new Set();
   const feeds = normalizeLines(input.extraFeeds);
   for (const line of feeds ? feeds.split("\n") : []) {
     if (line.startsWith("#")) continue;
@@ -54,11 +79,6 @@ export function validateProfileInput(input) {
       errors.push("额外 feed 格式必须是：src-git [--force] 名称 Git地址[;分支]。");
       break;
     }
-    if (feedNames.has(match[1])) {
-      errors.push(`额外 feed 名称重复：${match[1]}`);
-      break;
-    }
-    feedNames.add(match[1]);
   }
 
   const labels = new Set(["source"]);
@@ -95,7 +115,7 @@ export function buildProfileFiles(input) {
   const base = `profiles/${id}`;
   const requiredPackages = normalizeLines(input.requiredPackages);
   const watchSources = normalizeLines(input.watchSources);
-  const extraFeeds = normalizeLines(input.extraFeeds);
+  const extraFeeds = normalizeFeedLines(input.extraFeeds);
 
   const profileEnv = [
     `PROFILE_NAME=${shellQuote(input.profileName.trim())}`,
