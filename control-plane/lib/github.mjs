@@ -21,6 +21,9 @@ const PROFILE_FILE_MODES = Object.freeze({
 
 const PROFILE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const BUILDER_WORKFLOW = "build-openwrt.yml";
+const CONFIG_STUDIO_WORKFLOW = "config-studio.yml";
+const CONFIG_STUDIO_ID_RE = /^[0-9a-f]{16}$/;
+const CONFIG_STUDIO_BRANCH_PREFIX = "openwrt-ng/config-session-";
 const ACTIVE_BUILD_STATUSES = new Set([
   "queued",
   "in_progress",
@@ -71,6 +74,15 @@ export class BuildControlError extends Error {
   }
 }
 
+export class ConfigStudioError extends Error {
+  constructor(code, status = 400, message = code) {
+    super(message);
+    this.name = "ConfigStudioError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
 export function githubErrorReason(error) {
   const code =
     error && typeof error.githubError === "string"
@@ -108,6 +120,48 @@ function decodeBase64Utf8(value) {
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
   return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 }
+
+function decodeBase64Bytes(value) {
+  const binary = atob(String(value || "").replace(/\s+/g, ""));
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+async function decodeGzipBase64Json(value) {
+  if (typeof DecompressionStream !== "function") {
+    throw new ConfigStudioError("config_studio_gzip_unavailable", 500);
+  }
+  const bytes = decodeBase64Bytes(value);
+  const stream = new Blob([bytes])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"));
+  const text = await new Response(stream).text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new ConfigStudioError("config_studio_result_invalid", 502);
+  }
+}
+
+function profileEnvValue(content, key) {
+  const line = String(content || "")
+    .split(/\r?\n/)
+    .find((item) => item.trim().startsWith(key + "="));
+  if (!line) return "";
+  let value = line.slice(line.indexOf("=") + 1).trim();
+  if (
+    value.length >= 2 &&
+    ((value.startsWith("'") && value.endsWith("'")) ||
+      (value.startsWith('"') && value.endsWith('"')))
+  ) {
+    value = value.slice(1, -1);
+  }
+  return value;
+}
+
+function configStudioBranch(requestId) {
+  return CONFIG_STUDIO_BRANCH_PREFIX + requestId;
+}
+
 
 function byteLength(value) {
   return new TextEncoder().encode(String(value)).byteLength;
