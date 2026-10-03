@@ -1,5 +1,6 @@
 import {
   BuildControlError,
+  ConfigStudioError,
   GitHubAppClient,
   ProfileWriteError,
   githubErrorReason
@@ -578,6 +579,169 @@ export async function handleControlPlaneRequest(
         if (error?.name === "GitHubRequestError") {
           return json(502, {
             error: "github_profile_write_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
+    }
+
+
+    const configStudioRootMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/config-studio$/
+    );
+    if (request.method === "POST" && configStudioRootMatch) {
+      if (!validMutationRequest(request, config.origin)) {
+        return json(403, { error: "csrf_validation_failed" });
+      }
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return json(400, { error: "invalid_json" });
+      }
+      const owner = decodeURIComponent(configStudioRootMatch[1]);
+      const repo = decodeURIComponent(configStudioRootMatch[2]);
+      try {
+        const result = await deps.github.startConfigStudio(
+          session.accessToken,
+          owner,
+          repo,
+          payload
+        );
+        return json(202, result);
+      } catch (error) {
+        if (error instanceof ConfigStudioError) {
+          return json(error.status, { error: error.code });
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_config_studio_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
+    }
+
+    const configStudioSessionMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/config-studio\/([0-9a-f]{16})$/
+    );
+    if (request.method === "GET" && configStudioSessionMatch) {
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+      const owner = decodeURIComponent(configStudioSessionMatch[1]);
+      const repo = decodeURIComponent(configStudioSessionMatch[2]);
+      const requestId = configStudioSessionMatch[3];
+      try {
+        const result = await deps.github.getConfigStudioSession(
+          session.accessToken,
+          owner,
+          repo,
+          requestId
+        );
+        return json(200, result);
+      } catch (error) {
+        if (error instanceof ConfigStudioError) {
+          return json(error.status, { error: error.code });
+        }
+        throw error;
+      }
+    }
+    if (request.method === "DELETE" && configStudioSessionMatch) {
+      if (!validMutationRequest(request, config.origin)) {
+        return json(403, { error: "csrf_validation_failed" });
+      }
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+      const owner = decodeURIComponent(configStudioSessionMatch[1]);
+      const repo = decodeURIComponent(configStudioSessionMatch[2]);
+      const requestId = configStudioSessionMatch[3];
+      try {
+        const result = await deps.github.deleteConfigStudioSession(
+          session.accessToken,
+          owner,
+          repo,
+          requestId
+        );
+        return json(200, result);
+      } catch (error) {
+        if (error instanceof ConfigStudioError) {
+          return json(error.status, { error: error.code });
+        }
+        throw error;
+      }
+    }
+
+    const configStudioResolveMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/config-studio\/([0-9a-f]{16})\/resolve$/
+    );
+    if (request.method === "POST" && configStudioResolveMatch) {
+      if (!validMutationRequest(request, config.origin)) {
+        return json(403, { error: "csrf_validation_failed" });
+      }
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return json(400, { error: "invalid_json" });
+      }
+      const owner = decodeURIComponent(configStudioResolveMatch[1]);
+      const repo = decodeURIComponent(configStudioResolveMatch[2]);
+      const requestId = configStudioResolveMatch[3];
+      try {
+        const result = await deps.github.submitConfigStudioSelection(
+          session.accessToken,
+          owner,
+          repo,
+          requestId,
+          payload
+        );
+        return json(202, result);
+      } catch (error) {
+        if (error instanceof ConfigStudioError) {
+          return json(error.status, { error: error.code });
+        }
+        throw error;
+      }
+    }
+
+    const configStudioApplyMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/config-studio\/([0-9a-f]{16})\/apply\/([^/]+)$/
+    );
+    if (request.method === "POST" && configStudioApplyMatch) {
+      if (!validMutationRequest(request, config.origin)) {
+        return json(403, { error: "csrf_validation_failed" });
+      }
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+      const owner = decodeURIComponent(configStudioApplyMatch[1]);
+      const repo = decodeURIComponent(configStudioApplyMatch[2]);
+      const requestId = configStudioApplyMatch[3];
+      const profileId = decodeURIComponent(configStudioApplyMatch[4]);
+      try {
+        const result = await deps.github.applyConfigStudioToProfile(
+          session.accessToken,
+          owner,
+          repo,
+          requestId,
+          profileId
+        );
+        return json(201, result);
+      } catch (error) {
+        if (error instanceof ConfigStudioError) {
+          return json(error.status, { error: error.code });
+        }
+        if (error instanceof ProfileWriteError) {
+          return json(error.status, { error: error.code });
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_config_studio_apply_failed",
             reason: githubErrorReason(error)
           });
         }
