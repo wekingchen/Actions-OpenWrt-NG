@@ -361,14 +361,16 @@ Control Plane 不自己计算依赖。用户提交选择后，Action 实际运�
 
 ```text
 Control Plane 创建临时 session branch
+  仅保存 request.json
         ↓
-configure Job · contents:read
+Config Studio Action · contents:read
   clone 外部源码 / feeds
   make defconfig
-  生成 catalog / result Artifact
+  生成 catalog / result
         ↓
-writeback Job · contents:write
-  只把受控结果写回 session branch
+1 天短期 Actions Artifact
+        ↓
+Control Plane 会话鉴权读取并解压
         ↓
 用户确认
   ├─ 已有 Profile → 只替换 .config → 新分支 + PR
@@ -377,7 +379,7 @@ writeback Job · contents:write
 清理 session branch
 ```
 
-执行第三方 OpenWrt 源码和 feeds 的 Job 不拥有仓库写权限；写权限只存在于不执行第三方代码的独立 writeback Job。原 `.config` 上传 / 文本编辑仍然保留为高级兼容入口。SSH / tmate 不作为正式 Config Studio 主流程。
+执行第三方 OpenWrt 源码和 feeds 的 Workflow 全程不拥有仓库写权限；大型 catalog / result 不再写入 GitHub 分支，避免尺寸限制和第三方代码与写权限共存。原 `.config` 上传 / 文本编辑仍然保留为高级兼容入口。SSH / tmate 不作为正式 Config Studio 主流程。
 
 ### 12. 在自己的模板实例中启用 GitHub Pages V2 入口
 
