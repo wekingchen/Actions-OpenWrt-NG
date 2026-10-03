@@ -316,6 +316,7 @@ release
       ▼
 cleanup
   actions: write
+  contents: read
 ```
 
 设计原则：
@@ -326,7 +327,7 @@ cleanup
 - 正常情况下 Release tag 精确指向本次构建 commit；如果 GitHub 因历史 commit 与当前默认分支存在 workflow 差异而返回 `403 Resource not accessible by integration`，才自动降级为当前默认分支 tag，并在 Release 说明中保留真实 Build Run / commit。
 - 没有成功构建和验收，不创建 Release。
 - 旧 Release 只在新 Release 成功后清理。
-- Workflow 历史由独立最小权限 job 清理。
+- Workflow 历史由独立最小权限 job 清理：现存 Workflow 每个至少保留最近 10 条，超过 30 天的额外记录才删除；如果临时 Workflow 的 `.yml/.yaml` 已从默认分支删除，其已完成 runs 会在后续 Builder cleanup 中自动清理，运行中的记录会跳过。
 
 ## 自动检查上游更新
 
