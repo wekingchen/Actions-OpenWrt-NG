@@ -350,7 +350,7 @@ V2.0E 解决“创建 `.config` 仍必须在本地搭建编译环境并执行 `m
 - 软件包与 LuCI App，保留 `n / y / m` 三态语义。
 - 当前目标下可见的 Kconfig 编译特性，例如开发、镜像、网络、内核和调试相关选项。
 
-常用源当前包括 Passwall、`fw876/helloworld` 和 `sbwml/openwrt_helloworld`。Passwall 保持普通 feed；两个 HelloWorld 预设会写成 `src-git --force ...`，表示第三方版本优先。后台统一通过 `scripts/install-feeds.sh` 调用 OpenWrt 的 feeds 安装器，并把 `Overriding core package` / `Not overriding core package` 汇总到日志。多 feed 提供同名 source package 时，配置文件中靠前者优先。
+常用源当前包括 Passwall、`fw876/helloworld` 和 `sbwml/openwrt_helloworld`。所有常用源预设都会写成 `src-git --force ...`，统一优先于 OpenWrt core/default 同名 source package。后台在 `feeds update` 后先由 `scripts/resolve-feed-priority.py` 比较所有优先第三方 feed 的真实 `Version:` metadata；同名 source package 只保留版本最高候选，版本相同才按 feed 顺序稳定择一。随后 `scripts/install-feeds.sh` 调用 OpenWrt 原生 feeds 安装器完成 core override，并汇总 `Overriding core package` / `Not overriding core package` 日志。
 
 Control Plane 不自己计算依赖。用户提交选择后，Action 实际运行 `make defconfig`，再把结果返回前端，标记：
 
