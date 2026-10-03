@@ -2969,3 +2969,23 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
     align-items: flex-start;
   }
 }
+
+.profile-advanced-options {
+  margin-top: 14px;
+}
+.profile-advanced-body {
+  display: grid;
+  gap: 0;
+  padding: 4px 12px 12px;
+}
+.profile-advanced-body .compact-section {
+  margin: 0;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+.profile-advanced-body .compact-section:last-child {
+  border-bottom: 0;
+}
