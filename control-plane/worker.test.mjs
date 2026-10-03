@@ -156,6 +156,12 @@ const github = {
             sha: "watch",
             exists: true,
             content: ""
+          },
+          "feeds.conf": {
+            path: "profiles/default/feeds.conf",
+            sha: "feeds",
+            exists: true,
+            content: "src-git demo https://github.com/example/demo.git;main\n"
           }
         }
       }
@@ -326,7 +332,8 @@ const github = {
         "diy-part1.sh",
         "diy-part2.sh",
         "required-packages.txt",
-        "watch-sources.txt"
+        "watch-sources.txt",
+        "feeds.conf"
       ],
       action: "create",
       pullRequest: {
@@ -584,7 +591,8 @@ const templateInput = {
   maximizeSpace: false,
   streamLog: true,
   requiredPackages: "",
-  watchSources: ""
+  watchSources: "",
+  extraFeeds: "src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main"
 };
 
 const rejectedTemplatePreview = await handleControlPlaneRequest(
@@ -624,7 +632,7 @@ const templatePreview = await handleControlPlaneRequest(
 assert.equal(templatePreview.status, 200);
 const templatePreviewBody = await templatePreview.json();
 assert.equal(templatePreviewBody.profileId, "new-profile");
-assert.equal(templatePreviewBody.files.length, 6);
+assert.equal(templatePreviewBody.files.length, 7);
 assert.ok(
   templatePreviewBody.files.every((file) =>
     file.path.startsWith("profiles/new-profile/")
@@ -698,7 +706,8 @@ const writeFiles = {
   "diy-part1.sh": "#!/bin/bash\n",
   "diy-part2.sh": "#!/bin/bash\n",
   "required-packages.txt": "",
-  "watch-sources.txt": ""
+  "watch-sources.txt": "",
+  "feeds.conf": ""
 };
 const write = await handleControlPlaneRequest(
   new Request(
