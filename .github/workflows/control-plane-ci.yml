@@ -152,6 +152,14 @@ jobs:
         grep -q 'renderBuildRows' /tmp/control-plane-app.js
         grep -q 'builds?limit=100' /tmp/control-plane-app.js
         grep -q 'Math.min(100' lib/github.mjs
+        grep -q 'getBuilderArtifactDownloadUrl' lib/github.mjs
+        grep -q 'getBuilderArtifactDownloadUrl' worker.mjs
+        grep -q 'getBuilderArtifactDownloadUrl' server.mjs
+        grep -q '/artifacts/' /tmp/control-plane-app.js
+        grep -q '/download' /tmp/control-plane-app.js
+        grep -q 'selectionVersion' /tmp/control-plane-app.js
+        grep -q 'buildState.generation' /tmp/control-plane-app.js
+        grep -q 'buildDialogState.requestVersion' /tmp/control-plane-app.js
         grep -q 'result.requestId' /tmp/control-plane-app.js
         grep -q 'build_already_active' /tmp/control-plane-app.js
         grep -q 'readNewProfileInput' /tmp/control-plane-app.js
@@ -222,6 +230,8 @@ jobs:
         python3 - <<'PY'
         from pathlib import Path
         html = Path("/tmp/control-plane-index.html").read_text()
+        if html.count("<main") != 1 or html.count("</main>") != 1:
+            raise SystemExit("ERROR: Control Plane 页面必须且只能包含一组 main 标签")
         start = html.index('id="build-card"')
         end = html.index('</section>', start)
         block = html[start:end]
@@ -230,6 +240,9 @@ jobs:
         dialog = html[html.index('id="build-dialog"'):]
         if 'id="trigger-build"' not in dialog or 'id="publish-release"' not in dialog:
             raise SystemExit("ERROR: 构建入口与 Release 开关必须位于构建确认弹层")
+        app = Path("/tmp/control-plane-app.js").read_text()
+        if "artifact.url" in app:
+            raise SystemExit("ERROR: Artifact 下载不能退回未承诺的 GitHub Web 页面路径")
         PY
 
     - name: 构建可选自托管容器

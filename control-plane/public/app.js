@@ -24,7 +24,8 @@ const editorState = {
   original: {},
   files: {},
   currentFile: ".config",
-  previewValid: false
+  previewValid: false,
+  loadVersion: 0
 };
 
 const buildState = {
@@ -32,13 +33,16 @@ const buildState = {
   requestId: "",
   pollTimer: null,
   pollAttempts: 0,
-  hasActiveRuns: false
+  hasActiveRuns: false,
+  generation: 0
 };
 
 const buildDialogState = {
   repo: null,
   profileId: "",
-  releaseAllowed: false
+  releaseAllowed: false,
+  requestVersion: 0,
+  restoreFocus: null
 };
 
 const createState = {
@@ -49,7 +53,8 @@ const createState = {
 
 const repositoryState = {
   repositories: [],
-  selectedFullName: ""
+  selectedFullName: "",
+  selectionVersion: 0
 };
 
 function currentRepository() {
@@ -507,6 +512,33 @@ function clearBuildPolling() {
   }
 }
 
+function isCurrentBuildContext(repo, generation) {
+  return Boolean(
+    repo &&
+    generation === buildState.generation &&
+    buildState.repo?.fullName === repo.fullName &&
+    repositoryState.selectedFullName === repo.fullName
+  );
+}
+
+function buildStateMessage(titleText, detailText) {
+  const message = document.createElement("div");
+  message.className = "empty-state build-empty";
+  const title = document.createElement("strong");
+  title.textContent = titleText;
+  const detail = document.createElement("span");
+  detail.textContent = detailText;
+  message.append(title, detail);
+  return message;
+}
+
+function renderBuildHistoryState(title, detail) {
+  const recent = buildStateMessage(title, detail);
+  const full = buildStateMessage(title, detail);
+  $("recent-build-runs").replaceChildren(recent);
+  $("build-runs").replaceChildren(full);
+}
+
 function formatTime(value) {
   if (!value) return "—";
   const date = new Date(value);
@@ -584,19 +616,31 @@ function setBuildDialogStatus(message = "", isError = false) {
 }
 
 function closeBuildDialog() {
+  buildDialogState.requestVersion += 1;
+  const restoreFocus = buildDialogState.restoreFocus;
   $("build-dialog").hidden = true;
   document.body.classList.remove("dialog-open");
   buildDialogState.repo = null;
   buildDialogState.profileId = "";
   buildDialogState.releaseAllowed = false;
+  buildDialogState.restoreFocus = null;
   setBuildDialogStatus();
+  if (restoreFocus?.isConnected && typeof restoreFocus.focus === "function") {
+    restoreFocus.focus();
+  }
 }
 
 async function openBuildDialog(repo, profileId) {
   showError();
+  const requestVersion = buildDialogState.requestVersion + 1;
+  buildDialogState.requestVersion = requestVersion;
   buildDialogState.repo = repo;
   buildDialogState.profileId = profileId;
   buildDialogState.releaseAllowed = false;
+  buildDialogState.restoreFocus =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
 
   $("build-dialog-profile").textContent = profileId;
   $("build-dialog-title").textContent = `构建 ${profileId}`;
@@ -608,11 +652,21 @@ async function openBuildDialog(repo, profileId) {
   setBuildDialogStatus();
   $("build-dialog").hidden = false;
   document.body.classList.add("dialog-open");
+  $("build-dialog-close").focus();
 
   try {
     const data = await request(
       `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}`
     );
+    if (
+      requestVersion !== buildDialogState.requestVersion ||
+      buildDialogState.repo?.fullName !== repo.fullName ||
+      buildDialogState.profileId !== profileId ||
+      $("build-dialog").hidden
+    ) {
+      return;
+    }
+
     const profileEnv = data.profile.files["profile.env"]?.content || "";
     const releaseAllowed = parseProfileReleasePolicy(profileEnv);
     buildDialogState.releaseAllowed = releaseAllowed;
@@ -628,6 +682,12 @@ async function openBuildDialog(repo, profileId) {
       $("trigger-build").disabled = false;
     }
   } catch (error) {
+    if (
+      requestVersion !== buildDialogState.requestVersion ||
+      $("build-dialog").hidden
+    ) {
+      return;
+    }
     $("trigger-build").disabled = true;
     setBuildDialogStatus(friendlyError(error), true);
   }
@@ -728,11 +788,13 @@ function renderBuildRows(root, runs, options = {}) {
 
 async function loadBuildDetail(runId) {
   const repo = buildState.repo;
+  const generation = buildState.generation;
   if (!repo || !runId) return null;
 
   const data = await request(
     `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds/${runId}`
   );
+  if (!isCurrentBuildContext(repo, generation)) return null;
   const run = data.run;
 
   $("build-detail").hidden = false;
@@ -788,7 +850,8 @@ async function loadBuildDetail(runId) {
     for (const artifact of availableArtifacts) {
       const row = document.createElement("a");
       row.className = "build-link-row output-link-row";
-      row.href = artifact.url;
+      row.href =
+        `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds/${run.id}/artifacts/${artifact.id}/download`;
       row.target = "_blank";
       row.rel = "noreferrer";
       const strong = document.createElement("strong");
@@ -832,9 +895,11 @@ async function loadBuildDetail(runId) {
   return run;
 }
 
-function scheduleBuildPoll(delay = 15000) {
+function scheduleBuildPoll(delay = 15000, generation = buildState.generation) {
   clearBuildPolling();
+  const repo = buildState.repo;
   if (
+    !isCurrentBuildContext(repo, generation) ||
     (!buildState.hasActiveRuns && !buildState.requestId) ||
     buildState.pollAttempts >= MAX_BUILD_POLL_ATTEMPTS
   ) {
@@ -842,37 +907,42 @@ function scheduleBuildPoll(delay = 15000) {
   }
 
   buildState.pollTimer = setTimeout(() => {
-    loadBuildRuns({ polling: true }).catch((error) => {
+    if (!isCurrentBuildContext(repo, generation)) return;
+    loadBuildRuns({ polling: true, generation }).catch((error) => {
+      if (!isCurrentBuildContext(repo, generation)) return;
       buildState.pollAttempts += 1;
       showBuildResult(
-        `状态刷新暂时失败，将继续自动重试：${error.message}`
+        `状态刷新暂时失败，将继续自动重试：${friendlyError(error)}`
       );
-      scheduleBuildPoll(5000);
+      scheduleBuildPoll(5000, generation);
     });
   }, delay);
 }
 
 async function loadBuildRuns(options = {}) {
   const repo = buildState.repo;
-  if (!repo || !canReadActions(repo)) return;
+  const generation = options.generation ?? buildState.generation;
+  if (
+    !repo ||
+    !canReadActions(repo) ||
+    !isCurrentBuildContext(repo, generation)
+  ) {
+    return;
+  }
 
   const requestId = options.requestId || buildState.requestId || "";
   if (requestId) {
     const lookup = await request(
       `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds?request_id=${encodeURIComponent(requestId)}&limit=1`
     );
+    if (!isCurrentBuildContext(repo, generation)) return;
+
     if (!lookup.runs.length) {
       buildState.requestId = requestId;
       buildState.hasActiveRuns = true;
       showBuildResult("构建请求已提交，正在等待 GitHub 建立运行记录。");
-      if (!$("recent-build-runs").querySelector(".build-record")) {
-        renderBuildRows($("recent-build-runs"), [], { compact: true });
-      }
-      if (!$("build-runs").querySelector(".build-record")) {
-        renderBuildRows($("build-runs"), []);
-      }
       buildState.pollAttempts += 1;
-      scheduleBuildPoll(2500);
+      scheduleBuildPoll(2500, generation);
       return;
     }
     buildState.requestId = "";
@@ -881,6 +951,7 @@ async function loadBuildRuns(options = {}) {
   const data = await request(
     `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds?limit=100`
   );
+  if (!isCurrentBuildContext(repo, generation)) return;
 
   renderBuildRows($("recent-build-runs"), data.runs, { compact: true });
   renderBuildRows($("build-runs"), data.runs);
@@ -894,7 +965,7 @@ async function loadBuildRuns(options = {}) {
 
   if (buildState.hasActiveRuns) {
     showBuildResult("有构建正在运行，状态会自动刷新。");
-    scheduleBuildPoll(15000);
+    scheduleBuildPoll(15000, generation);
   } else {
     showBuildResult();
     clearBuildPolling();
@@ -903,6 +974,8 @@ async function loadBuildRuns(options = {}) {
 
 async function setupBuildHistory(repo) {
   clearBuildPolling();
+  const generation = buildState.generation + 1;
+  buildState.generation = generation;
   buildState.repo = repo;
   buildState.requestId = "";
   buildState.pollAttempts = 0;
@@ -912,32 +985,45 @@ async function setupBuildHistory(repo) {
   $("build-card").hidden = true;
   $("build-detail").hidden = true;
   showBuildResult();
+  renderBuildHistoryState("正在读取构建历史", "正在从 GitHub Actions 获取运行记录…");
 
   if (!canReadActions(repo)) {
-    const message = document.createElement("div");
-    message.className = "empty-state build-empty";
-    const title = document.createElement("strong");
-    title.textContent = "无法读取构建历史";
-    const detail = document.createElement("span");
-    detail.textContent = "GitHub App 需要 Actions 读取权限。";
-    message.append(title, detail);
-    $("recent-build-runs").replaceChildren(message.cloneNode(true));
-    $("build-runs").replaceChildren(message);
+    renderBuildHistoryState(
+      "无法读取构建历史",
+      "GitHub App 需要 Actions 读取权限。"
+    );
     return;
   }
 
-  await loadBuildRuns();
+  try {
+    await loadBuildRuns({ generation });
+  } catch (error) {
+    if (!isCurrentBuildContext(repo, generation)) return;
+    renderBuildHistoryState(
+      "构建历史暂时不可用",
+      friendlyError(error)
+    );
+  }
 }
 
 async function openProfile(repo, profileId, options = {}) {
   showError();
   showWriteResult();
   $("new-profile-card").hidden = true;
+  $("editor-card").hidden = true;
   invalidateNewProfilePreview();
 
+  const loadVersion = editorState.loadVersion + 1;
+  editorState.loadVersion = loadVersion;
   const data = await request(
     `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}`
   );
+  if (
+    loadVersion !== editorState.loadVersion ||
+    currentRepository()?.fullName !== repo.fullName
+  ) {
+    return;
+  }
 
   editorState.repo = repo;
   editorState.profileId = profileId;
@@ -987,11 +1073,12 @@ async function openProfile(repo, profileId, options = {}) {
   }
 }
 
-async function loadProfiles(repo) {
+async function loadProfiles(repo, selectionVersion) {
   showError();
   clearBuildPolling();
+  editorState.loadVersion += 1;
   createState.repo = repo;
-  repositoryState.selectedFullName = repo.fullName;
+  if (!$("build-dialog").hidden) closeBuildDialog();
   $("repo-switcher").value = repo.fullName;
   $("workspace-empty").hidden = true;
   $("editor-card").hidden = true;
@@ -1005,14 +1092,39 @@ async function loadProfiles(repo) {
     ? "通过 Pull Request 新建标准 Profile"
     : "需要 Contents 与 Pull requests 写权限";
 
-  const data = await request(
-    `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles`
-  );
-
   $("profile-card").hidden = false;
   $("profile-title").textContent = "配置";
-
   const root = $("profiles");
+  root.replaceChildren(
+    buildStateMessage("正在读取配置", "正在从当前仓库读取 Profile…")
+  );
+
+  let data;
+  try {
+    data = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles`
+    );
+  } catch (error) {
+    if (
+      selectionVersion !== repositoryState.selectionVersion ||
+      repositoryState.selectedFullName !== repo.fullName
+    ) {
+      return;
+    }
+    root.replaceChildren(
+      buildStateMessage("配置暂时不可用", friendlyError(error))
+    );
+    await setupBuildHistory(repo);
+    return;
+  }
+
+  if (
+    selectionVersion !== repositoryState.selectionVersion ||
+    repositoryState.selectedFullName !== repo.fullName
+  ) {
+    return;
+  }
+
   root.replaceChildren();
 
   if (!data.profiles.length) {
@@ -1075,7 +1187,10 @@ async function loadProfiles(repo) {
 
 async function selectRepository(repo) {
   if (!repo) return;
-  await loadProfiles(repo);
+  const selectionVersion = repositoryState.selectionVersion + 1;
+  repositoryState.selectionVersion = selectionVersion;
+  repositoryState.selectedFullName = repo.fullName;
+  await loadProfiles(repo, selectionVersion);
 }
 
 async function init() {
@@ -1403,6 +1518,7 @@ $("create-pr").addEventListener("click", async () => {
 $("trigger-build").addEventListener("click", async () => {
   const repo = buildDialogState.repo;
   const profileId = buildDialogState.profileId;
+  const requestVersion = buildDialogState.requestVersion;
   if (!repo || !profileId || !canRunRepo(repo)) return;
 
   const button = $("trigger-build");
@@ -1423,28 +1539,49 @@ $("trigger-build").addEventListener("click", async () => {
       }
     );
 
-    buildState.repo = repo;
+    if (currentRepository()?.fullName !== repo.fullName) return;
+
     buildState.requestId = result.requestId || "";
     buildState.pollAttempts = 0;
-    closeBuildDialog();
+    const generation = buildState.generation;
+    if (requestVersion === buildDialogState.requestVersion) {
+      closeBuildDialog();
+    }
 
-    await loadBuildRuns({ requestId: result.requestId || "" });
+    await loadBuildRuns({
+      requestId: result.requestId || "",
+      generation
+    });
   } catch (error) {
+    if (currentRepository()?.fullName !== repo.fullName) return;
+
     if (error.code === "build_already_active" && error.body?.activeRun) {
       const run = error.body.activeRun;
-      setBuildDialogStatus(
-        `这个 Profile 已有构建 #${run.runNumber} 正在${buildStatusLabel(run)}，不会重复触发。`,
-        true
-      );
-      buildState.repo = repo;
+      if (
+        requestVersion === buildDialogState.requestVersion &&
+        !$("build-dialog").hidden
+      ) {
+        setBuildDialogStatus(
+          `这个 Profile 已有构建 #${run.runNumber} 正在${buildStatusLabel(run)}，不会重复触发。`,
+          true
+        );
+      }
       buildState.requestId = "";
-      await loadBuildRuns();
-    } else {
+      await loadBuildRuns({ generation: buildState.generation });
+    } else if (
+      requestVersion === buildDialogState.requestVersion &&
+      !$("build-dialog").hidden
+    ) {
       setBuildDialogStatus(friendlyError(error), true);
     }
   } finally {
     button.textContent = "开始构建";
-    button.disabled = !canRunRepo(repo);
+    if (
+      requestVersion === buildDialogState.requestVersion &&
+      !$("build-dialog").hidden
+    ) {
+      button.disabled = !canRunRepo(repo);
+    }
   }
 });
 

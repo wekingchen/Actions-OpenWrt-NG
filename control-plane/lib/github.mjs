@@ -656,6 +656,89 @@ export class GitHubAppClient {
     };
   }
 
+  async getBuilderArtifactDownloadUrl(
+    token,
+    owner,
+    repo,
+    runId,
+    artifactId
+  ) {
+    const numericRunId = Number(runId);
+    const numericArtifactId = Number(artifactId);
+    if (!Number.isSafeInteger(numericRunId) || numericRunId <= 0) {
+      throw new BuildControlError("invalid_run_id", 400);
+    }
+    if (!Number.isSafeInteger(numericArtifactId) || numericArtifactId <= 0) {
+      throw new BuildControlError("invalid_artifact_id", 400);
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const run = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}`,
+      token
+    );
+    const workflowPath = String(run.path || "").split("@", 1)[0];
+    if (workflowPath !== ".github/workflows/" + BUILDER_WORKFLOW) {
+      throw new BuildControlError("not_builder_run", 404);
+    }
+
+    const artifactsBody = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}/artifacts?per_page=100`,
+      token
+    );
+    const artifacts = Array.isArray(artifactsBody.artifacts)
+      ? artifactsBody.artifacts
+      : [];
+    const artifact = artifacts.find(
+      (item) => Number(item.id) === numericArtifactId
+    );
+    if (!artifact) {
+      throw new BuildControlError("artifact_not_found", 404);
+    }
+    if (artifact.expired) {
+      throw new BuildControlError("artifact_expired", 410);
+    }
+
+    const response = await this.fetchImpl(
+      `${GITHUB_API}/repos/${safeOwner}/${safeRepo}/actions/artifacts/${numericArtifactId}/zip`,
+      {
+        method: "GET",
+        redirect: "manual",
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: "Bearer " + token,
+          "X-GitHub-Api-Version": this.apiVersion,
+          "User-Agent": "OpenWrt-NG-Control-Plane"
+        }
+      }
+    );
+
+    const location = response.headers.get("location") || "";
+    if (response.status >= 300 && response.status < 400 && location) {
+      const resolved = new URL(location, GITHUB_API);
+      if (resolved.protocol !== "https:") {
+        throw new BuildControlError("artifact_download_unavailable", 502);
+      }
+      return resolved.toString();
+    }
+    if (response.status === 410) {
+      throw new BuildControlError("artifact_expired", 410);
+    }
+
+    let body = {};
+    const text = await response.text();
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = { message: response.statusText || "Artifact download failed" };
+      }
+    }
+    if (!response.ok) throw asJsonError(response, body);
+    throw new BuildControlError("artifact_download_unavailable", 502);
+  }
+
   async createProfileFilesPullRequest(
     token,
     owner,

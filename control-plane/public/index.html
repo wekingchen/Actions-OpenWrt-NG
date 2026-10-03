@@ -37,7 +37,7 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.10.0</small>
+        <small>Control Plane 0.10.1</small>
       </div>
     </aside>
 
@@ -346,7 +346,7 @@
           <div class="panel-header compact-panel-header">
             <div>
               <h2 id="build-title">构建</h2>
-              <p class="panel-description">完整构建历史、运行详情与固件产物。</p>
+              <p class="panel-description">最近 100 次构建、运行详情与固件产物。</p>
             </div>
             <button class="icon-button refresh-icon-button" id="refresh-builds" type="button" aria-label="刷新构建历史" title="刷新">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
@@ -372,7 +372,7 @@
       </main>
 
       <div class="build-dialog-backdrop" id="build-dialog" hidden>
-        <section class="build-dialog" role="dialog" aria-modal="true" aria-labelledby="build-dialog-title">
+        <section class="build-dialog" role="dialog" aria-modal="true" aria-labelledby="build-dialog-title" aria-describedby="build-dialog-repo">
           <div class="build-dialog-handle" aria-hidden="true"></div>
           <div class="panel-header build-dialog-header">
             <div>
@@ -404,7 +404,6 @@
           </div>
         </section>
       </div>
-      </main>
     </div>
   </div>
 

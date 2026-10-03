@@ -223,6 +223,14 @@ const github = {
       release: null
     };
   },
+  async getBuilderArtifactDownloadUrl(token, owner, repo, runId, artifactId) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(String(runId), "123");
+    assert.equal(String(artifactId), "77");
+    return "https://downloads.example.test/worker/77.zip";
+  },
   async createNewProfilePullRequest(token, owner, repo, profileId, files) {
     assert.equal(token, "ghu_worker_access");
     assert.equal(owner, "acme");
@@ -657,6 +665,23 @@ const buildDetail = await handleControlPlaneRequest(
 );
 assert.equal(buildDetail.status, 200);
 assert.equal((await buildDetail.json()).run.id, 123);
+
+const artifactDownload = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/builds/123/artifacts/77/download",
+    {
+      headers: { Cookie: sessionCookie },
+      redirect: "manual"
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(artifactDownload.status, 302);
+assert.equal(
+  artifactDownload.headers.get("location"),
+  "https://downloads.example.test/worker/77.zip"
+);
 
 const rejectedBuild = await handleControlPlaneRequest(
   new Request(
