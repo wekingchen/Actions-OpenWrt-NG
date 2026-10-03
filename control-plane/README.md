@@ -342,13 +342,15 @@ profiles/<id>/feeds.conf
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
 
-V2.0E 解决“创建 `.config` 仍必须在本地搭建编译环境并执行 `make menuconfig`”的问题。0.12.0 进一步把新 Profile 固定为“源码 → 额外 feeds → 生成菜单 → 选择配置 → 检查依赖 → 确认”的向导。额外 feeds 保存为 `profiles/<id>/feeds.conf`，Config Studio 与正式 Builder 都在 `feeds update -a` 前应用它。
+V2.0E 解决“创建 `.config` 仍必须在本地搭建编译环境并执行 `make menuconfig`”的问题。0.13.0 延续“源码 → 额外 feeds → 生成菜单 → 选择配置 → 检查依赖 → 确认”的向导，并增加 feed 优先级/同名包覆盖语义。额外 feeds 保存为 `profiles/<id>/feeds.conf`，Config Studio 与正式 Builder 都在 `feeds update -a` 前应用它；带 `--force` 的 feed 由 OpenWrt 在 `feeds install` 阶段覆盖 core/default 同名包。
 
 用户仍然亲自决定：
 
 - Target System / Subtarget / Target Profile（设备）。
 - 软件包与 LuCI App，保留 `n / y / m` 三态语义。
 - 当前目标下可见的 Kconfig 编译特性，例如开发、镜像、网络、内核和调试相关选项。
+
+常用源当前包括 Passwall、`fw876/helloworld` 和 `sbwml/openwrt_helloworld`。Passwall 保持普通 feed；两个 HelloWorld 预设会写成 `src-git --force ...`，表示第三方版本优先。后台统一通过 `scripts/install-feeds.sh` 调用 OpenWrt 的 feeds 安装器，并把 `Overriding core package` / `Not overriding core package` 汇总到日志。多 feed 提供同名 source package 时，配置文件中靠前者优先。
 
 Control Plane 不自己计算依赖。用户提交选择后，Action 实际运行 `make defconfig`，再把结果返回前端，标记：
 
