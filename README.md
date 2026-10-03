@@ -60,7 +60,8 @@ profiles/default/
 ├── diy-part1.sh
 ├── diy-part2.sh
 ├── required-packages.txt
-└── watch-sources.txt
+├── watch-sources.txt
+└── feeds.conf
 ```
 
 默认示例使用 Lean `master` + x86_64 generic，用于提供一个开箱即用的基准。
@@ -89,6 +90,7 @@ DIY_PART1="profiles/default/diy-part1.sh"
 DIY_PART2="profiles/default/diy-part2.sh"
 REQUIRED_PACKAGES_FILE="profiles/default/required-packages.txt"
 WATCH_SOURCES_FILE="profiles/default/watch-sources.txt"
+EXTRA_FEEDS_FILE="profiles/default/feeds.conf"
 
 AUTO_UPDATE="false"
 MAXIMIZE_BUILD_SPACE="false"
@@ -238,6 +240,27 @@ Profile ID 必须以字母或数字开头，只允许字母、数字、点、下
 - V1.3 Wizard 本身仍只负责本地生成 Profile；如果已部署 V2 Control Plane，也可以在控制面中直接新建标准 Profile，并通过独立分支 + Pull Request 安全写入仓库。
 
 ## Config Studio / Web Menuconfig
+
+Control Plane 0.12.0 把“新 Profile”整理成和手工 OpenWrt 配置一致的顺序：
+
+1. 选择 OpenWrt / LEDE 源码与分支。
+2. **先配置额外 feeds / 软件源。**
+3. 点击“生成配置菜单”；后台只在这一阶段建立真实源码 + feeds 环境。
+4. 在图形 Menuconfig 中选择 Target、设备、LuCI App、软件包与编译特性。
+5. 点击“下一步：检查依赖”，由 OpenWrt 自己执行 `make defconfig`。
+6. 检查自动加入 / 移除的依赖后确认，把最终 `.config` 带回 Profile 并创建 PR。
+
+关闭 Config Studio 窗口、按 Esc 或点遮罩只会**暂存当前会话**。只要源码、feeds 和基础 `.config` 没有变化，再次点击“继续图形配置”会恢复同一 session，不会重复启动 catalog Action；只有点击“放弃本次配置”才删除会话。
+
+额外 feeds 会保存到 `profiles/<id>/feeds.conf`，并在正式 Builder 和 Config Studio 中统一于 `./scripts/feeds update -a` **之前**插入。例如 Passwall 当前官方 feed 方式：
+
+```text
+src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main
+src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main
+```
+
+因此正确顺序是“先加 Passwall 源，再生成 Menuconfig，再搜索并选择 Passwall App”，而不是在 Menuconfig 之后补源。
+
 
 Control Plane 0.11.1 延续并修复 **Config Studio**，把初始化 `.config` 时必须人工完成的 `make menuconfig` 选择流程搬到浏览器，同时保留 OpenWrt Kconfig 作为唯一依赖解析器。
 
