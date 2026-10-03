@@ -205,14 +205,18 @@
                       <strong>常用源</strong>
                       <span>点击即可加入；仍可在下方手动修改。</span>
                     </div>
-                    <button class="button ghost" id="new-feed-passwall" type="button">+ Passwall</button>
+                    <div class="feed-preset-actions">
+                      <button class="button ghost" id="new-feed-passwall" type="button">+ Passwall</button>
+                      <button class="button ghost" id="new-feed-fw876" type="button">+ HelloWorld · fw876</button>
+                      <button class="button ghost" id="new-feed-sbwml" type="button">+ HelloWorld · sbwml</button>
+                    </div>
                   </div>
 
                   <label class="field">
                     <span>额外 feeds</span>
                     <textarea id="new-extra-feeds" class="editor feeds-editor" spellcheck="false"
                               placeholder="src-git my_feed https://github.com/example/openwrt-packages.git;main"></textarea>
-                    <small>这些源会在 <code>./scripts/feeds update -a</code> 之前插入。修改源码或 feeds 后，需要重新生成配置菜单。</small>
+                    <small>这些源会在 <code>./scripts/feeds update -a</code> 前插入。带 <code>--force</code> 的源会在安装 feeds 时覆盖 OpenWrt 默认同名包；多源冲突时越靠上优先级越高。修改后需要重新生成配置菜单。</small>
                   </label>
                 </div>
 
