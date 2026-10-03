@@ -1904,25 +1904,164 @@ function updateConfigStudioChangeCount() {
   );
 }
 
+function configStudioMenuLabel(value) {
+  return String(value || "").replace(/^\s*\d+\.\s*/, "").trim();
+}
+
 function renderConfigStudioPackageCategories() {
   const select = $("config-studio-category");
-  const previous = select.value || "all";
+  const previous = select.value || "";
   select.replaceChildren();
 
-  const all = document.createElement("option");
-  all.value = "all";
-  all.textContent = "全部分类";
-  select.appendChild(all);
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "选择一级分类…";
+  select.appendChild(placeholder);
 
   for (const category of configStudioState.catalog?.packageCategories || []) {
     const option = document.createElement("option");
     option.value = category;
-    option.textContent = category;
+    option.textContent = configStudioMenuLabel(category) || category;
     select.appendChild(option);
   }
   select.value = [...select.options].some((item) => item.value === previous)
     ? previous
-    : "all";
+    : "";
+  renderConfigStudioPackageSubmenus();
+}
+
+function renderConfigStudioPackageSubmenus() {
+  const select = $("config-studio-submenu");
+  const category = $("config-studio-category").value || "";
+  const previous = select.value || "";
+  select.replaceChildren();
+
+  const all = document.createElement("option");
+  all.value = "";
+  all.textContent = category ? "全部二级菜单" : "先选择一级分类";
+  select.appendChild(all);
+
+  const values = [
+    ...new Set(
+      (configStudioState.catalog?.packages || [])
+        .filter(
+          (pkg) =>
+            (pkg.visible || pkg.selected) &&
+            (!category || pkg.category === category)
+        )
+        .map((pkg) => String(pkg.submenu || "").trim())
+        .filter(Boolean)
+    )
+  ].sort((a, b) =>
+    configStudioMenuLabel(a).localeCompare(
+      configStudioMenuLabel(b),
+      "zh-Hans-CN",
+      { numeric: true }
+    )
+  );
+
+  for (const submenu of values) {
+    const option = document.createElement("option");
+    option.value = submenu;
+    option.textContent = configStudioMenuLabel(submenu) || submenu;
+    select.appendChild(option);
+  }
+
+  select.disabled = !category || !values.length;
+  select.value = [...select.options].some((item) => item.value === previous)
+    ? previous
+    : "";
+}
+
+function configStudioFeatureMenuPath(feature) {
+  return (feature.menuPath || [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function renderConfigStudioFeatureMenus() {
+  const menu = $("config-studio-feature-menu");
+  const previousMenu = menu.value || "";
+  menu.replaceChildren();
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "选择一级菜单…";
+  menu.appendChild(placeholder);
+
+  const firstLevels = [
+    ...new Set(
+      (configStudioState.catalog?.features || [])
+        .filter((feature) => feature.visible)
+        .map((feature) => configStudioFeatureMenuPath(feature)[0] || "其他")
+    )
+  ].sort((a, b) =>
+    configStudioMenuLabel(a).localeCompare(
+      configStudioMenuLabel(b),
+      "zh-Hans-CN",
+      { numeric: true }
+    )
+  );
+
+  for (const item of firstLevels) {
+    const option = document.createElement("option");
+    option.value = item;
+    option.textContent = configStudioMenuLabel(item) || item;
+    menu.appendChild(option);
+  }
+
+  menu.value = [...menu.options].some((item) => item.value === previousMenu)
+    ? previousMenu
+    : "";
+  renderConfigStudioFeatureSubmenus();
+}
+
+function renderConfigStudioFeatureSubmenus() {
+  const menu = $("config-studio-feature-menu");
+  const submenu = $("config-studio-feature-submenu");
+  const firstLevel = menu.value || "";
+  const previous = submenu.value || "";
+  submenu.replaceChildren();
+
+  const all = document.createElement("option");
+  all.value = "";
+  all.textContent = firstLevel ? "全部二级菜单" : "先选择一级菜单";
+  submenu.appendChild(all);
+
+  const values = new Set();
+  let hasDirect = false;
+  for (const feature of configStudioState.catalog?.features || []) {
+    if (!feature.visible) continue;
+    const path = configStudioFeatureMenuPath(feature);
+    const level1 = path[0] || "其他";
+    if (firstLevel && level1 !== firstLevel) continue;
+    if (path[1]) values.add(path[1]);
+    else hasDirect = true;
+  }
+
+  if (hasDirect) {
+    const option = document.createElement("option");
+    option.value = "__direct__";
+    option.textContent = "当前菜单直属选项";
+    submenu.appendChild(option);
+  }
+  for (const item of [...values].sort((a, b) =>
+    configStudioMenuLabel(a).localeCompare(
+      configStudioMenuLabel(b),
+      "zh-Hans-CN",
+      { numeric: true }
+    )
+  )) {
+    const option = document.createElement("option");
+    option.value = item;
+    option.textContent = configStudioMenuLabel(item) || item;
+    submenu.appendChild(option);
+  }
+
+  submenu.disabled = !firstLevel || (!values.size && !hasDirect);
+  submenu.value = [...submenu.options].some((item) => item.value === previous)
+    ? previous
+    : "";
 }
 
 function configStudioPackageEnabled(pkg) {
@@ -2165,11 +2304,26 @@ function configStudioPackageChildren(pkg, search) {
 function renderConfigStudioPackages() {
   const root = $("config-studio-packages");
   const search = $("config-studio-search").value.trim().toLowerCase();
-  const category = $("config-studio-category").value || "all";
+  const category = $("config-studio-category").value || "";
+  const submenu = $("config-studio-submenu").value || "";
   const luciOnly = $("config-studio-luci-only").checked;
 
+  if (!search && !category) {
+    $("config-studio-package-count").textContent = "请先选择一级分类";
+    root.replaceChildren();
+    const empty = document.createElement("div");
+    empty.className = "config-studio-empty config-studio-menu-hint";
+    empty.textContent =
+      "像传统 menuconfig 一样，先选择一级分类，再按二级菜单缩小范围；也可以直接搜索全部软件包。";
+    root.appendChild(empty);
+    return;
+  }
+
   const matches = (configStudioState.catalog?.packages || []).filter((pkg) => {
-    if (category !== "all" && pkg.category !== category) return false;
+    const modified = configStudioState.modifiedValues.has(pkg.symbol);
+    if (!pkg.visible && !pkg.selected && !modified) return false;
+    if (!search && category && pkg.category !== category) return false;
+    if (!search && submenu && pkg.submenu !== submenu) return false;
     if (luciOnly && !pkg.luciApp) return false;
     if (!search) return true;
     return [
@@ -2321,9 +2475,33 @@ function featureControl(feature, row) {
 function renderConfigStudioFeatures() {
   const root = $("config-studio-features");
   const search = $("config-studio-feature-search").value.trim().toLowerCase();
+  const menu = $("config-studio-feature-menu").value || "";
+  const submenu = $("config-studio-feature-submenu").value || "";
+
+  if (!search && !menu) {
+    $("config-studio-feature-count").textContent = "请先选择一级菜单";
+    root.replaceChildren();
+    const empty = document.createElement("div");
+    empty.className = "config-studio-empty config-studio-menu-hint";
+    empty.textContent =
+      "编译特性按 OpenWrt 的真实 Kconfig 菜单路径分类；先进入一级菜单，或直接搜索全部特性。";
+    root.appendChild(empty);
+    return;
+  }
+
   const matches = (configStudioState.catalog?.features || []).filter(
     (feature) => {
       if (!feature.visible) return false;
+      const path = configStudioFeatureMenuPath(feature);
+      const firstLevel = path[0] || "其他";
+      if (!search && menu && firstLevel !== menu) return false;
+      if (
+        !search &&
+        submenu &&
+        (submenu === "__direct__" ? Boolean(path[1]) : path[1] !== submenu)
+      ) {
+        return false;
+      }
       if (!search) return true;
       return [
         feature.name,
@@ -2393,6 +2571,7 @@ function renderConfigStudioCatalog(forceSelection = false) {
   pickConfigStudioTargetSelection(forceSelection);
   renderConfigStudioTargetSelectors();
   renderConfigStudioPackageCategories();
+  renderConfigStudioFeatureMenus();
   renderConfigStudioPackages();
   renderConfigStudioFeatures();
   updateConfigStudioChangeCount();
@@ -3490,17 +3669,44 @@ $("config-studio-device").addEventListener("change", () => {
   persistNewConfigStudioUi();
 });
 
-for (const id of [
-  "config-studio-search",
-  "config-studio-category",
-  "config-studio-luci-only"
-]) {
-  $(id).addEventListener("input", renderConfigStudioPackages);
-  $(id).addEventListener("change", renderConfigStudioPackages);
-}
+$("config-studio-search").addEventListener("input", renderConfigStudioPackages);
+
+$("config-studio-category").addEventListener("change", () => {
+  renderConfigStudioPackageSubmenus();
+  renderConfigStudioPackages();
+});
+
+$("config-studio-submenu").addEventListener(
+  "change",
+  renderConfigStudioPackages
+);
+
+$("config-studio-luci-only").addEventListener("change", () => {
+  if (
+    $("config-studio-luci-only").checked &&
+    !$("config-studio-category").value &&
+    [...$("config-studio-category").options].some(
+      (item) => item.value === "LuCI"
+    )
+  ) {
+    $("config-studio-category").value = "LuCI";
+    renderConfigStudioPackageSubmenus();
+  }
+  renderConfigStudioPackages();
+});
 
 $("config-studio-feature-search").addEventListener(
   "input",
+  renderConfigStudioFeatures
+);
+
+$("config-studio-feature-menu").addEventListener("change", () => {
+  renderConfigStudioFeatureSubmenus();
+  renderConfigStudioFeatures();
+});
+
+$("config-studio-feature-submenu").addEventListener(
+  "change",
   renderConfigStudioFeatures
 );
 
