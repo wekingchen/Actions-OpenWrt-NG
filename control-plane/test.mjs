@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import {
   GitHubAppClient,
@@ -21,6 +22,28 @@ import {
   profileFilesObject
 } from "./lib/profile-template.mjs";
 import { buildProfileFiles as buildWizardProfileFiles } from "../dashboard/assets/wizard-core.js";
+
+const controlPlaneAppJs = readFileSync("./public/app.js", "utf8");
+const controlPlaneIndexHtml = readFileSync("./public/index.html", "utf8");
+const referencedDomIds = [
+  ...new Set(
+    [...controlPlaneAppJs.matchAll(/\$\("([^"]+)"\)/g)].map((match) => match[1])
+  )
+];
+const missingDomIds = referencedDomIds.filter(
+  (id) =>
+    !controlPlaneIndexHtml.includes('id="' + id + '"') &&
+    !controlPlaneIndexHtml.includes("id='" + id + "'")
+);
+assert.deepEqual(
+  missingDomIds,
+  [],
+  "app.js 引用的 DOM id 必须全部存在于 index.html"
+);
+assert.match(
+  controlPlaneIndexHtml,
+  /id="config-studio-progress-track"[^>]*role="progressbar"/
+);
 
 const builderProgress = builderProgressFromJobs([
   {
