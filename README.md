@@ -264,18 +264,14 @@ src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;m
 0.13.0 还支持把“这个第三方源是否要替代默认同名包”直接写进 `feeds.conf`。OpenWrt 自己支持在 feed 行声明 `--force`；项目会在 `feeds install` 阶段由 OpenWrt 完成 override，并汇总“已覆盖 / 未覆盖”的同名包日志。常用源预设：
 
 ```text
-# Passwall：普通新增，不默认覆盖 core
-src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main
-src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main
-
-# fw876 HelloWorld：优先覆盖 OpenWrt 默认同名包
+# 所有“常用源”都统一第三方优先
+src-git --force passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main
+src-git --force passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main
 src-git --force helloworld https://github.com/fw876/helloworld.git
-
-# sbwml HelloWorld 依赖源：优先覆盖同名包；固定当前 v5 系列
 src-git --force sbwml_helloworld https://github.com/sbwml/openwrt_helloworld.git;v5
 ```
 
-如果多个第三方 feed 都提供同一个 source package，`feeds.conf` 中越靠上的源优先。对于自定义 feed，只有明确写 `--force` 才表示“我要用这个源替代 OpenWrt 默认同名包”；未写时保持 OpenWrt 默认的保守行为。sbwml 上游还给出了替换 Golang 的做法，但本项目不随源预设自动更换工具链，避免对不同 OpenWrt 分支造成额外影响。
+所有通过“常用源”按钮加入的 feed 都会自动写成 `--force`，因此统一优先于 OpenWrt 默认/core 同名 source package。多个优先第三方 feed 同时提供同名 source package 时，项目会在 `feeds update` 后读取各 feed 的真实 `Version:` metadata，逐包保留版本最高者；只有版本完全相同才按 `feeds.conf` 顺序稳定择一。对于自定义 feed，只有明确写 `--force` 才加入同一套“第三方优先 + 版本择优”规则；未写时保持 OpenWrt 默认的保守行为。sbwml 上游还给出了替换 Golang 的做法，但本项目不随源预设自动更换工具链，避免对不同 OpenWrt 分支造成额外影响。
 
 
 工作方式：
