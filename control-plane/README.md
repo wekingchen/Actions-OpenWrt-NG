@@ -206,7 +206,7 @@ https://...workers.dev/api/v1/health
 3. 仓库列表应显示 Profile 可读取、可编辑 / PR、Builder 可运行。
 4. 点击仓库与 Profile，确认可以读取标准 `profiles/*` 文件。
 5. 做一次无害编辑，预览差异后创建 Pull Request；确认默认分支没有被直接修改。
-6. 不勾 Release，触发一次 Builder；确认页面能自动关联 Run、持续更新 Job 状态并最终显示 Artifact / Summary。
+6. 在目标配置行点击“构建”，在确认弹层中保持“本次构建同时发布 Release”关闭后开始构建；确认工作区“最近构建”自动更新，构建页能查看完整历史、Artifact / Release / Actions 出口。
 7. 再测试一次“新建 Profile”：服务端预览应只生成标准 6 文件，创建 PR 后确认默认分支仍未直接变化。
 8. 验证通过后关闭测试 PR、清理临时分支，再在自己的模板实例启用 Pages Control Plane 入口。
 
@@ -274,8 +274,8 @@ GitHub 官方对 `workflow_dispatch` 要求 Actions write；读取 workflow runs
 ```text
 .github/workflows/build-openwrt.yml
 ref = 仓库默认分支
-profile = 当前选择的 Profile
-publish_release = 用户明确选择
+profile = 用户点击“构建”的目标 Profile
+publish_release = 构建确认弹层中用户明确选择
 control_plane_request_id = 服务端随机生成
 ```
 
@@ -283,13 +283,14 @@ Builder 增加一个可选的 `control_plane_request_id` 输入。手动运行�
 
 调度请求同时设置 GitHub 的 `return_run_details=true`：支持该能力时直接获得 `workflow_run_id` 并按 Run ID 轮询；若 GitHub 返回旧式空响应，则自动退回 `control_plane_request_id` 搜索。两条路径均保留，避免依赖 Actions Run 列表的传播延迟。
 
-页面可查看：
+页面职责按三层拆分：
 
-- queued / running / completed 与最终 conclusion。
-- 各 Job 状态及 GitHub Actions 链接。
-- 当前 Run 产生的 Artifact 名称、大小与 GitHub 下载链接。
-- 与当前 Builder Run 匹配的 Release。
-- GitHub Actions Run 页面；该页面同时是 Workflow Summary 的入口。
+- **工作区**：显示配置摘要与当前仓库最近 5 次构建，不保存“当前 Profile”构建状态。
+- **配置**：管理 Profile；每一行唯一的“构建”入口会打开确认弹层，明确显示本次目标 Profile。
+- **构建**：显示当前仓库完整构建历史、运行详情与产物，不再放置第二个“开始构建”入口。
+- 构建确认弹层里的“本次构建同时发布 Release”只控制本次运行；若目标 Profile 的 `UPLOAD_RELEASE=false`，该开关直接禁用并说明原因。
+- 活动 Run 会自动轮询；手动刷新仅作为小图标补充操作。
+- 成功记录提供产物入口和 GitHub Actions 链接；详情中展示 Artifact 下载入口、匹配的 Release 和 Job 状态。
 
 Artifact 链接使用 GitHub 自身的登录态，不把 GitHub access token 暴露给浏览器。
 
