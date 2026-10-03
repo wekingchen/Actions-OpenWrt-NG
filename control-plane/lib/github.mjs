@@ -1,3 +1,5 @@
+import { strFromU8, unzipSync } from "fflate";
+
 const GITHUB_API = "https://api.github.com";
 const GITHUB_OAUTH = "https://github.com/login/oauth";
 
@@ -121,25 +123,32 @@ function decodeBase64Utf8(value) {
   return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 }
 
-function decodeBase64Bytes(value) {
-  const binary = atob(String(value || "").replace(/\s+/g, ""));
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
-}
-
-async function decodeGzipBase64Json(value) {
-  if (typeof DecompressionStream !== "function") {
-    throw new ConfigStudioError("config_studio_gzip_unavailable", 500);
-  }
-  const bytes = decodeBase64Bytes(value);
-  const stream = new Blob([bytes])
-    .stream()
-    .pipeThrough(new DecompressionStream("gzip"));
-  const text = await new Response(stream).text();
+function parseConfigStudioArtifact(zipBytes) {
+  let files;
   try {
-    return JSON.parse(text);
+    files = unzipSync(zipBytes);
   } catch {
-    throw new ConfigStudioError("config_studio_result_invalid", 502);
+    throw new ConfigStudioError("config_studio_artifact_invalid", 502);
   }
+
+  const parseJson = (name, optional = false) => {
+    const bytes = files[name];
+    if (!bytes) {
+      if (optional) return null;
+      throw new ConfigStudioError("config_studio_artifact_incomplete", 502);
+    }
+    try {
+      return JSON.parse(strFromU8(bytes));
+    } catch {
+      throw new ConfigStudioError("config_studio_result_invalid", 502);
+    }
+  };
+
+  return {
+    status: parseJson("status.json"),
+    catalog: parseJson("catalog.json"),
+    result: parseJson("result.json", true)
+  };
 }
 
 function profileEnvValue(content, key) {
