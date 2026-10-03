@@ -37,7 +37,7 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.13.1</small>
+        <small>Control Plane 0.14.0</small>
       </div>
     </aside>
 
@@ -443,10 +443,22 @@
           </div>
 
           <div id="config-studio-loading" class="config-studio-loading">
-            <span class="config-studio-spinner" aria-hidden="true"></span>
-            <div>
-              <strong>准备配置目录</strong>
-              <span>首次需要在 Runner 中建立真实源码环境。完成后即可在这里选择设备、App 与特性。</span>
+            <div class="config-studio-loading-head">
+              <span class="config-studio-spinner" aria-hidden="true"></span>
+              <div>
+                <strong id="config-studio-progress-title">等待 GitHub Runner</strong>
+                <span id="config-studio-progress-detail">正在建立本次配置任务，随后会显示真实 Action 步骤。</span>
+              </div>
+            </div>
+            <div class="config-studio-progress" aria-live="polite">
+              <div class="config-studio-progress-meta">
+                <strong id="config-studio-progress-count">准备中</strong>
+                <span id="config-studio-progress-elapsed"></span>
+              </div>
+              <div class="config-studio-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <span id="config-studio-progress-bar"></span>
+              </div>
+              <div id="config-studio-progress-steps" class="config-studio-progress-steps"></div>
             </div>
           </div>
 
