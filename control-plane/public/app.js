@@ -1021,11 +1021,23 @@ async function loadBuildDetail(runId) {
   );
   if (!isCurrentBuildContext(repo, generation)) return null;
   const run = data.run;
+  buildState.detailRunId = Number(run.id || runId || 0);
 
   $("build-detail").hidden = false;
   $("build-detail-title").textContent =
     `#${run.runNumber} ${buildProfileId(run)} · ${buildStatusLabel(run)}`;
   $("build-summary-link").href = run.summaryUrl || run.url;
+  renderActionProgressCard(
+    "build-detail-progress",
+    run.progress,
+    run,
+    {
+      runningTitle: "构建进行中",
+      runningDetail: "进度来自本次 GitHub Actions 的真实步骤。",
+      waitingTitle: "等待构建步骤",
+      waitingDetail: "GitHub Job 建立后会自动显示实际构建阶段。"
+    }
+  );
 
   const jobs = $("build-jobs");
   jobs.replaceChildren();
@@ -1156,7 +1168,9 @@ async function loadBuildRuns(options = {}) {
   }
 
   const requestId = options.requestId || buildState.requestId || "";
-  if (requestId) {
+  let requestedRunId = Number(options.runId || buildState.activeRunId || 0);
+
+  if (requestId && !requestedRunId) {
     const lookup = await request(
       `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds?request_id=${encodeURIComponent(requestId)}&limit=1`
     );
@@ -1165,11 +1179,22 @@ async function loadBuildRuns(options = {}) {
     if (!lookup.runs.length) {
       buildState.requestId = requestId;
       buildState.hasActiveRuns = true;
+      renderActionProgressCard(
+        "recent-build-progress",
+        null,
+        null,
+        {
+          force: true,
+          waitingTitle: "等待 GitHub 建立运行记录",
+          waitingDetail: "构建请求已经提交；运行记录出现后会自动切换到真实步骤进度。"
+        }
+      );
       showBuildResult("构建请求已提交，正在等待 GitHub 建立运行记录。");
       buildState.pollAttempts += 1;
       scheduleBuildPoll(2500, generation);
       return;
     }
+    requestedRunId = Number(lookup.runs[0]?.id || 0);
     buildState.requestId = "";
   }
 
@@ -1181,17 +1206,45 @@ async function loadBuildRuns(options = {}) {
   renderBuildRows($("recent-build-runs"), data.runs, { compact: true });
   renderBuildRows($("build-runs"), data.runs);
 
-  buildState.hasActiveRuns = data.runs.some((run) =>
-    ACTIVE_BUILD_STATUSES.has(run.status)
+  const activeRun =
+    data.runs.find((run) => Number(run.id) === requestedRunId) ||
+    data.runs.find((run) => ACTIVE_BUILD_STATUSES.has(run.status)) ||
+    null;
+
+  buildState.hasActiveRuns = Boolean(
+    activeRun && ACTIVE_BUILD_STATUSES.has(activeRun.status)
   );
+  buildState.activeRunId = buildState.hasActiveRuns
+    ? Number(activeRun.id || 0)
+    : 0;
   buildState.pollAttempts = options.polling
     ? buildState.pollAttempts + 1
     : 0;
 
-  if (buildState.hasActiveRuns) {
-    showBuildResult("有构建正在运行，状态会自动刷新。");
-    scheduleBuildPoll(15000, generation);
+  if (buildState.hasActiveRuns && activeRun) {
+    const detailData = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds/${activeRun.id}`
+    );
+    if (!isCurrentBuildContext(repo, generation)) return;
+    const detailedRun = detailData.run;
+    renderActionProgressCard(
+      "recent-build-progress",
+      detailedRun.progress,
+      detailedRun,
+      {
+        runningTitle: "构建进行中",
+        runningDetail: "当前页面会持续读取本次 GitHub Actions 的真实构建步骤。"
+      }
+    );
+    if (buildState.detailRunId === Number(activeRun.id)) {
+      await loadBuildDetail(activeRun.id);
+    }
+    showBuildResult("构建正在运行，真实步骤进度会自动刷新。");
+    scheduleBuildPoll(5000, generation);
   } else {
+    buildState.requestId = "";
+    buildState.activeRunId = 0;
+    renderActionProgressCard("recent-build-progress", null, null);
     showBuildResult();
     clearBuildPolling();
   }
@@ -1205,10 +1258,14 @@ async function setupBuildHistory(repo) {
   buildState.requestId = "";
   buildState.pollAttempts = 0;
   buildState.hasActiveRuns = false;
+  buildState.activeRunId = 0;
+  buildState.detailRunId = 0;
 
   $("recent-build-card").hidden = false;
   $("build-card").hidden = true;
   $("build-detail").hidden = true;
+  renderActionProgressCard("recent-build-progress", null, null);
+  renderActionProgressCard("build-detail-progress", null, null);
   showBuildResult();
   renderBuildHistoryState("正在读取构建历史", "正在从 GitHub Actions 获取运行记录…");
 
@@ -1532,7 +1589,7 @@ function renderActionProgressCard(rootId, progress, run, options = {}) {
 
   const hasProgress =
     progress && Array.isArray(progress.steps) && progress.steps.length;
-  if (!hasProgress && !run) {
+  if (!hasProgress && !run && !options.force) {
     root.hidden = true;
     root.replaceChildren();
     return;
