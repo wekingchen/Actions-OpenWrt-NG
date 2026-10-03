@@ -241,7 +241,7 @@ Profile ID 必须以字母或数字开头，只允许字母、数字、点、下
 
 ## Config Studio / Web Menuconfig
 
-Control Plane 0.14.0 延续现有向导，并增加基于 GitHub Actions job steps 的实时进度显示；第三方源优先级/同名包覆盖规则保持不变。新 Profile 仍按和手工 OpenWrt 配置一致的顺序：
+Control Plane 0.15.0 将“等待后端 Action”统一为真实步骤进度：Config Studio 和 Builder 都直接读取 GitHub Actions jobs/steps，显示当前阶段、已完成步骤数、进度条、已用时与失败步骤；第三方源优先级/同名包覆盖规则保持不变。新 Profile 仍按和手工 OpenWrt 配置一致的顺序：
 
 1. 选择 OpenWrt / LEDE 源码与分支。
 2. **先配置额外 feeds / 软件源。**
@@ -251,6 +251,8 @@ Control Plane 0.14.0 延续现有向导，并增加基于 GitHub Actions job ste
 6. 检查自动加入 / 移除的依赖后确认，把最终 `.config` 带回 Profile 并创建 PR。
 
 Config Studio 在“生成配置菜单”和“检查依赖”两个等待阶段会直接读取当前 GitHub Actions 的真实 job steps，展示当前阶段、已完成步骤数、进度条与已用时。源码准备、Feeds 更新/安装、Kconfig、菜单导出和 Artifact 上传都会分别显示；这里的进度是实际步骤进度，不伪造预计剩余分钟数。
+
+同一规则也应用于 Builder。用户点击“开始构建”后，工作区“最近构建”会立即显示等待/运行进度；GitHub 建立 run 后自动切换为真实阶段：Profile 预检、OpenWrt 源码、Feeds、编译缓存、源码下载、固件编译、Manifest/产物、Release 与清理。进入构建详情后继续显示同一份进度。Control Plane 不用虚假的固定 spinner 代替可读取的 Action 状态。
 
 关闭 Config Studio 窗口、按 Esc 或点遮罩只会**暂存当前会话**。只要源码、feeds 和基础 `.config` 没有变化，再次点击“继续图形配置”会恢复同一 session，不会重复启动 catalog Action；只有点击“放弃本次配置”才删除会话。
 
