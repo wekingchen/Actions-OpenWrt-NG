@@ -74,6 +74,7 @@ jobs:
         bash -n scripts/apply-extra-feeds.sh
         bash -n scripts/install-feeds.sh
         python3 -m py_compile scripts/resolve-feed-priority.py
+        python3 scripts/test-resolve-feed-priority.py
         bash -n scripts/cleanup-workflow-runs.sh
         bash -n scripts/write-summary.sh
         python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
