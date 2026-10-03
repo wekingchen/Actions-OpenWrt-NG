@@ -37,7 +37,7 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.17.0</small>
+        <small>Control Plane 0.18.0</small>
       </div>
     </aside>
 
@@ -495,10 +495,11 @@
               </div>
 
               <div id="config-studio-packages-panel" class="config-studio-panel" role="tabpanel">
-                <div class="config-studio-filterbar">
+                <div class="config-studio-filterbar config-studio-package-filters">
                   <input id="config-studio-search" type="search" placeholder="搜索 luci-app、passwall、usb、samba…"
                          autocomplete="off" aria-label="搜索软件包">
-                  <select id="config-studio-category" aria-label="软件包分类"></select>
+                  <select id="config-studio-category" aria-label="软件包一级分类"></select>
+                  <select id="config-studio-submenu" aria-label="软件包二级菜单" disabled></select>
                   <label class="form-switch config-studio-luci-filter">
                     <input id="config-studio-luci-only" type="checkbox">
                     <span>只看 LuCI App</span>
@@ -512,10 +513,12 @@
               </div>
 
               <div id="config-studio-features-panel" class="config-studio-panel" role="tabpanel" hidden>
-                <div class="config-studio-filterbar">
+                <div class="config-studio-filterbar config-studio-feature-filters">
                   <input id="config-studio-feature-search" type="search"
                          placeholder="搜索 ccache、IPv6、镜像、内核、调试等特性"
                          autocomplete="off" aria-label="搜索编译特性">
+                  <select id="config-studio-feature-menu" aria-label="编译特性一级菜单"></select>
+                  <select id="config-studio-feature-submenu" aria-label="编译特性二级菜单" disabled></select>
                 </div>
                 <div class="config-studio-list-head">
                   <span id="config-studio-feature-count">0 个可选特性</span>
