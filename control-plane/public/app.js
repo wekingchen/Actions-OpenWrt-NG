@@ -47,6 +47,119 @@ const repositoryState = {
   selectedFullName: ""
 };
 
+function currentRepository() {
+  return repositoryState.repositories.find(
+    (repo) => repo.fullName === repositoryState.selectedFullName
+  ) || null;
+}
+
+function currentProfileId(repo) {
+  if (!repo) return "";
+  if (
+    buildState.repo?.fullName === repo.fullName &&
+    buildState.profileId
+  ) {
+    return buildState.profileId;
+  }
+  if (
+    editorState.repo?.fullName === repo.fullName &&
+    editorState.profileId
+  ) {
+    return editorState.profileId;
+  }
+  return "";
+}
+
+function setActiveNavigation(name) {
+  for (const item of document.querySelectorAll(".sidebar-nav .nav-item")) {
+    const active = item.dataset.nav === name;
+    item.classList.toggle("active", active);
+    if (active) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
+  }
+}
+
+function scrollToPanel(node) {
+  if (!node || node.hidden) return;
+  node.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function navigateControlPlane(destination) {
+  showError();
+  const repo = currentRepository();
+
+  if (destination === "workspace") {
+    setActiveNavigation("workspace");
+    if (!repo) {
+      scrollToPanel($("workspace-empty"));
+      return;
+    }
+    $("build-card").hidden = false;
+    scrollToPanel($("profile-card"));
+    return;
+  }
+
+  if (!repo) {
+    showError("请先从顶栏选择一个仓库。");
+    setActiveNavigation("workspace");
+    scrollToPanel($("workspace-empty"));
+    return;
+  }
+
+  if (destination === "profiles") {
+    if (!$("new-profile-card").hidden) {
+      setActiveNavigation("profiles");
+      scrollToPanel($("new-profile-card"));
+      return;
+    }
+
+    const profileId = currentProfileId(repo);
+    if (!profileId) {
+      showError("请先在工作区选择一个 Profile，再进入配置。");
+      setActiveNavigation("workspace");
+      scrollToPanel($("profile-card"));
+      return;
+    }
+
+    const editorReady =
+      !$("editor-card").hidden &&
+      editorState.repo?.fullName === repo.fullName &&
+      editorState.profileId === profileId;
+
+    if (!editorReady) {
+      await openProfile(repo, profileId, {
+        scroll: false,
+        activateNavigation: false
+      });
+    }
+    setActiveNavigation("profiles");
+    scrollToPanel($("editor-card"));
+    return;
+  }
+
+  if (destination === "builder") {
+    const profileId = currentProfileId(repo);
+    if (!profileId) {
+      showError("请先在工作区选择一个 Profile，再进入构建。");
+      setActiveNavigation("workspace");
+      scrollToPanel($("profile-card"));
+      return;
+    }
+
+    const buildReady =
+      buildState.repo?.fullName === repo.fullName &&
+      buildState.profileId === profileId;
+
+    if (!buildReady) {
+      await setupBuildControl(repo, profileId);
+    } else {
+      $("build-card").hidden = false;
+    }
+    setActiveNavigation("builder");
+    scrollToPanel($("build-card"));
+  }
+}
+
 function iconSvg(name) {
   const paths = {
     repo: '<path d="M4 5.5h6l1.5 2H20v11H4z"/><path d="M4 9h16"/>',
@@ -313,10 +426,8 @@ function openNewProfileForm() {
   $("build-card").hidden = true;
   $("new-profile-card").hidden = false;
   $("new-profile-title").textContent = repo.fullName + " · 新建 Profile";
-  $("new-profile-card").scrollIntoView({
-    behavior: "smooth",
-    block: "start"
-  });
+  setActiveNavigation("profiles");
+  scrollToPanel($("new-profile-card"));
 }
 
 function saveCurrentEditorFile() {
@@ -789,8 +900,11 @@ function markSelectedProfile(profileId) {
 async function selectProfileForBuild(repo, profileId, options = {}) {
   markSelectedProfile(profileId);
   await setupBuildControl(repo, profileId);
+  if (options.activateNavigation) {
+    setActiveNavigation("builder");
+  }
   if (options.scroll) {
-    $("build-card").scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToPanel($("build-card"));
   }
 }
 
@@ -844,8 +958,11 @@ async function openProfile(repo, profileId, options = {}) {
   $("editor-content").readOnly = !writeReady;
   $("create-pr").disabled = true;
   $("preview-card").hidden = true;
+  if (options.activateNavigation !== false) {
+    setActiveNavigation("profiles");
+  }
   if (options.scroll !== false) {
-    $("editor-card").scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToPanel($("editor-card"));
   }
 }
 
@@ -859,6 +976,7 @@ async function loadProfiles(repo) {
   $("editor-card").hidden = true;
   $("new-profile-card").hidden = true;
   updateRepositoryContext(repo);
+  setActiveNavigation("workspace");
 
   $("new-profile-open").disabled = !canWriteRepo(repo);
   $("new-profile-open").title = canWriteRepo(repo)
@@ -952,8 +1070,10 @@ async function loadProfiles(repo) {
     buildButton.textContent = "构建";
     buildButton.title = `选择 ${profile.id} 并进入构建面板`;
     buildButton.addEventListener("click", () => {
-      selectProfileForBuild(repo, profile.id, { scroll: true })
-        .catch((error) => showError(error));
+      selectProfileForBuild(repo, profile.id, {
+        scroll: true,
+        activateNavigation: true
+      }).catch((error) => showError(error));
     });
 
     row.append(openButton, buildButton);
@@ -1070,10 +1190,7 @@ async function init() {
 }
 for (const item of document.querySelectorAll(".sidebar-nav .nav-item")) {
   item.addEventListener("click", () => {
-    for (const nav of document.querySelectorAll(".sidebar-nav .nav-item")) {
-      nav.classList.remove("active");
-    }
-    item.classList.add("active");
+    navigateControlPlane(item.dataset.nav).catch((error) => showError(error));
   });
 }
 
@@ -1110,6 +1227,9 @@ $("new-profile-open").addEventListener("click", openNewProfileForm);
 $("new-profile-close").addEventListener("click", () => {
   $("new-profile-card").hidden = true;
   invalidateNewProfilePreview();
+  if (buildState.repo) $("build-card").hidden = false;
+  setActiveNavigation("workspace");
+  scrollToPanel($("profile-card"));
 });
 
 $("new-source-preset").addEventListener("change", () => {

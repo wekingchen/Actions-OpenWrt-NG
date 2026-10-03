@@ -1996,3 +1996,41 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
     padding: 0 9px;
   }
 }
+
+
+/* V0.9.1 real workbench navigation */
+.sidebar-nav .nav-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  appearance: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sidebar-nav .nav-item.active {
+  background: linear-gradient(90deg, rgba(36,201,143,.18), rgba(36,201,143,.07));
+}
+#profile-card,
+#new-profile-card,
+#editor-card,
+#build-card,
+#workspace-empty {
+  scroll-margin-top: 102px;
+}
+
+@media (max-width: 860px) {
+  .sidebar-nav .nav-item {
+    text-align: center;
+  }
+  .sidebar-nav .nav-item.active {
+    background: var(--accent-soft);
+  }
+  #profile-card,
+  #new-profile-card,
+  #editor-card,
+  #build-card,
+  #workspace-empty {
+    scroll-margin-top: 70px;
+  }
+}
