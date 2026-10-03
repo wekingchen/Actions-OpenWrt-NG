@@ -63,6 +63,8 @@ const configStudioState = {
   catalog: null,
   result: null,
   modifiedValues: new Map(),
+  dependencyLocks: new Map(),
+  dependencyOnly: false,
   targetId: "",
   subtargetId: "",
   deviceProfileId: "",
@@ -1873,6 +1875,215 @@ function configStudioOptionValue(symbol, fallback = "n") {
     : String(fallback ?? "n");
 }
 
+function configStudioTristateRank(value) {
+  return value === "y" ? 2 : value === "m" ? 1 : 0;
+}
+
+function configStudioMaxTristate(left, right) {
+  return configStudioTristateRank(left) >= configStudioTristateRank(right)
+    ? left
+    : right;
+}
+
+function configStudioDependencyConditionValue(name) {
+  const symbol = "CONFIG_" + name;
+  if (configStudioState.modifiedValues.has(symbol)) {
+    return String(configStudioState.modifiedValues.get(symbol));
+  }
+
+  for (const pkg of configStudioState.catalog?.packages || []) {
+    if (pkg.symbol === symbol) return String(pkg.value || "n");
+    for (const option of pkg.configOptions || []) {
+      if (option.symbol === symbol) return String(option.value || "n");
+    }
+  }
+  for (const feature of configStudioState.catalog?.features || []) {
+    if (feature.symbol === symbol) return String(feature.value || "n");
+  }
+
+  return String(
+    configStudioState.catalog?.dependencyConditionValues?.[name] || "n"
+  );
+}
+
+function configStudioDependencyConditionMatches(condition) {
+  const source = String(condition || "").trim();
+  if (!source) return true;
+
+  const compact = source.replace(/\s+/g, "");
+  const tokens = compact.match(
+    /&&|\|\||!|\(|\)|[A-Za-z_][A-Za-z0-9_]*/g
+  );
+  if (!tokens || tokens.join("") !== compact) return false;
+
+  let index = 0;
+  const primary = () => {
+    const token = tokens[index];
+    if (token === "(") {
+      index += 1;
+      const value = parseOr();
+      if (tokens[index] !== ")") throw new Error("dependency expression");
+      index += 1;
+      return value;
+    }
+    if (!token || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(token)) {
+      throw new Error("dependency expression");
+    }
+    index += 1;
+    return ["y", "m"].includes(configStudioDependencyConditionValue(token));
+  };
+  const parseNot = () => {
+    if (tokens[index] === "!") {
+      index += 1;
+      return !parseNot();
+    }
+    return primary();
+  };
+  const parseAnd = () => {
+    let value = parseNot();
+    while (tokens[index] === "&&") {
+      index += 1;
+      value = parseNot() && value;
+    }
+    return value;
+  };
+  const parseOr = () => {
+    let value = parseAnd();
+    while (tokens[index] === "||") {
+      index += 1;
+      value = parseAnd() || value;
+    }
+    return value;
+  };
+
+  try {
+    const value = parseOr();
+    return index === tokens.length ? value : false;
+  } catch {
+    return false;
+  }
+}
+
+function configStudioDependencyRequiredValue(parentValue, pkg) {
+  const assignable = Array.isArray(pkg.assignable)
+    ? pkg.assignable
+    : ["n", "m", "y"];
+  if (parentValue === "y") {
+    if (assignable.includes("y")) return "y";
+    if (assignable.includes("m")) return "m";
+  }
+  if (parentValue === "m") {
+    if (assignable.includes("m")) return "m";
+    if (assignable.includes("y")) return "y";
+  }
+  return "n";
+}
+
+function computeConfigStudioDependencyLocks() {
+  const packages = configStudioState.catalog?.packages || [];
+  const byName = new Map(packages.map((pkg) => [pkg.name, pkg]));
+  const effective = new Map();
+  const queue = [];
+  const processedRank = new Map();
+  const locks = new Map();
+
+  for (const pkg of packages) {
+    const value = configStudioOptionValue(pkg.symbol, pkg.value);
+    effective.set(pkg.name, value);
+    if (configStudioTristateRank(value) > 0) queue.push(pkg.name);
+  }
+
+  while (queue.length) {
+    const parentName = queue.shift();
+    const parent = byName.get(parentName);
+    if (!parent) continue;
+    const parentValue = effective.get(parentName) || "n";
+    const rank = configStudioTristateRank(parentValue);
+    if (rank <= (processedRank.get(parentName) || 0)) continue;
+    processedRank.set(parentName, rank);
+
+    for (const rule of parent.dependencyRules || []) {
+      if (!configStudioDependencyConditionMatches(rule.condition)) continue;
+      const dependency = byName.get(rule.package);
+      if (!dependency) continue;
+
+      const requiredValue = configStudioDependencyRequiredValue(
+        parentValue,
+        dependency
+      );
+      if (configStudioTristateRank(requiredValue) <= 0) continue;
+
+      const existing = locks.get(dependency.symbol) || {
+        package: dependency.name,
+        value: "n",
+        requiredBy: new Set()
+      };
+      existing.value = configStudioMaxTristate(
+        existing.value,
+        requiredValue
+      );
+      existing.requiredBy.add(parent.name);
+      locks.set(dependency.symbol, existing);
+
+      const currentEffective = effective.get(dependency.name) || "n";
+      const nextEffective = configStudioMaxTristate(
+        currentEffective,
+        requiredValue
+      );
+      if (nextEffective !== currentEffective) {
+        effective.set(dependency.name, nextEffective);
+        queue.push(dependency.name);
+      }
+    }
+  }
+
+  configStudioState.dependencyLocks = new Map(
+    [...locks].map(([symbol, item]) => [
+      symbol,
+      {
+        package: item.package,
+        value: item.value,
+        requiredBy: [...item.requiredBy].sort()
+      }
+    ])
+  );
+  return configStudioState.dependencyLocks;
+}
+
+function configStudioPackageDisplayValue(pkg, lock = null) {
+  const manual = configStudioOptionValue(pkg.symbol, pkg.value);
+  return lock ? configStudioMaxTristate(manual, lock.value) : manual;
+}
+
+function configStudioEffectiveModifiedEntries() {
+  computeConfigStudioDependencyLocks();
+  return [...configStudioState.modifiedValues].filter(([symbol, value]) => {
+    const lock = configStudioState.dependencyLocks.get(symbol);
+    return (
+      !lock ||
+      configStudioTristateRank(String(value)) >=
+        configStudioTristateRank(lock.value)
+    );
+  });
+}
+
+function renderConfigStudioDependencySummary() {
+  const node = $("config-studio-dependency-summary");
+  const count = $("config-studio-dependency-count");
+  const button = $("config-studio-show-dependencies");
+  const locks = configStudioState.dependencyLocks;
+  const total = locks.size;
+
+  node.hidden = total === 0;
+  count.textContent =
+    total +
+    " 项依赖已联动锁定";
+  button.textContent = configStudioState.dependencyOnly
+    ? "返回分类浏览"
+    : "查看联动项";
+  button.setAttribute("aria-pressed", String(configStudioState.dependencyOnly));
+}
+
 function setConfigStudioModifiedValue(symbol, value) {
   configStudioState.modifiedValues.set(symbol, String(value));
   updateConfigStudioChangeCount();
@@ -1900,7 +2111,7 @@ function updateConfigStudioChangeCount() {
     targetChanges += 1;
   }
   $("config-studio-change-count").textContent = String(
-    configStudioState.modifiedValues.size + targetChanges
+    configStudioEffectiveModifiedEntries().length + targetChanges
   );
 }
 
