@@ -2316,8 +2316,10 @@ function renderConfigStudioPackages() {
   }
 
   const matches = (configStudioState.catalog?.packages || []).filter((pkg) => {
-    if (category && pkg.category !== category) return false;
-    if (submenu && pkg.submenu !== submenu) return false;
+    const modified = configStudioState.modifiedValues.has(pkg.symbol);
+    if (!pkg.visible && !pkg.selected && !modified) return false;
+    if (!search && category && pkg.category !== category) return false;
+    if (!search && submenu && pkg.submenu !== submenu) return false;
     if (luciOnly && !pkg.luciApp) return false;
     if (!search) return true;
     return [
@@ -2488,8 +2490,9 @@ function renderConfigStudioFeatures() {
       if (!feature.visible) return false;
       const path = configStudioFeatureMenuPath(feature);
       const firstLevel = path[0] || "其他";
-      if (menu && firstLevel !== menu) return false;
+      if (!search && menu && firstLevel !== menu) return false;
       if (
+        !search &&
         submenu &&
         (submenu === "__direct__" ? Boolean(path[1]) : path[1] !== submenu)
       ) {
