@@ -10,12 +10,16 @@ on:
       - ".github/workflows/control-plane-ci.yml"
       - ".github/workflows/deploy-control-plane.yml"
       - ".github/workflows/build-openwrt.yml"
+      - "scripts/compile.sh"
+      - "scripts/write-summary.sh"
   pull_request:
     paths:
       - "control-plane/**"
       - ".github/workflows/control-plane-ci.yml"
       - ".github/workflows/deploy-control-plane.yml"
       - ".github/workflows/build-openwrt.yml"
+      - "scripts/compile.sh"
+      - "scripts/write-summary.sh"
 
 permissions:
   contents: read
@@ -56,11 +60,18 @@ jobs:
         node --check control-plane/lib/profile-template.mjs
         node --check control-plane/public/app.js
         node --check control-plane/test.mjs
+        bash -n scripts/compile.sh
+        bash -n scripts/write-summary.sh
         python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
         python3 -m json.tool control-plane/api-schema.json >/dev/null
 
         grep -q 'control_plane_request_id:' .github/workflows/build-openwrt.yml
         grep -q 'cp:{0}' .github/workflows/build-openwrt.yml
+        grep -q 'openwrt/.ccache' .github/workflows/build-openwrt.yml
+        grep -q 'openwrt-ng-build-v2-' .github/workflows/build-openwrt.yml
+        grep -q 'CCACHE_MAXSIZE: 2G' .github/workflows/build-openwrt.yml
+        grep -q 'CCACHE_DIR="$PWD/.ccache"' scripts/compile.sh
+        grep -q 'ccache 本轮 Hits' scripts/write-summary.sh
         grep -q 'return_run_details: true' control-plane/lib/github.mjs
         grep -q 'friendlyError' control-plane/public/app.js
         grep -q 'Profile 可读取' control-plane/public/app.js
@@ -78,6 +89,11 @@ jobs:
         if [ -n "$bad_github_secrets" ]; then
           printf '%s\n' "$bad_github_secrets"
           echo "ERROR: 自定义 GitHub Actions Secret 名称不能以 GITHUB_ 开头" >&2
+          exit 1
+        fi
+
+        if grep -qE 'openwrt/staging_dir/(host|target-\*)/ccache|~/.ccache' .github/workflows/build-openwrt.yml; then
+          echo "ERROR: Lean/OpenWrt CONFIG_CCACHE 默认使用 openwrt/.ccache，不能恢复旧错误路径" >&2
           exit 1
         fi
 

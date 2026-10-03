@@ -173,7 +173,7 @@ V1.1 开始把 GitHub Actions 的 **Summary** 作为主要状态入口之一。
 不需要翻完整日志，就可以直接看到：
 
 - **构建预检**：Profile、源码、Adapter、触发方式、自动追新、空间扩展和 Release 开关。
-- **构建结果**：源码 commit、缓存命中、编译耗时、固件候选数量、配置变化，以及 Compile / Manifest / Config Record / Release Bundle 各阶段状态。
+- **构建结果**：源码 commit、dl / 编译缓存命中、ccache 本轮 Hits / Misses / 大小、编译耗时、固件候选数量、配置变化，以及 Compile / Manifest / Config Record / Release Bundle 各阶段状态。
 - **Update Checker**：本轮检查哪些 Profile、上游状态指纹、是否命中历史状态、本轮是否触发构建。
 - **Release**：发布状态、Release Tag、附件数量和直接入口。
 - **Release Existing Build**：原 Build Run、原 commit、恢复发布状态和新 Release 入口。
@@ -269,7 +269,7 @@ Core 提供：
 - 180 分钟构建超时。
 - 可选构建空间扩展。
 - `dl` 下载缓存。
-- ccache / Go build cache。
+- ccache / Go build cache；Lean/OpenWrt 的 `CONFIG_CCACHE=y` 默认缓存目录为源码树内的 `openwrt/.ccache`，Core 会直接持久化这一实际目录。
 - 可选流式或静默编译日志。
 - 长编译心跳。
 - 并行编译失败后的目标识别。

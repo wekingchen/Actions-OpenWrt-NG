@@ -32,7 +32,7 @@ concurrency:
 env:
   TZ: Asia/Shanghai
   CCACHE_COMPILERCHECK: content
-  CCACHE_MAXSIZE: 1G
+  CCACHE_MAXSIZE: 2G
 
 jobs:
   preflight:
@@ -415,13 +415,11 @@ jobs:
       uses: actions/cache/restore@v6
       with:
         path: |
-          openwrt/staging_dir/host/ccache
-          openwrt/staging_dir/target-*/ccache
+          openwrt/.ccache
           openwrt/.cache/go-build
-          ~/.ccache
-        key: openwrt-ng-build-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-${{ steps.build-cache.outputs.hash }}
+        key: openwrt-ng-build-v2-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-${{ steps.build-cache.outputs.hash }}
         restore-keys: |
-          openwrt-ng-build-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-
+          openwrt-ng-build-v2-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-
 
     - name: 下载软件包源码
       run: |
@@ -462,11 +460,9 @@ jobs:
       uses: actions/cache/save@v6
       with:
         path: |
-          openwrt/staging_dir/host/ccache
-          openwrt/staging_dir/target-*/ccache
+          openwrt/.ccache
           openwrt/.cache/go-build
-          ~/.ccache
-        key: openwrt-ng-build-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-${{ steps.build-cache.outputs.hash }}
+        key: openwrt-ng-build-v2-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-${{ steps.build-cache.outputs.hash }}
 
     - name: 校验固件 Manifest
       id: manifest
