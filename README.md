@@ -239,7 +239,7 @@ Profile ID 必须以字母或数字开头，只允许字母、数字、点、下
 
 ## Config Studio / Web Menuconfig
 
-Control Plane 0.11.0 增加 **Config Studio**，把初始化 `.config` 时必须人工完成的 `make menuconfig` 选择流程搬到浏览器，同时保留 OpenWrt Kconfig 作为唯一依赖解析器。
+Control Plane 0.11.1 延续并修复 **Config Studio**，把初始化 `.config` 时必须人工完成的 `make menuconfig` 选择流程搬到浏览器，同时保留 OpenWrt Kconfig 作为唯一依赖解析器。
 
 工作方式：
 
