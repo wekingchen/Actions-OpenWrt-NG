@@ -178,8 +178,8 @@ const SOURCE_PRESETS = Object.freeze({
 });
 
 const PASSWALL_FEEDS = [
-  "src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main",
-  "src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main"
+  "src-git --force passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main",
+  "src-git --force passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main"
 ];
 
 const FW876_HELLOWORLD_FEEDS = [
