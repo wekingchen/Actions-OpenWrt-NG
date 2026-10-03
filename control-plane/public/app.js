@@ -211,7 +211,7 @@ function newConfigStudioFingerprint(repo) {
 function loadNewConfigStudioDraft(repo) {
   if (!repo) return null;
   try {
-    const raw = sessionStorage.getItem(configStudioDraftStorageKey(repo));
+    const raw = localStorage.getItem(configStudioDraftStorageKey(repo));
     if (!raw) return null;
     const value = JSON.parse(raw);
     return value && typeof value === "object" ? value : null;
@@ -225,12 +225,12 @@ function saveNewConfigStudioDraft(repo, draft) {
   if (!repo) return;
   try {
     if (draft) {
-      sessionStorage.setItem(
+      localStorage.setItem(
         configStudioDraftStorageKey(repo),
         JSON.stringify(draft)
       );
     } else {
-      sessionStorage.removeItem(configStudioDraftStorageKey(repo));
+      localStorage.removeItem(configStudioDraftStorageKey(repo));
     }
   } catch {}
 }
