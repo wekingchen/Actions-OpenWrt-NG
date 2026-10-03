@@ -26,6 +26,20 @@ def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def decode_process_text(value: bytes | str | None) -> str:
+    """Decode external build-tool output without letting legacy text kill a catalog.
+
+    Some OpenWrt/feeds Kconfig prompts and help strings still contain bytes from
+    legacy encodings. Symbols and config values are ASCII-safe; display text is
+    allowed to use U+FFFD for undecodable bytes.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return value.decode("utf-8", errors="replace")
+
+
 def parse_config_text(text: str) -> dict[str, str]:
     values: dict[str, str] = {}
     for raw in text.splitlines():
@@ -271,7 +285,6 @@ def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], dict[str, dict[s
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
-            text=True,
         )
 
         objects = [config_dir / name for name in object_names]
@@ -297,10 +310,9 @@ def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], dict[str, dict[s
                 check=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
             )
             if compiled.returncode != 0:
-                detail = (compiled.stderr or compiled.stdout).strip()
+                detail = decode_process_text(compiled.stderr or compiled.stdout).strip()
                 return [], {}, f"OpenWrt Kconfig exporter compile failed: {detail[-1200:]}"
 
             env = os.environ.copy()
@@ -312,16 +324,17 @@ def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], dict[str, dict[s
                 check=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
             )
+            exported_stdout = decode_process_text(exported.stdout)
+            exported_stderr = decode_process_text(exported.stderr)
             if exported.returncode != 0:
-                detail = (exported.stderr or exported.stdout).strip()
-                return [], {}, f"OpenWrt Kconfig exporter failed: {detail[-1200:]}"
+                detail = (exported_stderr or exported_stdout).strip()
+                return [], {}, f"OpenWrt Kconfig exporter failed: {detail[-1200:]}" 
 
         features: list[dict[str, Any]] = []
         package_states: dict[str, dict[str, Any]] = {}
         seen: set[str] = set()
-        for number, raw_line in enumerate(exported.stdout.splitlines(), 1):
+        for number, raw_line in enumerate(exported_stdout.splitlines(), 1):
             line = raw_line.strip()
             if not line:
                 continue
@@ -374,7 +387,7 @@ def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], dict[str, dict[s
         )
         return features, package_states, ""
     except subprocess.CalledProcessError as error:
-        detail = (error.stderr or error.stdout or str(error)).strip()
+        detail = decode_process_text(error.stderr or error.stdout or str(error)).strip()
         return [], {}, f"OpenWrt Kconfig prepare failed: {detail[-1200:]}"
     except Exception as error:
         return [], {}, f"OpenWrt Kconfig export failed: {type(error).__name__}: {error}"
