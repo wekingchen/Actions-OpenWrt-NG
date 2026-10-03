@@ -216,7 +216,7 @@
                     <span>额外 feeds</span>
                     <textarea id="new-extra-feeds" class="editor feeds-editor" spellcheck="false"
                               placeholder="src-git my_feed https://github.com/example/openwrt-packages.git;main"></textarea>
-                    <small>这些源会在 <code>./scripts/feeds update -a</code> 前插入。带 <code>--force</code> 的源会在安装 feeds 时覆盖 OpenWrt 默认同名包；多源冲突时越靠上优先级越高。修改后需要重新生成配置菜单。</small>
+                    <small>这些源会在 <code>./scripts/feeds update -a</code> 前插入。“常用源”都会标记为第三方优先；它们之间出现同名 source package 时自动选择版本最高者，版本相同才按列表顺序稳定择一。修改后需要重新生成配置菜单。</small>
                   </label>
                 </div>
 
