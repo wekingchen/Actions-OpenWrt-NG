@@ -26,6 +26,42 @@ def run(*args: str) -> None:
     )
 
 
+def test_dependency_rules() -> None:
+    rules = CONFIG_STUDIO.dependency_rules_for_package(
+        "luci-app-test",
+        [
+            "+luci-base",
+            "+PACKAGE_luci-app-test_INCLUDE_Mihomo:mihomo",
+            "+!PACKAGE_firewall4:iptables",
+            "+@TARGET_ath79",
+            "@TARGET_x86",
+            "libc",
+            "+luci-base",
+        ],
+    )
+    assert rules == [
+        {
+            "package": "luci-base",
+            "condition": "",
+            "source": "+luci-base",
+        },
+        {
+            "package": "mihomo",
+            "condition": "PACKAGE_luci-app-test_INCLUDE_Mihomo",
+            "source": "+PACKAGE_luci-app-test_INCLUDE_Mihomo:mihomo",
+        },
+        {
+            "package": "iptables",
+            "condition": "!PACKAGE_firewall4",
+            "source": "+!PACKAGE_firewall4:iptables",
+        },
+    ]
+    assert CONFIG_STUDIO.dependency_condition_names(rules) == {
+        "PACKAGE_luci-app-test_INCLUDE_Mihomo",
+        "PACKAGE_firewall4",
+    }
+
+
 def test_package_config_options() -> None:
     packages = [
         {"name": "luci-app-ssr-plus"},
@@ -118,6 +154,7 @@ def test_package_config_options() -> None:
 
 
 def main() -> None:
+    test_dependency_rules()
     test_package_config_options()
 
     exporter_source = (ROOT / "scripts" / "config-studio-kconfig.c").read_text(
@@ -208,6 +245,14 @@ Description: Base
         assert pkg["luciApp"] is True
         assert pkg["category"] == "LuCI"
         assert pkg["assignable"] == ["n", "m", "y"]
+        assert pkg["dependencyRules"] == [
+            {
+                "package": "luci-base",
+                "condition": "",
+                "source": "+luci-base",
+            }
+        ]
+        assert catalog["configStats"]["dependencyRules"] == 1
 
         # OpenWrt scripts/metadata.pm::confstr() also converts '-' to '_'.
         (build / ".config").write_text(

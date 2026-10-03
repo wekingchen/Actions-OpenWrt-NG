@@ -63,6 +63,8 @@ const configStudioState = {
   catalog: null,
   result: null,
   modifiedValues: new Map(),
+  dependencyLocks: new Map(),
+  dependencyOnly: false,
   targetId: "",
   subtargetId: "",
   deviceProfileId: "",
@@ -1873,6 +1875,218 @@ function configStudioOptionValue(symbol, fallback = "n") {
     : String(fallback ?? "n");
 }
 
+function configStudioTristateRank(value) {
+  return value === "y" ? 2 : value === "m" ? 1 : 0;
+}
+
+function configStudioMaxTristate(left, right) {
+  return configStudioTristateRank(left) >= configStudioTristateRank(right)
+    ? left
+    : right;
+}
+
+function configStudioDependencyConditionValue(name) {
+  const symbol = "CONFIG_" + name;
+  if (configStudioState.modifiedValues.has(symbol)) {
+    return String(configStudioState.modifiedValues.get(symbol));
+  }
+
+  for (const pkg of configStudioState.catalog?.packages || []) {
+    if (pkg.symbol === symbol) return String(pkg.value || "n");
+    for (const option of pkg.configOptions || []) {
+      if (option.symbol === symbol) return String(option.value || "n");
+    }
+  }
+  for (const feature of configStudioState.catalog?.features || []) {
+    if (feature.symbol === symbol) return String(feature.value || "n");
+  }
+
+  return String(
+    configStudioState.catalog?.dependencyConditionValues?.[name] || "n"
+  );
+}
+
+function configStudioDependencyConditionMatches(condition) {
+  const source = String(condition || "").trim();
+  if (!source) return true;
+
+  const compact = source.replace(/\s+/g, "");
+  const tokens = compact.match(
+    /&&|\|\||!|\(|\)|[A-Za-z_][A-Za-z0-9_.+@/-]*/g
+  );
+  if (!tokens || tokens.join("") !== compact) return false;
+
+  let index = 0;
+  const primary = () => {
+    const token = tokens[index];
+    if (token === "(") {
+      index += 1;
+      const value = parseOr();
+      if (tokens[index] !== ")") throw new Error("dependency expression");
+      index += 1;
+      return value;
+    }
+    if (!token || !/^[A-Za-z_][A-Za-z0-9_.+@/-]*$/.test(token)) {
+      throw new Error("dependency expression");
+    }
+    index += 1;
+    return ["y", "m"].includes(configStudioDependencyConditionValue(token));
+  };
+  const parseNot = () => {
+    if (tokens[index] === "!") {
+      index += 1;
+      return !parseNot();
+    }
+    return primary();
+  };
+  const parseAnd = () => {
+    let value = parseNot();
+    while (tokens[index] === "&&") {
+      index += 1;
+      value = parseNot() && value;
+    }
+    return value;
+  };
+  const parseOr = () => {
+    let value = parseAnd();
+    while (tokens[index] === "||") {
+      index += 1;
+      value = parseAnd() || value;
+    }
+    return value;
+  };
+
+  try {
+    const value = parseOr();
+    return index === tokens.length ? value : false;
+  } catch {
+    return false;
+  }
+}
+
+function configStudioDependencyRequiredValue(parentValue, pkg) {
+  const assignable = Array.isArray(pkg.assignable)
+    ? pkg.assignable
+    : ["n", "m", "y"];
+  if (parentValue === "y") {
+    if (assignable.includes("y")) return "y";
+    if (assignable.includes("m")) return "m";
+  }
+  if (parentValue === "m") {
+    if (assignable.includes("m")) return "m";
+    if (assignable.includes("y")) return "y";
+  }
+  return "n";
+}
+
+function computeConfigStudioDependencyLocks() {
+  const packages = configStudioState.catalog?.packages || [];
+  const byName = new Map(packages.map((pkg) => [pkg.name, pkg]));
+  const effective = new Map();
+  const queue = [];
+  const processedRank = new Map();
+  const locks = new Map();
+
+  for (const pkg of packages) {
+    const value = configStudioOptionValue(pkg.symbol, pkg.value);
+    effective.set(pkg.name, value);
+    if (configStudioTristateRank(value) > 0) queue.push(pkg.name);
+  }
+
+  while (queue.length) {
+    const parentName = queue.shift();
+    const parent = byName.get(parentName);
+    if (!parent) continue;
+    const parentValue = effective.get(parentName) || "n";
+    const rank = configStudioTristateRank(parentValue);
+    if (rank <= (processedRank.get(parentName) || 0)) continue;
+    processedRank.set(parentName, rank);
+
+    for (const rule of parent.dependencyRules || []) {
+      if (!configStudioDependencyConditionMatches(rule.condition)) continue;
+      const dependency = byName.get(rule.package);
+      if (!dependency) continue;
+
+      const requiredValue = configStudioDependencyRequiredValue(
+        parentValue,
+        dependency
+      );
+      if (configStudioTristateRank(requiredValue) <= 0) continue;
+
+      const existing = locks.get(dependency.symbol) || {
+        package: dependency.name,
+        value: "n",
+        requiredBy: new Set()
+      };
+      existing.value = configStudioMaxTristate(
+        existing.value,
+        requiredValue
+      );
+      existing.requiredBy.add(parent.name);
+      locks.set(dependency.symbol, existing);
+
+      const currentEffective = effective.get(dependency.name) || "n";
+      const nextEffective = configStudioMaxTristate(
+        currentEffective,
+        requiredValue
+      );
+      if (nextEffective !== currentEffective) {
+        effective.set(dependency.name, nextEffective);
+        queue.push(dependency.name);
+      }
+    }
+  }
+
+  configStudioState.dependencyLocks = new Map(
+    [...locks].map(([symbol, item]) => [
+      symbol,
+      {
+        package: item.package,
+        value: item.value,
+        requiredBy: [...item.requiredBy].sort()
+      }
+    ])
+  );
+  return configStudioState.dependencyLocks;
+}
+
+function configStudioPackageDisplayValue(pkg, lock = null) {
+  const manual = configStudioOptionValue(pkg.symbol, pkg.value);
+  return lock ? configStudioMaxTristate(manual, lock.value) : manual;
+}
+
+function configStudioEffectiveModifiedEntries() {
+  computeConfigStudioDependencyLocks();
+  return [...configStudioState.modifiedValues].filter(([symbol, value]) => {
+    const lock = configStudioState.dependencyLocks.get(symbol);
+    return (
+      !lock ||
+      configStudioTristateRank(String(value)) >=
+        configStudioTristateRank(lock.value)
+    );
+  });
+}
+
+function renderConfigStudioDependencySummary() {
+  const node = $("config-studio-dependency-summary");
+  const count = $("config-studio-dependency-count");
+  const button = $("config-studio-show-dependencies");
+  const locks = configStudioState.dependencyLocks;
+  const total = locks.size;
+
+  if (!total && configStudioState.dependencyOnly) {
+    configStudioState.dependencyOnly = false;
+  }
+  node.hidden = total === 0;
+  count.textContent =
+    total +
+    " 项依赖已联动锁定";
+  button.textContent = configStudioState.dependencyOnly
+    ? "返回分类浏览"
+    : "查看联动项";
+  button.setAttribute("aria-pressed", String(configStudioState.dependencyOnly));
+}
+
 function setConfigStudioModifiedValue(symbol, value) {
   configStudioState.modifiedValues.set(symbol, String(value));
   updateConfigStudioChangeCount();
@@ -1900,7 +2114,7 @@ function updateConfigStudioChangeCount() {
     targetChanges += 1;
   }
   $("config-studio-change-count").textContent = String(
-    configStudioState.modifiedValues.size + targetChanges
+    configStudioEffectiveModifiedEntries().length + targetChanges
   );
 }
 
@@ -2150,8 +2364,11 @@ function configStudioPackageOptionRow(pkg, option) {
       : "先选择主软件包后再配置子选项";
   }
   select.addEventListener("change", () => {
+    const root = $("config-studio-packages");
+    const scrollTop = root.scrollTop;
     setConfigStudioModifiedValue(option.symbol, select.value);
-    row.classList.add("modified");
+    renderConfigStudioPackages();
+    root.scrollTop = scrollTop;
   });
 
   row.append(copy, select);
@@ -2215,7 +2432,10 @@ function configStudioPackageChoice(pkg, prompt, options) {
       }
       updateConfigStudioChangeCount();
       persistNewConfigStudioUi();
-      row.classList.remove("modified");
+      const root = $("config-studio-packages");
+      const scrollTop = root.scrollTop;
+      renderConfigStudioPackages();
+      root.scrollTop = scrollTop;
       return;
     }
     for (const option of options) {
@@ -2226,7 +2446,10 @@ function configStudioPackageChoice(pkg, prompt, options) {
     }
     updateConfigStudioChangeCount();
     persistNewConfigStudioUi();
-    row.classList.add("modified");
+    const root = $("config-studio-packages");
+    const scrollTop = root.scrollTop;
+    renderConfigStudioPackages();
+    root.scrollTop = scrollTop;
   });
 
   row.append(copy, select);
@@ -2308,7 +2531,10 @@ function renderConfigStudioPackages() {
   const submenu = $("config-studio-submenu").value || "";
   const luciOnly = $("config-studio-luci-only").checked;
 
-  if (!search && !category) {
+  computeConfigStudioDependencyLocks();
+  renderConfigStudioDependencySummary();
+
+  if (!configStudioState.dependencyOnly && !search && !category) {
     $("config-studio-package-count").textContent = "请先选择一级分类";
     root.replaceChildren();
     const empty = document.createElement("div");
@@ -2321,7 +2547,9 @@ function renderConfigStudioPackages() {
 
   const matches = (configStudioState.catalog?.packages || []).filter((pkg) => {
     const modified = configStudioState.modifiedValues.has(pkg.symbol);
-    if (!pkg.visible && !pkg.selected && !modified) return false;
+    const lock = configStudioState.dependencyLocks.get(pkg.symbol);
+    if (configStudioState.dependencyOnly) return Boolean(lock);
+    if (!pkg.visible && !pkg.selected && !modified && !lock) return false;
     if (!search && category && pkg.category !== category) return false;
     if (!search && submenu && pkg.submenu !== submenu) return false;
     if (luciOnly && !pkg.luciApp) return false;
@@ -2337,7 +2565,9 @@ function renderConfigStudioPackages() {
   });
 
   $("config-studio-package-count").textContent =
-    matches.length + " 个可选软件包";
+    configStudioState.dependencyOnly
+      ? matches.length + " 个依赖联动项"
+      : matches.length + " 个可选软件包";
   root.replaceChildren();
 
   if (!matches.length) {
@@ -2353,10 +2583,13 @@ function renderConfigStudioPackages() {
     const block = document.createElement("div");
     block.className = "config-studio-package-block";
 
+    const lock = configStudioState.dependencyLocks.get(pkg.symbol);
+    const baselineLocked = pkg.selected && pkg.changeable === false;
     const row = document.createElement("div");
     row.className =
       "config-studio-option" +
-      (configStudioState.modifiedValues.has(pkg.symbol) ? " modified" : "");
+      (configStudioState.modifiedValues.has(pkg.symbol) ? " modified" : "") +
+      (lock || baselineLocked ? " dependency-locked" : "");
 
     const copy = document.createElement("div");
     copy.className = "config-studio-option-copy";
@@ -2367,8 +2600,25 @@ function renderConfigStudioPackages() {
     const subtitle = document.createElement("span");
     subtitle.textContent = pkg.title || pkg.submenu || pkg.category || "";
     title.append(strong, subtitle);
+    if (lock || baselineLocked) {
+      const badge = document.createElement("span");
+      badge.className = "config-studio-lock-badge";
+      badge.textContent = lock ? "依赖锁定" : "Kconfig 锁定";
+      title.appendChild(badge);
+    }
     const meta = document.createElement("small");
+    const lockReason = lock
+      ? "由 " +
+        lock.requiredBy.slice(0, 3).join("、") +
+        (lock.requiredBy.length > 3
+          ? " 等 " + lock.requiredBy.length + " 项"
+          : "") +
+        " 必需依赖"
+      : baselineLocked
+        ? "当前配置由 Kconfig 依赖固定"
+        : "";
     meta.textContent = [
+      lockReason,
       pkg.category,
       pkg.submenu,
       pkg.repository && pkg.repository !== "base"
@@ -2384,17 +2634,42 @@ function renderConfigStudioPackages() {
       y: "编入固件",
       m: "仅编译模块"
     };
-    const assignable =
+    const baseAssignable =
       Array.isArray(pkg.assignable) && pkg.assignable.length
         ? pkg.assignable
         : ["n", "m", "y"];
+    const assignable = lock
+      ? baseAssignable.filter(
+          (value) =>
+            configStudioTristateRank(value) >=
+            configStudioTristateRank(lock.value)
+        )
+      : baseAssignable;
     for (const value of assignable) {
       const option = document.createElement("option");
       option.value = value;
       option.textContent = packageLabels[value] || value;
       select.appendChild(option);
     }
-    select.value = configStudioOptionValue(pkg.symbol, pkg.value);
+    const displayValue = configStudioPackageDisplayValue(pkg, lock);
+    if (![...select.options].some((item) => item.value === displayValue)) {
+      const option = document.createElement("option");
+      option.value = displayValue;
+      option.textContent = packageLabels[displayValue] || displayValue;
+      select.appendChild(option);
+    }
+    select.value = displayValue;
+    select.disabled = Boolean(
+      baselineLocked || (lock && assignable.length <= 1)
+    );
+    if (lock) {
+      select.title =
+        "该软件包由必需依赖锁定，不能低于 " +
+        (lock.value === "y" ? "编入固件" : "仅编译模块") +
+        "；可用范围与最终值仍由 OpenWrt Kconfig 确认";
+    } else if (baselineLocked) {
+      select.title = "该软件包当前由 OpenWrt Kconfig 固定，不能手动修改";
+    }
     select.addEventListener("change", () => {
       const scrollTop = root.scrollTop;
       setConfigStudioModifiedValue(pkg.symbol, select.value);
@@ -2714,6 +2989,8 @@ function resetConfigStudioState() {
   configStudioState.catalog = null;
   configStudioState.result = null;
   configStudioState.modifiedValues = new Map();
+  configStudioState.dependencyLocks = new Map();
+  configStudioState.dependencyOnly = false;
   configStudioState.targetId = "";
   configStudioState.subtargetId = "";
   configStudioState.deviceProfileId = "";
@@ -2989,9 +3266,10 @@ async function resolveConfigStudio() {
   const requestId = configStudioState.requestId;
   if (!repo || !requestId || !configStudioState.catalog) return;
 
+  computeConfigStudioDependencyLocks();
   const values = {
     ...configStudioTargetValues(),
-    ...Object.fromEntries(configStudioState.modifiedValues)
+    ...Object.fromEntries(configStudioEffectiveModifiedEntries())
   };
   const button = $("config-studio-resolve");
   button.disabled = true;
@@ -3669,19 +3947,24 @@ $("config-studio-device").addEventListener("change", () => {
   persistNewConfigStudioUi();
 });
 
-$("config-studio-search").addEventListener("input", renderConfigStudioPackages);
+$("config-studio-search").addEventListener("input", () => {
+  configStudioState.dependencyOnly = false;
+  renderConfigStudioPackages();
+});
 
 $("config-studio-category").addEventListener("change", () => {
+  configStudioState.dependencyOnly = false;
   renderConfigStudioPackageSubmenus();
   renderConfigStudioPackages();
 });
 
-$("config-studio-submenu").addEventListener(
-  "change",
-  renderConfigStudioPackages
-);
+$("config-studio-submenu").addEventListener("change", () => {
+  configStudioState.dependencyOnly = false;
+  renderConfigStudioPackages();
+});
 
 $("config-studio-luci-only").addEventListener("change", () => {
+  configStudioState.dependencyOnly = false;
   if (
     $("config-studio-luci-only").checked &&
     !$("config-studio-category").value &&
@@ -3692,6 +3975,11 @@ $("config-studio-luci-only").addEventListener("change", () => {
     $("config-studio-category").value = "LuCI";
     renderConfigStudioPackageSubmenus();
   }
+  renderConfigStudioPackages();
+});
+
+$("config-studio-show-dependencies").addEventListener("click", () => {
+  configStudioState.dependencyOnly = !configStudioState.dependencyOnly;
   renderConfigStudioPackages();
 });
 

@@ -53,6 +53,11 @@ assert.match(controlPlaneAppJs, /renderConfigStudioFeatureSubmenus/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-submenu"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-feature-menu"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-feature-submenu"/);
+assert.match(controlPlaneAppJs, /computeConfigStudioDependencyLocks/);
+assert.match(controlPlaneAppJs, /configStudioDependencyConditionMatches/);
+assert.match(controlPlaneAppJs, /configStudioEffectiveModifiedEntries/);
+assert.match(controlPlaneIndexHtml, /id="config-studio-dependency-summary"/);
+assert.match(controlPlaneIndexHtml, /id="config-studio-show-dependencies"/);
 
 const builderProgress = builderProgressFromJobs([
   {

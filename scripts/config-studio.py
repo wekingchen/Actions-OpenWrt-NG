@@ -194,6 +194,64 @@ def parse_targetinfo(path: Path, config: dict[str, str]) -> list[dict[str, Any]]
     return output
 
 
+def dependency_rules_for_package(
+    package_name: str,
+    tokens: list[str],
+) -> list[dict[str, str]]:
+    """Extract package-select edges used by OpenWrt's generated menuconfig.
+
+    Only '+' dependencies select another package. '+@FOO' selects a raw Kconfig
+    symbol instead of a package and is therefore not shown as a package lock.
+    Conditional package deps such as '+PACKAGE_x:foo' keep their Kconfig
+    condition for the browser-side preview. The final source of truth remains
+    OpenWrt's own make defconfig.
+    """
+    rules: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw_token in tokens:
+        token = str(raw_token or "").strip()
+        flags_match = re.match(r"^([@+]+)", token)
+        flags = flags_match.group(1) if flags_match else ""
+        if "+" not in flags or "@" in flags:
+            continue
+
+        value = token[len(flags):]
+        condition = ""
+        target = value
+        if ":" in value:
+            condition, target = value.split(":", 1)
+            condition = condition.strip()
+            target = target.strip()
+            if condition == f"PACKAGE_{package_name}":
+                condition = ""
+
+        if not target or target.startswith("@"):
+            continue
+
+        key = (target, condition)
+        if key in seen:
+            continue
+        seen.add(key)
+        rules.append({
+            "package": target,
+            "condition": condition,
+            "source": token,
+        })
+    return rules
+
+
+def dependency_condition_names(rules: list[dict[str, str]]) -> set[str]:
+    names: set[str] = set()
+    for rule in rules:
+        condition = str(rule.get("condition") or "")
+        names.update(
+            name
+            for name in re.findall(r"[A-Za-z_][A-Za-z0-9_.+@/-]*", condition)
+            if name not in {"y", "m", "n"}
+        )
+    return names
+
+
 def parse_packageinfo(path: Path, config: dict[str, str]) -> list[dict[str, Any]]:
     packages: list[dict[str, Any]] = []
     source_makefile = ""
@@ -254,6 +312,10 @@ def parse_packageinfo(path: Path, config: dict[str, str]) -> list[dict[str, Any]
         package["luciApp"] = package["name"].startswith("luci-app-")
         package["assignable"] = (
             ["n", "m", "y"] if "ipkg" in package["types"] else ["n", "y"]
+        )
+        package["dependencyRules"] = dependency_rules_for_package(
+            package["name"],
+            package["depends"],
         )
         visible.append(package)
     return visible
@@ -486,6 +548,14 @@ def command_catalog(args: argparse.Namespace) -> None:
 
     attach_package_config_options(packages, package_states)
 
+    dependency_condition_values: dict[str, str] = {}
+    for package in packages:
+        for name in dependency_condition_names(package["dependencyRules"]):
+            symbol = f"CONFIG_{name}"
+            dependency_condition_values[name] = config_value_for_json(
+                config.get(symbol, "n")
+            )
+
     categories = sorted(
         {
             item["category"]
@@ -495,17 +565,22 @@ def command_catalog(args: argparse.Namespace) -> None:
         key=str.casefold,
     )
     payload = {
-        "version": 2,
+        "version": 3,
         "targets": parse_targetinfo(targetinfo, config),
         "packages": packages,
         "packageCategories": categories,
         "features": features,
+        "dependencyConditionValues": dependency_condition_values,
         "featureCatalogError": feature_error,
         "configStats": {
             "symbols": len(config),
             "packages": len(packages),
             "packageOptions": sum(
                 len(package.get("configOptions") or [])
+                for package in packages
+            ),
+            "dependencyRules": sum(
+                len(package.get("dependencyRules") or [])
                 for package in packages
             ),
             "features": len(features),

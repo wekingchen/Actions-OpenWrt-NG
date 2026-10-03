@@ -37,7 +37,7 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.18.0</small>
+        <small>Control Plane 0.19.0</small>
       </div>
     </aside>
 
@@ -505,9 +505,22 @@
                     <span>只看 LuCI App</span>
                   </label>
                 </div>
+                <div id="config-studio-dependency-summary"
+                     class="config-studio-dependency-summary" hidden>
+                  <div class="config-studio-dependency-copy">
+                    <span class="config-studio-dependency-mark" aria-hidden="true">↳</span>
+                    <div>
+                      <strong id="config-studio-dependency-count">0 项依赖已联动锁定</strong>
+                      <small>由当前选择自动约束；最终仍以 OpenWrt Kconfig / make defconfig 为准。</small>
+                    </div>
+                  </div>
+                  <button id="config-studio-show-dependencies"
+                          class="button button-secondary button-compact"
+                          type="button" aria-pressed="false">查看联动项</button>
+                </div>
                 <div class="config-studio-list-head">
                   <span id="config-studio-package-count">0 个可选软件包</span>
-                  <span>主包选择；带子配置的软件包可展开</span>
+                  <span>主包选择；必需依赖会自动锁定</span>
                 </div>
                 <div id="config-studio-packages" class="config-studio-option-list"></div>
               </div>
