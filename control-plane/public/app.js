@@ -51,6 +51,28 @@ const createState = {
   previewValid: false
 };
 
+const configStudioState = {
+  repo: null,
+  requestId: "",
+  profileId: "",
+  context: "existing",
+  catalog: null,
+  result: null,
+  modifiedValues: new Map(),
+  targetId: "",
+  subtargetId: "",
+  deviceProfileId: "",
+  baselineTargetId: "",
+  baselineSubtargetId: "",
+  baselineDeviceProfileId: "",
+  pollTimer: null,
+  pollAttempts: 0,
+  generation: 0,
+  restoreFocus: null
+};
+
+const MAX_CONFIG_STUDIO_POLL_ATTEMPTS = 600;
+
 const repositoryState = {
   repositories: [],
   selectedFullName: "",
@@ -188,6 +210,26 @@ const ERROR_MESSAGES = {
     "暂时无法从 GitHub 读取 Builder 状态。",
   github_builder_dispatch_failed:
     "GitHub 未能启动 Builder，请检查 Actions 权限与 workflow 是否存在。",
+  github_config_studio_failed:
+    "GitHub 未能启动图形配置会话，请检查 Actions / Contents 权限与 Config Studio workflow。",
+  github_config_studio_apply_failed:
+    "Kconfig 已完成，但 GitHub 未能创建 Profile 配置 Pull Request。",
+  config_studio_session_not_found:
+    "图形配置会话已经不存在，可能已完成、取消或被清理。",
+  config_studio_run_active:
+    "当前图形配置仍在 Actions 中运行，请等本轮解析完成后再提交。",
+  config_studio_not_resolved:
+    "还没有可应用的 Kconfig 解析结果，请先校验当前选择。",
+  config_studio_profile_mismatch:
+    "这次图形配置会话不属于当前 Profile，已拒绝应用。",
+  invalid_config_studio_selection:
+    "图形配置选择格式无效，请刷新配置目录后重试。",
+  invalid_config_symbol:
+    "提交内容包含不允许的 Kconfig 符号，已拒绝处理。",
+  config_studio_gzip_unavailable:
+    "当前 Control Plane 运行环境无法解压配置目录。",
+  config_studio_result_invalid:
+    "Config Studio 返回的数据无法解析，请查看对应 Actions 日志。",
   build_already_active:
     "这个 Profile 已经有构建在运行，本次不会重复排队。",
   invalid_build_request:
@@ -1193,6 +1235,878 @@ async function selectRepository(repo) {
   await loadProfiles(repo, selectionVersion);
 }
 
+
+function clearConfigStudioPolling() {
+  if (configStudioState.pollTimer) {
+    clearTimeout(configStudioState.pollTimer);
+    configStudioState.pollTimer = null;
+  }
+}
+
+function configStudioBasePath(repo) {
+  return (
+    "/api/v1/repositories/" +
+    encodeURIComponent(repo.owner) +
+    "/" +
+    encodeURIComponent(repo.name) +
+    "/config-studio"
+  );
+}
+
+function setConfigStudioError(message = "") {
+  const node = $("config-studio-error");
+  const text = friendlyError(message);
+  node.hidden = !text;
+  node.textContent = text;
+}
+
+function setConfigStudioStatus(title, detail = "") {
+  $("config-studio-status").textContent = title;
+  $("config-studio-status-detail").textContent = detail;
+}
+
+function currentConfigStudioTarget() {
+  return (configStudioState.catalog?.targets || []).find(
+    (item) => item.id === configStudioState.targetId
+  ) || null;
+}
+
+function currentConfigStudioSubtarget() {
+  return (currentConfigStudioTarget()?.subtargets || []).find(
+    (item) => item.id === configStudioState.subtargetId
+  ) || null;
+}
+
+function currentConfigStudioDevice() {
+  return (currentConfigStudioSubtarget()?.devices || []).find(
+    (item) => item.profileId === configStudioState.deviceProfileId
+  ) || null;
+}
+
+function pickConfigStudioTargetSelection(force = false) {
+  const targets = configStudioState.catalog?.targets || [];
+  if (!targets.length) return;
+
+  let target = !force
+    ? targets.find((item) => item.id === configStudioState.targetId)
+    : null;
+  target ||= targets.find((item) => item.selected) || targets[0];
+  configStudioState.targetId = target?.id || "";
+
+  const subtargets = target?.subtargets || [];
+  let subtarget = !force
+    ? subtargets.find((item) => item.id === configStudioState.subtargetId)
+    : null;
+  subtarget ||= subtargets.find((item) => item.selected) || subtargets[0];
+  configStudioState.subtargetId = subtarget?.id || "";
+
+  const devices = subtarget?.devices || [];
+  let device = !force
+    ? devices.find(
+        (item) => item.profileId === configStudioState.deviceProfileId
+      )
+    : null;
+  device ||= devices.find((item) => item.selected) || devices[0] || null;
+  configStudioState.deviceProfileId = device?.profileId || "";
+
+  if (!configStudioState.baselineTargetId) {
+    configStudioState.baselineTargetId = target?.id || "";
+    configStudioState.baselineSubtargetId = subtarget?.id || "";
+    configStudioState.baselineDeviceProfileId = device?.profileId || "";
+  }
+}
+
+function renderConfigStudioTargetSelectors() {
+  const targets = configStudioState.catalog?.targets || [];
+  const targetSelect = $("config-studio-target");
+  const subtargetSelect = $("config-studio-subtarget");
+  const deviceSelect = $("config-studio-device");
+
+  targetSelect.replaceChildren();
+  for (const target of targets) {
+    const option = document.createElement("option");
+    option.value = target.id;
+    option.textContent = target.name
+      ? target.name + " · " + target.id
+      : target.id;
+    targetSelect.appendChild(option);
+  }
+  targetSelect.value = configStudioState.targetId;
+
+  const target = currentConfigStudioTarget();
+  subtargetSelect.replaceChildren();
+  for (const subtarget of target?.subtargets || []) {
+    const option = document.createElement("option");
+    option.value = subtarget.id;
+    option.textContent = subtarget.id
+      ? (subtarget.name || subtarget.id) + " · " + subtarget.id
+      : subtarget.name || "Default";
+    subtargetSelect.appendChild(option);
+  }
+  subtargetSelect.value = configStudioState.subtargetId;
+  subtargetSelect.disabled = (target?.subtargets || []).length <= 1;
+
+  const subtarget = currentConfigStudioSubtarget();
+  deviceSelect.replaceChildren();
+  const devices = subtarget?.devices || [];
+  if (!devices.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Default";
+    deviceSelect.appendChild(option);
+  } else {
+    for (const device of devices) {
+      const option = document.createElement("option");
+      option.value = device.profileId;
+      option.textContent =
+        (device.name || device.id || device.profileId) +
+        (device.broken ? " · BROKEN" : "");
+      option.disabled = Boolean(device.broken);
+      deviceSelect.appendChild(option);
+    }
+  }
+  deviceSelect.value = configStudioState.deviceProfileId;
+  deviceSelect.disabled = devices.length <= 1;
+}
+
+function configStudioOptionValue(symbol, fallback = "n") {
+  return configStudioState.modifiedValues.has(symbol)
+    ? String(configStudioState.modifiedValues.get(symbol))
+    : String(fallback ?? "n");
+}
+
+function setConfigStudioModifiedValue(symbol, value) {
+  configStudioState.modifiedValues.set(symbol, String(value));
+  updateConfigStudioChangeCount();
+}
+
+function updateConfigStudioChangeCount() {
+  let targetChanges = 0;
+  if (
+    configStudioState.targetId &&
+    configStudioState.targetId !== configStudioState.baselineTargetId
+  ) {
+    targetChanges += 1;
+  }
+  if (
+    configStudioState.subtargetId !==
+    configStudioState.baselineSubtargetId
+  ) {
+    targetChanges += 1;
+  }
+  if (
+    configStudioState.deviceProfileId !==
+    configStudioState.baselineDeviceProfileId
+  ) {
+    targetChanges += 1;
+  }
+  $("config-studio-change-count").textContent = String(
+    configStudioState.modifiedValues.size + targetChanges
+  );
+}
+
+function renderConfigStudioPackageCategories() {
+  const select = $("config-studio-category");
+  const previous = select.value || "all";
+  select.replaceChildren();
+
+  const all = document.createElement("option");
+  all.value = "all";
+  all.textContent = "全部分类";
+  select.appendChild(all);
+
+  for (const category of configStudioState.catalog?.packageCategories || []) {
+    const option = document.createElement("option");
+    option.value = category;
+    option.textContent = category;
+    select.appendChild(option);
+  }
+  select.value = [...select.options].some((item) => item.value === previous)
+    ? previous
+    : "all";
+}
+
+function renderConfigStudioPackages() {
+  const root = $("config-studio-packages");
+  const search = $("config-studio-search").value.trim().toLowerCase();
+  const category = $("config-studio-category").value || "all";
+  const luciOnly = $("config-studio-luci-only").checked;
+
+  const matches = (configStudioState.catalog?.packages || []).filter((pkg) => {
+    if (category !== "all" && pkg.category !== category) return false;
+    if (luciOnly && !pkg.luciApp) return false;
+    if (!search) return true;
+    return [
+      pkg.name,
+      pkg.title,
+      pkg.category,
+      pkg.submenu,
+      pkg.repository
+    ].some((value) => String(value || "").toLowerCase().includes(search));
+  });
+
+  $("config-studio-package-count").textContent =
+    matches.length + " 个可选软件包";
+  root.replaceChildren();
+
+  if (!matches.length) {
+    const empty = document.createElement("div");
+    empty.className = "config-studio-empty";
+    empty.textContent = "没有符合当前筛选条件的软件包。";
+    root.appendChild(empty);
+    return;
+  }
+
+  const cap = 600;
+  for (const pkg of matches.slice(0, cap)) {
+    const row = document.createElement("div");
+    row.className =
+      "config-studio-option" +
+      (configStudioState.modifiedValues.has(pkg.symbol) ? " modified" : "");
+
+    const copy = document.createElement("div");
+    copy.className = "config-studio-option-copy";
+    const title = document.createElement("div");
+    title.className = "config-studio-option-title";
+    const strong = document.createElement("strong");
+    strong.textContent = pkg.name;
+    const subtitle = document.createElement("span");
+    subtitle.textContent = pkg.title || pkg.submenu || pkg.category || "";
+    title.append(strong, subtitle);
+    const meta = document.createElement("small");
+    meta.textContent = [
+      pkg.category,
+      pkg.submenu,
+      pkg.repository && pkg.repository !== "base"
+        ? "feed:" + pkg.repository
+        : ""
+    ].filter(Boolean).join(" · ");
+    copy.append(title, meta);
+
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", pkg.name + " 构建方式");
+    const packageLabels = {
+      n: "不选",
+      y: "编入固件",
+      m: "仅编译模块"
+    };
+    const assignable =
+      Array.isArray(pkg.assignable) && pkg.assignable.length
+        ? pkg.assignable
+        : ["n", "m", "y"];
+    for (const value of assignable) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = packageLabels[value] || value;
+      select.appendChild(option);
+    }
+    select.value = configStudioOptionValue(pkg.symbol, pkg.value);
+    select.addEventListener("change", () => {
+      setConfigStudioModifiedValue(pkg.symbol, select.value);
+      row.classList.add("modified");
+    });
+
+    row.append(copy, select);
+    root.appendChild(row);
+  }
+
+  if (matches.length > cap) {
+    const more = document.createElement("div");
+    more.className = "config-studio-empty";
+    more.textContent =
+      "当前匹配 " +
+      matches.length +
+      " 项，为保证手机端流畅仅显示前 " +
+      cap +
+      " 项；请使用分类或搜索继续缩小范围。";
+    root.appendChild(more);
+  }
+}
+
+function featureControl(feature, row) {
+  const symbol = feature.symbol;
+  const current = configStudioOptionValue(symbol, feature.value);
+  const assignable = Array.isArray(feature.assignable)
+    ? feature.assignable
+    : [];
+
+  if (assignable.length) {
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", feature.prompt || feature.name);
+    const labels = { n: "关闭", m: "模块", y: "开启" };
+    for (const value of assignable) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = labels[value] || value;
+      select.appendChild(option);
+    }
+    if (![...select.options].some((item) => item.value === current)) {
+      const option = document.createElement("option");
+      option.value = current;
+      option.textContent = labels[current] || current;
+      select.appendChild(option);
+    }
+    select.value = current;
+    select.disabled = feature.changeable === false;
+    if (select.disabled) {
+      select.title = "该选项当前由 Kconfig 依赖固定，不能手动修改";
+    }
+    select.addEventListener("change", () => {
+      setConfigStudioModifiedValue(symbol, select.value);
+      row.classList.add("modified");
+    });
+    return select;
+  }
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = current;
+  input.disabled = feature.changeable === false;
+  if (input.disabled) {
+    input.title = "该选项当前由 Kconfig 依赖固定，不能手动修改";
+  }
+  input.setAttribute("aria-label", feature.prompt || feature.name);
+  input.addEventListener("change", () => {
+    setConfigStudioModifiedValue(symbol, input.value);
+    row.classList.add("modified");
+  });
+  return input;
+}
+
+function renderConfigStudioFeatures() {
+  const root = $("config-studio-features");
+  const search = $("config-studio-feature-search").value.trim().toLowerCase();
+  const matches = (configStudioState.catalog?.features || []).filter(
+    (feature) => {
+      if (!feature.visible) return false;
+      if (!search) return true;
+      return [
+        feature.name,
+        feature.prompt,
+        ...(feature.menuPath || []),
+        feature.help
+      ].some((value) => String(value || "").toLowerCase().includes(search));
+    }
+  );
+
+  $("config-studio-feature-count").textContent =
+    matches.length + " 个当前可见特性";
+  root.replaceChildren();
+
+  if (!matches.length) {
+    const empty = document.createElement("div");
+    empty.className = "config-studio-empty";
+    empty.textContent =
+      configStudioState.catalog?.featureCatalogError ||
+      "当前目标没有匹配的可视化特性。";
+    root.appendChild(empty);
+    return;
+  }
+
+  const cap = 500;
+  for (const feature of matches.slice(0, cap)) {
+    const row = document.createElement("div");
+    row.className =
+      "config-studio-option" +
+      (configStudioState.modifiedValues.has(feature.symbol)
+        ? " modified"
+        : "");
+
+    const copy = document.createElement("div");
+    copy.className = "config-studio-option-copy";
+    const title = document.createElement("div");
+    title.className = "config-studio-option-title";
+    const strong = document.createElement("strong");
+    strong.textContent = feature.prompt || feature.name;
+    const symbol = document.createElement("span");
+    symbol.textContent = feature.name;
+    title.append(strong, symbol);
+    const meta = document.createElement("small");
+    const path = (feature.menuPath || []).join(" › ");
+    meta.textContent = [path, feature.help].filter(Boolean).join(" · ");
+    copy.append(title, meta);
+
+    row.append(copy, featureControl(feature, row));
+    root.appendChild(row);
+  }
+
+  if (matches.length > cap) {
+    const more = document.createElement("div");
+    more.className = "config-studio-empty";
+    more.textContent =
+      "当前匹配 " +
+      matches.length +
+      " 项，仅显示前 " +
+      cap +
+      " 项；请搜索具体特性。";
+    root.appendChild(more);
+  }
+}
+
+function renderConfigStudioCatalog(forceSelection = false) {
+  if (!configStudioState.catalog) return;
+  pickConfigStudioTargetSelection(forceSelection);
+  renderConfigStudioTargetSelectors();
+  renderConfigStudioPackageCategories();
+  renderConfigStudioPackages();
+  renderConfigStudioFeatures();
+  updateConfigStudioChangeCount();
+
+  $("config-studio-loading").hidden = true;
+  $("config-studio-workbench").hidden = false;
+  $("config-studio-result").hidden = true;
+  $("config-studio-back").hidden = true;
+  $("config-studio-apply").hidden = true;
+  $("config-studio-use").hidden = true;
+  $("config-studio-resolve").hidden = false;
+  $("config-studio-resolve").disabled = false;
+}
+
+function configStudioTargetValues() {
+  const values = {};
+  const targets = configStudioState.catalog?.targets || [];
+  const target = currentConfigStudioTarget();
+  const subtarget = currentConfigStudioSubtarget();
+  const device = currentConfigStudioDevice();
+
+  if (target?.symbol) values[target.symbol] = "y";
+  if (subtarget?.symbol && subtarget.symbol !== target?.symbol) {
+    values[subtarget.symbol] = "y";
+  }
+  if (device?.symbol) values[device.symbol] = "y";
+
+  const baselineTarget = targets.find(
+    (item) => item.id === configStudioState.baselineTargetId
+  );
+  const baselineSubtarget = (baselineTarget?.subtargets || []).find(
+    (item) => item.id === configStudioState.baselineSubtargetId
+  );
+  const baselineDevice = (baselineSubtarget?.devices || []).find(
+    (item) => item.profileId === configStudioState.baselineDeviceProfileId
+  );
+
+  if (
+    baselineTarget?.symbol &&
+    baselineTarget.symbol !== target?.symbol
+  ) {
+    values[baselineTarget.symbol] = "n";
+  }
+  if (
+    baselineSubtarget?.symbol &&
+    baselineSubtarget.symbol !== subtarget?.symbol &&
+    baselineSubtarget.symbol !== baselineTarget?.symbol
+  ) {
+    values[baselineSubtarget.symbol] = "n";
+  }
+  if (
+    baselineDevice?.symbol &&
+    baselineDevice.symbol !== device?.symbol
+  ) {
+    values[baselineDevice.symbol] = "n";
+  }
+  return values;
+}
+
+function renderConfigStudioResult() {
+  const result = configStudioState.result;
+  if (!result) return;
+
+  $("config-result-honored").textContent = String(
+    result.summary?.honored || 0
+  );
+  $("config-result-adjusted").textContent = String(
+    result.summary?.adjusted || 0
+  );
+  $("config-result-packages").textContent = String(
+    result.summary?.selectedPackages || 0
+  );
+
+  const root = $("config-studio-adjustments");
+  root.replaceChildren();
+  const adjusted = (result.comparison || []).filter(
+    (item) => item.status === "adjusted"
+  );
+  const dependencyChanges = (result.packageChanges || []).filter(
+    (item) => item.reason === "dependency"
+  );
+
+  const items = [
+    ...adjusted.map((item) => ({
+      key: item.symbol,
+      detail:
+        "请求 " +
+        String(item.requested) +
+        " → Kconfig " +
+        String(item.resolved)
+    })),
+    ...dependencyChanges.map((item) => ({
+      key: item.name,
+      detail:
+        item.change === "added"
+          ? "Kconfig 自动加入依赖"
+          : "Kconfig 因依赖关系移除"
+    }))
+  ];
+
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "config-studio-empty";
+    empty.textContent =
+      "你本轮提交的选择全部被 Kconfig 接受，没有额外依赖调整需要提示。";
+    root.appendChild(empty);
+  } else {
+    for (const item of items.slice(0, 120)) {
+      const row = document.createElement("div");
+      row.className = "config-studio-adjustment";
+      const code = document.createElement("code");
+      code.textContent = item.key;
+      const detail = document.createElement("span");
+      detail.textContent = item.detail;
+      row.append(code, detail);
+      root.appendChild(row);
+    }
+  }
+
+  $("config-studio-loading").hidden = true;
+  $("config-studio-workbench").hidden = true;
+  $("config-studio-result").hidden = false;
+  $("config-studio-resolve").hidden = true;
+  $("config-studio-back").hidden = false;
+  const existing = configStudioState.context === "existing";
+  $("config-studio-apply").hidden = !existing;
+  $("config-studio-use").hidden = existing;
+  setConfigStudioStatus(
+    "Kconfig 解析完成",
+    "请检查依赖调整；确认后再生成 Profile PR 或带回新 Profile。"
+  );
+}
+
+function resetConfigStudioState() {
+  clearConfigStudioPolling();
+  configStudioState.repo = null;
+  configStudioState.requestId = "";
+  configStudioState.profileId = "";
+  configStudioState.context = "existing";
+  configStudioState.catalog = null;
+  configStudioState.result = null;
+  configStudioState.modifiedValues = new Map();
+  configStudioState.targetId = "";
+  configStudioState.subtargetId = "";
+  configStudioState.deviceProfileId = "";
+  configStudioState.baselineTargetId = "";
+  configStudioState.baselineSubtargetId = "";
+  configStudioState.baselineDeviceProfileId = "";
+  configStudioState.pollAttempts = 0;
+  configStudioState.restoreFocus = null;
+}
+
+function hideConfigStudioDialog() {
+  clearConfigStudioPolling();
+  $("config-studio-dialog").hidden = true;
+  document.body.classList.remove("dialog-open");
+}
+
+async function deleteConfigStudioSession() {
+  const repo = configStudioState.repo;
+  const requestId = configStudioState.requestId;
+  if (!repo || !requestId) return;
+  try {
+    await request(
+      configStudioBasePath(repo) + "/" + requestId,
+      { method: "DELETE" }
+    );
+  } catch (error) {
+    if (error.code !== "config_studio_session_not_found") {
+      console.warn("Config Studio cleanup failed", error);
+    }
+  }
+}
+
+async function closeConfigStudio({ cleanup = true } = {}) {
+  const restoreFocus = configStudioState.restoreFocus;
+  configStudioState.generation += 1;
+  clearConfigStudioPolling();
+  if (cleanup) await deleteConfigStudioSession();
+  hideConfigStudioDialog();
+  resetConfigStudioState();
+  if (restoreFocus?.isConnected && typeof restoreFocus.focus === "function") {
+    restoreFocus.focus();
+  }
+}
+
+async function pollConfigStudio(generation) {
+  const repo = configStudioState.repo;
+  const requestId = configStudioState.requestId;
+  if (!repo || !requestId || generation !== configStudioState.generation) {
+    return;
+  }
+
+  configStudioState.pollAttempts += 1;
+  try {
+    const data = await request(
+      configStudioBasePath(repo) + "/" + requestId
+    );
+    if (
+      generation !== configStudioState.generation ||
+      $("config-studio-dialog").hidden
+    ) {
+      return;
+    }
+
+    if (data.run?.url) {
+      $("config-studio-run-link").href = data.run.url;
+      $("config-studio-run-link").hidden = false;
+    }
+
+    const status = data.status?.status || "preparing";
+    if (status === "failed") {
+      setConfigStudioStatus(
+        "配置环境生成失败",
+        "请打开 Actions 查看真实 OpenWrt / feeds / Kconfig 错误。"
+      );
+      setConfigStudioError("Config Studio Action 执行失败。");
+      $("config-studio-resolve").disabled = true;
+      return;
+    }
+
+    if (data.catalog) {
+      configStudioState.catalog = data.catalog;
+    }
+
+    if (status === "ready" && data.catalog) {
+      setConfigStudioStatus(
+        "配置目录已就绪",
+        "现在由你选择设备、软件包和特性；下一步交给 OpenWrt Kconfig 校验依赖。"
+      );
+      renderConfigStudioCatalog(true);
+      return;
+    }
+
+    if (status === "resolved" && data.result) {
+      configStudioState.result = data.result;
+      if (data.catalog) {
+        configStudioState.catalog = data.catalog;
+        pickConfigStudioTargetSelection(true);
+      }
+      renderConfigStudioResult();
+      return;
+    }
+
+    if (status === "resolving") {
+      setConfigStudioStatus(
+        "Kconfig 正在解析选择",
+        "正在真实运行 make defconfig，并重新生成当前目标下的菜单目录。"
+      );
+      $("config-studio-resolve").disabled = true;
+    } else {
+      setConfigStudioStatus(
+        "正在准备真实 OpenWrt 配置环境",
+        "正在读取源码、feeds 和设备元数据。"
+      );
+    }
+  } catch (error) {
+    if (
+      generation !== configStudioState.generation ||
+      $("config-studio-dialog").hidden
+    ) {
+      return;
+    }
+    setConfigStudioError(error);
+  }
+
+  if (configStudioState.pollAttempts >= MAX_CONFIG_STUDIO_POLL_ATTEMPTS) {
+    setConfigStudioError("图形配置准备时间过长，请打开 Actions 检查运行状态。");
+    return;
+  }
+  configStudioState.pollTimer = setTimeout(
+    () => pollConfigStudio(generation),
+    2500
+  );
+}
+
+async function startConfigStudio(repo, options) {
+  if (!repo || !canWriteRepo(repo) || !canRunRepo(repo)) {
+    showError(
+      "图形配置需要 Contents、Pull requests 与 Actions 写权限。"
+    );
+    return;
+  }
+
+  const existing = Boolean(options.profileId);
+  const payload = existing
+    ? { profileId: options.profileId }
+    : {
+        sourceRepo: options.sourceRepo,
+        sourceBranch: options.sourceBranch,
+        adapter: options.adapter,
+        baseConfig: options.baseConfig || ""
+      };
+
+  resetConfigStudioState();
+  configStudioState.generation += 1;
+  const generation = configStudioState.generation;
+  configStudioState.repo = repo;
+  configStudioState.profileId = options.profileId || "";
+  configStudioState.context = existing ? "existing" : "new";
+  configStudioState.restoreFocus =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+
+  setConfigStudioError();
+  $("config-studio-title").textContent = existing
+    ? "图形配置 · " + options.profileId
+    : "新 Profile · 图形 Menuconfig";
+  $("config-studio-context").textContent = existing
+    ? repo.fullName + " · 从当前 Profile 配置开始"
+    : repo.fullName + " · " + options.sourceRepo + " @ " + options.sourceBranch;
+  $("config-studio-loading").hidden = false;
+  $("config-studio-workbench").hidden = true;
+  $("config-studio-result").hidden = true;
+  $("config-studio-run-link").hidden = true;
+  $("config-studio-resolve").hidden = false;
+  $("config-studio-resolve").disabled = true;
+  $("config-studio-back").hidden = true;
+  $("config-studio-apply").hidden = true;
+  $("config-studio-use").hidden = true;
+  setConfigStudioStatus(
+    "正在提交配置环境",
+    "不会直接修改默认分支；Config Studio 使用受控临时分支保存会话。"
+  );
+
+  $("config-studio-dialog").hidden = false;
+  document.body.classList.add("dialog-open");
+  $("config-studio-close").focus();
+
+  try {
+    const result = await request(configStudioBasePath(repo), {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    if (
+      generation !== configStudioState.generation ||
+      $("config-studio-dialog").hidden
+    ) {
+      return;
+    }
+    configStudioState.requestId = result.requestId;
+    if (result.runUrl) {
+      $("config-studio-run-link").href = result.runUrl;
+      $("config-studio-run-link").hidden = false;
+    }
+    configStudioState.pollAttempts = 0;
+    await pollConfigStudio(generation);
+  } catch (error) {
+    if (generation !== configStudioState.generation) return;
+    setConfigStudioStatus(
+      "无法启动图形配置",
+      "Control Plane 没有创建 Config Studio 会话。"
+    );
+    setConfigStudioError(error);
+  }
+}
+
+async function resolveConfigStudio() {
+  const repo = configStudioState.repo;
+  const requestId = configStudioState.requestId;
+  if (!repo || !requestId || !configStudioState.catalog) return;
+
+  const values = {
+    ...configStudioTargetValues(),
+    ...Object.fromEntries(configStudioState.modifiedValues)
+  };
+  const button = $("config-studio-resolve");
+  button.disabled = true;
+  button.textContent = "正在提交…";
+  setConfigStudioError();
+
+  try {
+    const result = await request(
+      configStudioBasePath(repo) + "/" + requestId + "/resolve",
+      {
+        method: "POST",
+        body: JSON.stringify({ values })
+      }
+    );
+    if (result.runUrl) {
+      $("config-studio-run-link").href = result.runUrl;
+      $("config-studio-run-link").hidden = false;
+    }
+    configStudioState.result = null;
+    configStudioState.pollAttempts = 0;
+    $("config-studio-loading").hidden = false;
+    $("config-studio-workbench").hidden = true;
+    setConfigStudioStatus(
+      "Kconfig 正在解析选择",
+      "正在运行 make defconfig；依赖变化会在完成后逐项展示。"
+    );
+    await pollConfigStudio(configStudioState.generation);
+  } catch (error) {
+    setConfigStudioError(error);
+    button.disabled = false;
+  } finally {
+    button.textContent = "让 Kconfig 校验选择";
+  }
+}
+
+async function applyConfigStudioToProfile() {
+  const repo = configStudioState.repo;
+  const requestId = configStudioState.requestId;
+  const profileId = configStudioState.profileId;
+  if (!repo || !requestId || !profileId || !configStudioState.result) return;
+
+  const button = $("config-studio-apply");
+  button.disabled = true;
+  button.textContent = "正在创建 PR…";
+  setConfigStudioError();
+
+  try {
+    const result = await request(
+      configStudioBasePath(repo) +
+        "/" +
+        requestId +
+        "/apply/" +
+        encodeURIComponent(profileId),
+      { method: "POST", body: "{}" }
+    );
+    const restoreFocus = configStudioState.restoreFocus;
+    hideConfigStudioDialog();
+    resetConfigStudioState();
+    showWriteResult(
+      "图形配置已生成独立分支；默认分支未被直接修改。",
+      result.pullRequest?.url || ""
+    );
+    $("preview-card").hidden = true;
+    editorState.previewValid = false;
+    restoreFocus?.focus?.();
+  } catch (error) {
+    setConfigStudioError(error);
+    button.disabled = false;
+  } finally {
+    button.textContent = "生成 Profile PR";
+  }
+}
+
+async function useConfigStudioForNewProfile() {
+  if (
+    configStudioState.context !== "new" ||
+    !configStudioState.result?.finalConfig
+  ) {
+    return;
+  }
+  const finalConfig = configStudioState.result.finalConfig;
+  $("new-config-text").value = finalConfig;
+  invalidateNewProfilePreview();
+  await closeConfigStudio({ cleanup: true });
+  $("new-profile-card").hidden = false;
+  showControlPlaneView("profiles");
+  setActiveNavigation("profiles");
+  scrollToPanel($("new-profile-card"));
+  showNewProfileResult(
+    "已使用真实 Kconfig 解析后的 .config；请预览标准文件后创建 Profile PR。"
+  );
+}
+
 async function init() {
   showError();
   const publicConfig = await request("/api/v1/config");
@@ -1314,10 +2228,34 @@ document.addEventListener("keydown", (event) => {
     $("account-dropdown").hidden = true;
     $("user-box").setAttribute("aria-expanded", "false");
     if (!$("build-dialog").hidden) closeBuildDialog();
+    if (!$("config-studio-dialog").hidden) {
+      closeConfigStudio({ cleanup: true }).catch((error) => showError(error));
+    }
   }
 });
 
 $("new-profile-open").addEventListener("click", openNewProfileForm);
+
+$("new-config-studio").addEventListener("click", () => {
+  const repo = createState.repo;
+  const sourceRepo = $("new-source-repo").value.trim();
+  const sourceBranch = $("new-source-branch").value.trim();
+  const adapter = $("new-adapter").value;
+  if (!repo) {
+    showError("请先选择仓库。");
+    return;
+  }
+  if (!sourceRepo || !sourceBranch) {
+    showError("请先填写源码仓库与分支 / Tag，再打开图形配置。");
+    return;
+  }
+  startConfigStudio(repo, {
+    sourceRepo,
+    sourceBranch,
+    adapter,
+    baseConfig: $("new-config-text").value
+  }).catch((error) => showError(error));
+});
 
 $("new-profile-close").addEventListener("click", () => {
   $("new-profile-card").hidden = true;
@@ -1454,6 +2392,14 @@ $("file-select").addEventListener("change", () => {
 });
 
 $("editor-content").addEventListener("input", setPreviewStale);
+
+$("editor-config-studio").addEventListener("click", () => {
+  if (!editorState.repo || !editorState.profileId) return;
+  startConfigStudio(editorState.repo, {
+    profileId: editorState.profileId
+  }).catch((error) => showError(error));
+});
+
 
 $("preview-change").addEventListener("click", () => {
   const names = changedFiles();
@@ -1600,8 +2546,123 @@ $("build-dialog").addEventListener("click", (event) => {
   if (event.target === $("build-dialog")) closeBuildDialog();
 });
 
+$("config-studio-target").addEventListener("change", () => {
+  configStudioState.targetId = $("config-studio-target").value;
+  const target = currentConfigStudioTarget();
+  const subtarget =
+    (target?.subtargets || []).find((item) => item.selected) ||
+    target?.subtargets?.[0] ||
+    null;
+  configStudioState.subtargetId = subtarget?.id || "";
+  const device =
+    (subtarget?.devices || []).find((item) => item.selected) ||
+    subtarget?.devices?.find((item) => !item.broken) ||
+    null;
+  configStudioState.deviceProfileId = device?.profileId || "";
+  renderConfigStudioTargetSelectors();
+  updateConfigStudioChangeCount();
+});
+
+$("config-studio-subtarget").addEventListener("change", () => {
+  configStudioState.subtargetId = $("config-studio-subtarget").value;
+  const subtarget = currentConfigStudioSubtarget();
+  const device =
+    (subtarget?.devices || []).find((item) => item.selected) ||
+    subtarget?.devices?.find((item) => !item.broken) ||
+    null;
+  configStudioState.deviceProfileId = device?.profileId || "";
+  renderConfigStudioTargetSelectors();
+  updateConfigStudioChangeCount();
+});
+
+$("config-studio-device").addEventListener("change", () => {
+  configStudioState.deviceProfileId = $("config-studio-device").value;
+  updateConfigStudioChangeCount();
+});
+
+for (const id of [
+  "config-studio-search",
+  "config-studio-category",
+  "config-studio-luci-only"
+]) {
+  $(id).addEventListener("input", renderConfigStudioPackages);
+  $(id).addEventListener("change", renderConfigStudioPackages);
+}
+
+$("config-studio-feature-search").addEventListener(
+  "input",
+  renderConfigStudioFeatures
+);
+
+function setConfigStudioTab(tab) {
+  const packages = tab === "packages";
+  $("config-studio-tab-packages").classList.toggle("active", packages);
+  $("config-studio-tab-packages").setAttribute(
+    "aria-selected",
+    String(packages)
+  );
+  $("config-studio-tab-features").classList.toggle("active", !packages);
+  $("config-studio-tab-features").setAttribute(
+    "aria-selected",
+    String(!packages)
+  );
+  $("config-studio-packages-panel").hidden = !packages;
+  $("config-studio-features-panel").hidden = packages;
+}
+
+$("config-studio-tab-packages").addEventListener("click", () => {
+  setConfigStudioTab("packages");
+});
+$("config-studio-tab-features").addEventListener("click", () => {
+  setConfigStudioTab("features");
+});
+
+$("config-studio-resolve").addEventListener("click", () => {
+  resolveConfigStudio().catch((error) => setConfigStudioError(error));
+});
+
+$("config-studio-back").addEventListener("click", () => {
+  configStudioState.result = null;
+  configStudioState.modifiedValues = new Map();
+  pickConfigStudioTargetSelection(true);
+  configStudioState.baselineTargetId = configStudioState.targetId;
+  configStudioState.baselineSubtargetId = configStudioState.subtargetId;
+  configStudioState.baselineDeviceProfileId =
+    configStudioState.deviceProfileId;
+  setConfigStudioStatus(
+    "继续调整",
+    "以上一轮 make defconfig 的真实结果作为新的起点。"
+  );
+  renderConfigStudioCatalog(false);
+});
+
+$("config-studio-apply").addEventListener("click", () => {
+  applyConfigStudioToProfile().catch((error) => setConfigStudioError(error));
+});
+
+$("config-studio-use").addEventListener("click", () => {
+  useConfigStudioForNewProfile().catch((error) => setConfigStudioError(error));
+});
+
+for (const id of ["config-studio-close", "config-studio-cancel"]) {
+  $(id).addEventListener("click", () => {
+    closeConfigStudio({ cleanup: true }).catch((error) => showError(error));
+  });
+}
+
+$("config-studio-dialog").addEventListener("click", (event) => {
+  if (event.target === $("config-studio-dialog")) {
+    closeConfigStudio({ cleanup: true }).catch((error) => showError(error));
+  }
+});
+
+
 $("logout").addEventListener("click", async () => {
   clearBuildPolling();
+  clearConfigStudioPolling();
+  if (!$("config-studio-dialog").hidden) {
+    await closeConfigStudio({ cleanup: true });
+  }
   await request("/api/v1/logout", { method: "POST" });
   location.reload();
 });

@@ -37,7 +37,7 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.10.1</small>
+        <small>Control Plane 0.11.0</small>
       </div>
     </aside>
 
@@ -199,18 +199,28 @@
                     <span>02</span>
                     <div><strong>构建配置</strong><small>上传或粘贴 OpenWrt .config</small></div>
                   </div>
+                  <div class="config-source-choice">
+                    <div>
+                      <strong>推荐：图形配置</strong>
+                      <span>基于真实源码与 feeds 生成可选项，由 OpenWrt Kconfig 解析依赖。</span>
+                    </div>
+                    <button class="button primary" id="new-config-studio" type="button">
+                      打开图形 Menuconfig
+                    </button>
+                  </div>
+
                   <label class="field">
-                    <span>OpenWrt .config</span>
+                    <span>OpenWrt .config · 高级 / 兼容方式</span>
                     <div class="file-drop">
                       <input id="new-config-file" type="file" accept=".config,text/plain">
                       <div class="file-drop-copy">
-                        <strong>选择 .config 文件</strong>
-                        <span>或直接在下方编辑器粘贴内容</span>
+                        <strong>选择已有 .config 文件</strong>
+                        <span>也可以直接在下方粘贴或继续手动编辑</span>
                       </div>
                     </div>
                     <textarea id="new-config-text" class="editor create-config-editor" spellcheck="false"
-                              placeholder="CONFIG_TARGET_..."></textarea>
-                    <small>预览时仅发送到你自己的 Control Plane 校验，不会写入 GitHub。</small>
+                              placeholder="也可以先留空，使用上方图形 Menuconfig 生成"></textarea>
+                    <small>图形配置完成后会把 Kconfig 解析后的最终配置自动填入这里。</small>
                   </label>
                 </div>
 
@@ -308,7 +318,8 @@
                 <textarea id="editor-content" class="editor" spellcheck="false"></textarea>
               </div>
 
-              <div class="form-actions">
+              <div class="form-actions editor-actions">
+                <button class="button ghost" id="editor-config-studio" type="button">图形配置</button>
                 <button class="button ghost" id="preview-change" type="button">预览变更</button>
                 <button class="button primary" id="create-pr" type="button" disabled>创建分支并发起 PR</button>
               </div>
@@ -370,6 +381,130 @@
           </div>
         </section>
       </main>
+
+      <div class="build-dialog-backdrop" id="config-studio-dialog" hidden>
+        <section class="config-studio-dialog" role="dialog" aria-modal="true"
+                 aria-labelledby="config-studio-title" aria-describedby="config-studio-status">
+          <div class="panel-header config-studio-header">
+            <div>
+              <p class="eyebrow">Web Menuconfig</p>
+              <h2 id="config-studio-title">图形配置</h2>
+              <p class="panel-description" id="config-studio-context"></p>
+            </div>
+            <button class="icon-button" id="config-studio-close" type="button" aria-label="关闭图形配置">×</button>
+          </div>
+
+          <div class="config-studio-status-row">
+            <div>
+              <strong id="config-studio-status">正在准备真实 OpenWrt 配置环境…</strong>
+              <span id="config-studio-status-detail">Actions 会读取目标源码、安装 feeds，并运行 make defconfig。</span>
+            </div>
+            <a class="text-link" id="config-studio-run-link" href="#" target="_blank" rel="noreferrer" hidden>打开 Actions ↗</a>
+          </div>
+
+          <div id="config-studio-loading" class="config-studio-loading">
+            <span class="config-studio-spinner" aria-hidden="true"></span>
+            <div>
+              <strong>准备配置目录</strong>
+              <span>首次需要在 Runner 中建立真实源码环境。完成后即可在这里选择设备、App 与特性。</span>
+            </div>
+          </div>
+
+          <div id="config-studio-workbench" class="config-studio-workbench" hidden>
+            <section class="config-studio-targets">
+              <div class="config-studio-section-title">
+                <strong>目标设备</strong>
+                <span>对应 make menuconfig 顶部的 Target / Subtarget / Target Profile</span>
+              </div>
+              <div class="form-grid three-cols">
+                <label class="field">
+                  <span>Target System</span>
+                  <select id="config-studio-target"></select>
+                </label>
+                <label class="field">
+                  <span>Subtarget</span>
+                  <select id="config-studio-subtarget"></select>
+                </label>
+                <label class="field">
+                  <span>Target Profile / Device</span>
+                  <select id="config-studio-device"></select>
+                </label>
+              </div>
+            </section>
+
+            <section class="config-studio-options">
+              <div class="config-studio-tabs" role="tablist" aria-label="配置类别">
+                <button class="config-studio-tab active" id="config-studio-tab-packages" type="button"
+                        role="tab" aria-selected="true" aria-controls="config-studio-packages-panel">软件包 / LuCI App</button>
+                <button class="config-studio-tab" id="config-studio-tab-features" type="button"
+                        role="tab" aria-selected="false" aria-controls="config-studio-features-panel">编译特性</button>
+              </div>
+
+              <div id="config-studio-packages-panel" class="config-studio-panel" role="tabpanel">
+                <div class="config-studio-filterbar">
+                  <input id="config-studio-search" type="search" placeholder="搜索 luci-app、passwall、usb、samba…"
+                         autocomplete="off" aria-label="搜索软件包">
+                  <select id="config-studio-category" aria-label="软件包分类"></select>
+                  <label class="form-switch config-studio-luci-filter">
+                    <input id="config-studio-luci-only" type="checkbox">
+                    <span>只看 LuCI App</span>
+                  </label>
+                </div>
+                <div class="config-studio-list-head">
+                  <span id="config-studio-package-count">0 个可选软件包</span>
+                  <span>不选 / 编入固件 / 模块</span>
+                </div>
+                <div id="config-studio-packages" class="config-studio-option-list"></div>
+              </div>
+
+              <div id="config-studio-features-panel" class="config-studio-panel" role="tabpanel" hidden>
+                <div class="config-studio-filterbar">
+                  <input id="config-studio-feature-search" type="search"
+                         placeholder="搜索 ccache、IPv6、镜像、内核、调试等特性"
+                         autocomplete="off" aria-label="搜索编译特性">
+                </div>
+                <div class="config-studio-list-head">
+                  <span id="config-studio-feature-count">0 个可选特性</span>
+                  <span>仅显示 menuconfig 中有可见提示的选项</span>
+                </div>
+                <div id="config-studio-features" class="config-studio-option-list"></div>
+              </div>
+            </section>
+
+            <div class="config-studio-change-summary">
+              <span>本次手动变更</span>
+              <strong id="config-studio-change-count">0</strong>
+              <small>设备选择会连同旧目标一起提交，其他选项只提交你主动修改的项目。</small>
+            </div>
+          </div>
+
+          <div id="config-studio-result" class="config-studio-result" hidden>
+            <div class="config-studio-result-head">
+              <div>
+                <span class="preview-kicker">Kconfig Resolve</span>
+                <h3>OpenWrt 已解析你的选择</h3>
+              </div>
+              <div class="config-studio-result-metrics">
+                <span><strong id="config-result-honored">0</strong> 原样接受</span>
+                <span><strong id="config-result-adjusted">0</strong> 被依赖调整</span>
+                <span><strong id="config-result-packages">0</strong> 最终软件包</span>
+              </div>
+            </div>
+            <p class="panel-description">“被依赖调整”不是前端猜测，而是实际运行 <code>make defconfig</code> 后与手动选择逐项比较的结果。</p>
+            <div id="config-studio-adjustments" class="config-studio-adjustments"></div>
+          </div>
+
+          <p class="build-dialog-status" id="config-studio-error" role="alert" aria-live="polite" hidden></p>
+
+          <div class="form-actions config-studio-actions">
+            <button class="button ghost" id="config-studio-cancel" type="button">取消</button>
+            <button class="button ghost" id="config-studio-back" type="button" hidden>继续调整</button>
+            <button class="button primary" id="config-studio-resolve" type="button" disabled>让 Kconfig 校验选择</button>
+            <button class="button primary" id="config-studio-apply" type="button" hidden>生成 Profile PR</button>
+            <button class="button primary" id="config-studio-use" type="button" hidden>使用此配置</button>
+          </div>
+        </section>
+      </div>
 
       <div class="build-dialog-backdrop" id="build-dialog" hidden>
         <section class="build-dialog" role="dialog" aria-modal="true" aria-labelledby="build-dialog-title" aria-describedby="build-dialog-repo">

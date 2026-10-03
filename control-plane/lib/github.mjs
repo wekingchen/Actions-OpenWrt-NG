@@ -1,3 +1,5 @@
+import { strFromU8, unzipSync } from "fflate";
+
 const GITHUB_API = "https://api.github.com";
 const GITHUB_OAUTH = "https://github.com/login/oauth";
 
@@ -21,6 +23,9 @@ const PROFILE_FILE_MODES = Object.freeze({
 
 const PROFILE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const BUILDER_WORKFLOW = "build-openwrt.yml";
+const CONFIG_STUDIO_WORKFLOW = "config-studio.yml";
+const CONFIG_STUDIO_ID_RE = /^[0-9a-f]{16}$/;
+const CONFIG_STUDIO_BRANCH_PREFIX = "openwrt-ng/config-session-";
 const ACTIVE_BUILD_STATUSES = new Set([
   "queued",
   "in_progress",
@@ -71,6 +76,15 @@ export class BuildControlError extends Error {
   }
 }
 
+export class ConfigStudioError extends Error {
+  constructor(code, status = 400, message = code) {
+    super(message);
+    this.name = "ConfigStudioError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
 export function githubErrorReason(error) {
   const code =
     error && typeof error.githubError === "string"
@@ -108,6 +122,55 @@ function decodeBase64Utf8(value) {
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
   return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 }
+
+function parseConfigStudioArtifact(zipBytes) {
+  let files;
+  try {
+    files = unzipSync(zipBytes);
+  } catch {
+    throw new ConfigStudioError("config_studio_artifact_invalid", 502);
+  }
+
+  const parseJson = (name, optional = false) => {
+    const bytes = files[name];
+    if (!bytes) {
+      if (optional) return null;
+      throw new ConfigStudioError("config_studio_artifact_incomplete", 502);
+    }
+    try {
+      return JSON.parse(strFromU8(bytes));
+    } catch {
+      throw new ConfigStudioError("config_studio_result_invalid", 502);
+    }
+  };
+
+  return {
+    status: parseJson("status.json"),
+    catalog: parseJson("catalog.json"),
+    result: parseJson("result.json", true)
+  };
+}
+
+function profileEnvValue(content, key) {
+  const line = String(content || "")
+    .split(/\r?\n/)
+    .find((item) => item.trim().startsWith(key + "="));
+  if (!line) return "";
+  let value = line.slice(line.indexOf("=") + 1).trim();
+  if (
+    value.length >= 2 &&
+    ((value.startsWith("'") && value.endsWith("'")) ||
+      (value.startsWith('"') && value.endsWith('"')))
+  ) {
+    value = value.slice(1, -1);
+  }
+  return value;
+}
+
+function configStudioBranch(requestId) {
+  return CONFIG_STUDIO_BRANCH_PREFIX + requestId;
+}
+
 
 function byteLength(value) {
   return new TextEncoder().encode(String(value)).byteLength;
@@ -260,6 +323,27 @@ export class GitHubAppClient {
     }
     if (!response.ok) throw asJsonError(response, body);
     return body;
+  }
+
+  async apiBytes(path, token) {
+    const response = await this.fetchImpl(GITHUB_API + path, {
+      method: "GET",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: "Bearer " + token,
+        "X-GitHub-Api-Version": this.apiVersion,
+        "User-Agent": "OpenWrt-NG-Control-Plane"
+      },
+      redirect: "follow"
+    });
+    if (!response.ok) {
+      let body = {};
+      try {
+        body = await response.json();
+      } catch {}
+      throw asJsonError(response, body);
+    }
+    return new Uint8Array(await response.arrayBuffer());
   }
 
   getUser(token) {
@@ -737,6 +821,536 @@ export class GitHubAppClient {
     }
     if (!response.ok) throw asJsonError(response, body);
     throw new BuildControlError("artifact_download_unavailable", 502);
+  }
+
+  async readBranchTextFile(token, owner, repo, branchName, path, optional = false) {
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    try {
+      const body = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/contents/${path
+          .split("/")
+          .map(encodeSegment)
+          .join("/")}?ref=${encodeSegment(branchName)}`,
+        token
+      );
+      if (body?.encoding !== "base64" || typeof body.content !== "string") {
+        throw new ConfigStudioError("config_studio_file_unavailable", 502);
+      }
+      return decodeBase64Utf8(body.content);
+    } catch (error) {
+      if (optional && error?.httpStatus === 404) return null;
+      if (error?.httpStatus === 404) {
+        throw new ConfigStudioError("config_studio_session_not_found", 404);
+      }
+      throw error;
+    }
+  }
+
+  async commitConfigStudioFiles(
+    token,
+    owner,
+    repo,
+    branchName,
+    files,
+    message
+  ) {
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const ref = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/ref/${refPath(branchName)}`,
+      token
+    );
+    const headSha = ref?.object?.sha || "";
+    if (!/^[0-9a-f]{40}$/i.test(headSha)) {
+      throw new ConfigStudioError("config_studio_branch_unavailable", 502);
+    }
+    const commit = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/commits/${headSha}`,
+      token
+    );
+    if (!commit?.tree?.sha) {
+      throw new ConfigStudioError("repository_tree_unavailable", 502);
+    }
+
+    const treeEntries = [];
+    for (const [path, content] of Object.entries(files)) {
+      const blob = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/git/blobs`,
+        token,
+        {
+          method: "POST",
+          body: { content: String(content), encoding: "utf-8" }
+        }
+      );
+      treeEntries.push({
+        path,
+        mode: "100644",
+        type: "blob",
+        sha: blob.sha
+      });
+    }
+
+    const tree = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/trees`,
+      token,
+      {
+        method: "POST",
+        body: {
+          base_tree: commit.tree.sha,
+          tree: treeEntries
+        }
+      }
+    );
+    const nextCommit = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/commits`,
+      token,
+      {
+        method: "POST",
+        body: {
+          message,
+          tree: tree.sha,
+          parents: [headSha]
+        }
+      }
+    );
+    await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/refs/${refPath(branchName)}`,
+      token,
+      {
+        method: "PATCH",
+        body: { sha: nextCommit.sha, force: false }
+      }
+    );
+    return nextCommit.sha;
+  }
+
+  async dispatchConfigStudio(
+    token,
+    owner,
+    repo,
+    defaultBranch,
+    mode,
+    requestId,
+    branchName
+  ) {
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const response = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/workflows/${CONFIG_STUDIO_WORKFLOW}/dispatches`,
+      token,
+      {
+        method: "POST",
+        body: {
+          ref: defaultBranch,
+          return_run_details: true,
+          inputs: {
+            mode,
+            request_id: requestId,
+            session_branch: branchName
+          }
+        }
+      }
+    );
+    return {
+      runId: Number(response?.workflow_run_id || 0),
+      runUrl: response?.html_url || ""
+    };
+  }
+
+  async startConfigStudio(token, owner, repo, payload = {}) {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new ConfigStudioError("invalid_config_studio_request", 400);
+    }
+
+    let profileId = String(payload.profileId || "").trim();
+    let sourceRepo = String(payload.sourceRepo || "").trim();
+    let sourceBranch = String(payload.sourceBranch || "").trim();
+    let adapter = String(payload.adapter || "direct-openwrt").trim();
+    let baseConfig = String(payload.baseConfig || "");
+    const state = await this.repositoryState(token, owner, repo);
+
+    if (profileId) {
+      if (!PROFILE_ID_RE.test(profileId)) {
+        throw new ConfigStudioError("invalid_profile_id", 400);
+      }
+      const current = await this.getProfile(token, owner, repo, profileId);
+      if (current.baseRefSha !== state.baseRefSha) {
+        throw new ConfigStudioError("repository_changed", 409);
+      }
+      const env = current.profile.files["profile.env"]?.content || "";
+      sourceRepo = profileEnvValue(env, "SOURCE_REPO");
+      sourceBranch = profileEnvValue(env, "SOURCE_BRANCH");
+      adapter = profileEnvValue(env, "ADAPTER") || "direct-openwrt";
+      baseConfig = current.profile.files[".config"]?.content || "";
+    }
+
+    if (!sourceRepo || /[\r\n]/.test(sourceRepo) || sourceRepo.length > 1000) {
+      throw new ConfigStudioError("invalid_source_repo", 400);
+    }
+    if (
+      !sourceBranch ||
+      /[\r\n]/.test(sourceBranch) ||
+      sourceBranch.length > 255
+    ) {
+      throw new ConfigStudioError("invalid_source_branch", 400);
+    }
+    if (!/^[A-Za-z0-9._-]+$/.test(adapter)) {
+      throw new ConfigStudioError("invalid_adapter", 400);
+    }
+    if (byteLength(baseConfig) > MAX_PROFILE_FILE_BYTES) {
+      throw new ConfigStudioError("config_studio_base_config_too_large", 413);
+    }
+
+    const requestId = shortNonce(16);
+    if (!CONFIG_STUDIO_ID_RE.test(requestId)) {
+      throw new ConfigStudioError("config_studio_request_id_failed", 500);
+    }
+    const branchName = configStudioBranch(requestId);
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+
+    await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/refs`,
+      token,
+      {
+        method: "POST",
+        body: {
+          ref: `refs/heads/${branchName}`,
+          sha: state.baseRefSha
+        }
+      }
+    );
+
+    const request = {
+      version: 1,
+      requestId,
+      profileId,
+      sourceRepo,
+      sourceBranch,
+      adapter,
+      baseConfig,
+      baseRefSha: state.baseRefSha,
+      selection: { values: {} }
+    };
+    const root = `.openwrt-ng/config-studio/${requestId}`;
+    try {
+      await this.commitConfigStudioFiles(
+        token,
+        owner,
+        repo,
+        branchName,
+        {
+          [`${root}/request.json`]: JSON.stringify(request)
+        },
+        `config-studio(${requestId}): start session`
+      );
+      const dispatched = await this.dispatchConfigStudio(
+        token,
+        owner,
+        repo,
+        state.defaultBranch,
+        "catalog",
+        requestId,
+        branchName
+      );
+      return {
+        accepted: true,
+        requestId,
+        branch: branchName,
+        profileId,
+        sourceRepo,
+        sourceBranch,
+        adapter,
+        ref: state.defaultBranch,
+        ...dispatched
+      };
+    } catch (error) {
+      try {
+        await this.api(
+          `/repos/${safeOwner}/${safeRepo}/git/refs/${refPath(branchName)}`,
+          token,
+          { method: "DELETE" }
+        );
+      } catch (cleanupError) {
+        console.error("Failed to clean Config Studio branch", cleanupError);
+      }
+      throw error;
+    }
+  }
+
+  async getConfigStudioSession(token, owner, repo, requestId) {
+    if (!CONFIG_STUDIO_ID_RE.test(String(requestId || ""))) {
+      throw new ConfigStudioError("invalid_config_studio_request_id", 400);
+    }
+    const branchName = configStudioBranch(requestId);
+    const root = `.openwrt-ng/config-studio/${requestId}`;
+    const requestText = await this.readBranchTextFile(
+      token,
+      owner,
+      repo,
+      branchName,
+      `${root}/request.json`
+    );
+    let request;
+    try {
+      request = JSON.parse(requestText);
+    } catch {
+      throw new ConfigStudioError("config_studio_request_invalid", 502);
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const runsBody = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/workflows/${CONFIG_STUDIO_WORKFLOW}/runs?event=workflow_dispatch&per_page=50`,
+      token
+    );
+    const runs = Array.isArray(runsBody.workflow_runs)
+      ? runsBody.workflow_runs
+      : [];
+    const run = runs.find((item) =>
+      String(item.display_title || item.name || "").includes(`cs:${requestId}`)
+    );
+
+    let status = { status: "preparing", mode: "catalog", requestId };
+    let catalog = null;
+    let result = null;
+
+    if (run) {
+      const title = String(run.display_title || run.name || "");
+      const mode = title.includes("Config · resolve ·") ? "resolve" : "catalog";
+      if (run.status !== "completed") {
+        status = {
+          status: mode === "resolve" ? "resolving" : "preparing",
+          mode,
+          requestId
+        };
+      } else if (run.conclusion !== "success") {
+        status = { status: "failed", mode, requestId };
+      } else {
+        const artifactsBody = await this.api(
+          `/repos/${safeOwner}/${safeRepo}/actions/runs/${Number(run.id)}/artifacts?per_page=100`,
+          token
+        );
+        const artifacts = Array.isArray(artifactsBody.artifacts)
+          ? artifactsBody.artifacts
+          : [];
+        const artifact = artifacts.find(
+          (item) =>
+            item.name === `OpenWrt_Config_Studio_${requestId}` &&
+            !item.expired
+        );
+        if (artifact) {
+          const size = Number(artifact.size_in_bytes || 0);
+          if (size > 25 * 1024 * 1024) {
+            throw new ConfigStudioError("config_studio_artifact_too_large", 502);
+          }
+          const zipBytes = await this.apiBytes(
+            `/repos/${safeOwner}/${safeRepo}/actions/artifacts/${Number(artifact.id)}/zip`,
+            token
+          );
+          const parsed = parseConfigStudioArtifact(zipBytes);
+          status = parsed.status;
+          catalog = parsed.catalog;
+          result = parsed.result;
+        } else {
+          status = {
+            status: mode === "resolve" ? "resolving" : "preparing",
+            mode,
+            requestId
+          };
+        }
+      }
+    }
+
+    return {
+      requestId,
+      branch: branchName,
+      profileId: request.profileId || "",
+      sourceRepo: request.sourceRepo || "",
+      sourceBranch: request.sourceBranch || "",
+      adapter: request.adapter || "direct-openwrt",
+      status,
+      run: run
+        ? {
+            id: Number(run.id || 0),
+            status: run.status || "unknown",
+            conclusion: run.conclusion || "",
+            url: run.html_url || "",
+            updatedAt: run.updated_at || ""
+          }
+        : null,
+      catalog,
+      result
+    };
+  }
+
+  async submitConfigStudioSelection(
+    token,
+    owner,
+    repo,
+    requestId,
+    payload = {}
+  ) {
+    if (!CONFIG_STUDIO_ID_RE.test(String(requestId || ""))) {
+      throw new ConfigStudioError("invalid_config_studio_request_id", 400);
+    }
+    const values = payload?.values;
+    if (!values || typeof values !== "object" || Array.isArray(values)) {
+      throw new ConfigStudioError("invalid_config_studio_selection", 400);
+    }
+    const entries = Object.entries(values);
+    if (entries.length > 20000) {
+      throw new ConfigStudioError("config_studio_selection_too_large", 413);
+    }
+    for (const [symbol, value] of entries) {
+      if (!/^CONFIG_[A-Za-z0-9_.+@/-]+$/.test(symbol)) {
+        throw new ConfigStudioError("invalid_config_symbol", 400);
+      }
+      if (byteLength(String(value)) > 4096) {
+        throw new ConfigStudioError("config_value_too_large", 413);
+      }
+    }
+
+    const branchName = configStudioBranch(requestId);
+    const root = `.openwrt-ng/config-studio/${requestId}`;
+    const requestText = await this.readBranchTextFile(
+      token,
+      owner,
+      repo,
+      branchName,
+      `${root}/request.json`
+    );
+    let request;
+    try {
+      request = JSON.parse(requestText);
+    } catch {
+      throw new ConfigStudioError("config_studio_request_invalid", 502);
+    }
+    const current = await this.getConfigStudioSession(
+      token,
+      owner,
+      repo,
+      requestId
+    );
+    if (current.run && ACTIVE_BUILD_STATUSES.has(current.run.status)) {
+      throw new ConfigStudioError("config_studio_run_active", 409);
+    }
+
+    // When the user continues adjusting after a resolved round, use that
+    // resolved .config as the next seed. This mirrors repeated menuconfig
+    // sessions and prevents accepted choices from falling back to the
+    // repository's original baseConfig on the next resolve.
+    if (
+      current.status?.status === "resolved" &&
+      typeof current.result?.finalConfig === "string" &&
+      current.result.finalConfig
+    ) {
+      request.baseConfig = current.result.finalConfig;
+    }
+    request.selection = { values: Object.fromEntries(entries) };
+
+    await this.commitConfigStudioFiles(
+      token,
+      owner,
+      repo,
+      branchName,
+      {
+        [`${root}/request.json`]: JSON.stringify(request)
+      },
+      `config-studio(${requestId}): submit selection`
+    );
+    const state = await this.repositoryState(token, owner, repo);
+    const dispatched = await this.dispatchConfigStudio(
+      token,
+      owner,
+      repo,
+      state.defaultBranch,
+      "resolve",
+      requestId,
+      branchName
+    );
+    return {
+      accepted: true,
+      requestId,
+      branch: branchName,
+      ...dispatched
+    };
+  }
+
+  async deleteConfigStudioSession(token, owner, repo, requestId) {
+    if (!CONFIG_STUDIO_ID_RE.test(String(requestId || ""))) {
+      throw new ConfigStudioError("invalid_config_studio_request_id", 400);
+    }
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const branchName = configStudioBranch(requestId);
+    try {
+      await this.api(
+        `/repos/${safeOwner}/${safeRepo}/git/refs/${refPath(branchName)}`,
+        token,
+        { method: "DELETE" }
+      );
+    } catch (error) {
+      if (error?.httpStatus !== 404) throw error;
+    }
+    return { deleted: true, requestId };
+  }
+
+  async applyConfigStudioToProfile(
+    token,
+    owner,
+    repo,
+    requestId,
+    profileId
+  ) {
+    if (!PROFILE_ID_RE.test(String(profileId || ""))) {
+      throw new ConfigStudioError("invalid_profile_id", 400);
+    }
+    const session = await this.getConfigStudioSession(
+      token,
+      owner,
+      repo,
+      requestId
+    );
+    if (!session.result?.finalConfig) {
+      throw new ConfigStudioError("config_studio_not_resolved", 409);
+    }
+    if (session.profileId && session.profileId !== profileId) {
+      throw new ConfigStudioError("config_studio_profile_mismatch", 409);
+    }
+
+    const current = await this.getProfile(token, owner, repo, profileId);
+    const root = `.openwrt-ng/config-studio/${requestId}`;
+    const requestText = await this.readBranchTextFile(
+      token,
+      owner,
+      repo,
+      session.branch,
+      `${root}/request.json`
+    );
+    const request = JSON.parse(requestText);
+    if (request.baseRefSha && request.baseRefSha !== current.baseRefSha) {
+      throw new ConfigStudioError("repository_changed", 409);
+    }
+
+    const files = {};
+    for (const name of PROFILE_FILES) {
+      files[name] = current.profile.files[name]?.content || "";
+    }
+    files[".config"] = session.result.finalConfig;
+    const result = await this.createProfilePullRequest(
+      token,
+      owner,
+      repo,
+      profileId,
+      {
+        baseRefSha: current.baseRefSha,
+        files
+      }
+    );
+    await this.deleteConfigStudioSession(token, owner, repo, requestId);
+    return result;
   }
 
   async createProfileFilesPullRequest(

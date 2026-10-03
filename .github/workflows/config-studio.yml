@@ -1,0 +1,181 @@
+name: OpenWrt NG Config Studio
+run-name: Config · ${{ inputs.mode }} · cs:${{ inputs.request_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "catalog 生成菜单目录；resolve 由真实 Kconfig 解析用户选择"
+        required: true
+        type: choice
+        options:
+          - catalog
+          - resolve
+      request_id:
+        description: "Config Studio 请求 ID"
+        required: true
+        type: string
+      session_branch:
+        description: "受控临时会话分支"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openwrt-ng-config-${{ inputs.request_id }}
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    name: 解析 OpenWrt 配置
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      REQUEST_ID: ${{ inputs.request_id }}
+      SESSION_BRANCH: ${{ inputs.session_branch }}
+      CONFIG_MODE: ${{ inputs.mode }}
+
+    steps:
+    - name: 检出控制仓库
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 校验会话并读取请求
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -Eeuo pipefail
+        [[ "$REQUEST_ID" =~ ^[0-9a-f]{16}$ ]] || { echo 'ERROR: invalid request id' >&2; exit 1; }
+        expected_branch="openwrt-ng/config-session-$REQUEST_ID"
+        [ "$SESSION_BRANCH" = "$expected_branch" ] || { echo 'ERROR: invalid session branch' >&2; exit 1; }
+
+        session_path=".openwrt-ng/config-studio/$REQUEST_ID/request.json"
+        gh api "repos/${GITHUB_REPOSITORY}/contents/${session_path}?ref=${SESSION_BRANCH}" --jq '.content' \
+          | tr -d '\n' | base64 --decode > "$RUNNER_TEMP/config-studio-request.json"
+        jq -e --arg id "$REQUEST_ID" '.requestId == $id' "$RUNNER_TEMP/config-studio-request.json" >/dev/null
+
+        source_repo="$(jq -r '.sourceRepo // empty' "$RUNNER_TEMP/config-studio-request.json")"
+        source_branch="$(jq -r '.sourceBranch // empty' "$RUNNER_TEMP/config-studio-request.json")"
+        adapter="$(jq -r '.adapter // "direct-openwrt"' "$RUNNER_TEMP/config-studio-request.json")"
+        profile_id="$(jq -r '.profileId // empty' "$RUNNER_TEMP/config-studio-request.json")"
+        [ -n "$source_repo" ] || { echo 'ERROR: sourceRepo missing' >&2; exit 1; }
+        [ -n "$source_branch" ] || { echo 'ERROR: sourceBranch missing' >&2; exit 1; }
+        [[ "$adapter" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'ERROR: invalid adapter' >&2; exit 1; }
+        [ -x "adapters/$adapter.sh" ] || { echo 'ERROR: adapter unavailable' >&2; exit 1; }
+
+        {
+          echo "SOURCE_REPO=$source_repo"
+          echo "SOURCE_BRANCH=$source_branch"
+          echo "CONFIG_STUDIO_ADAPTER=$adapter"
+          echo "CONFIG_STUDIO_PROFILE_ID=$profile_id"
+        } >> "$GITHUB_ENV"
+
+    - name: 安装配置解析依赖
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        set -Eeuo pipefail
+        sudo apt-get -qq update
+        sudo apt-get -qq install -y build-essential gawk gettext git libncurses-dev rsync unzip wget zlib1g-dev
+
+    - name: 加载 Profile 上下文
+      run: |
+        set -Eeuo pipefail
+        chmod +x scripts/*.sh adapters/*.sh
+        if [ -n "$CONFIG_STUDIO_PROFILE_ID" ]; then
+          scripts/profile.sh validate "$CONFIG_STUDIO_PROFILE_ID"
+          scripts/profile.sh export "$CONFIG_STUDIO_PROFILE_ID"
+        else
+          {
+            echo "ADAPTER=$CONFIG_STUDIO_ADAPTER"
+            echo "ADAPTER_SCRIPT=$GITHUB_WORKSPACE/adapters/$CONFIG_STUDIO_ADAPTER.sh"
+            echo "DIY_PART1="
+            echo "DIY_PART2="
+            echo "POST_FEEDS_SCRIPT="
+            echo "PROFILE_FILES_DIR="
+          } >> "$GITHUB_ENV"
+        fi
+
+    - name: 准备真实 OpenWrt 配置环境
+      run: |
+        set -Eeuo pipefail
+        "$ADAPTER_SCRIPT" install-deps
+        "$ADAPTER_SCRIPT" prepare
+        [ -d openwrt ] || { echo 'ERROR: Adapter 未生成 openwrt build root' >&2; exit 1; }
+
+        if [ -n "${DIY_PART1:-}" ]; then
+          (cd openwrt && bash "$DIY_PART1")
+        fi
+        (cd openwrt && ./scripts/feeds update -a)
+        if [ -n "${POST_FEEDS_SCRIPT:-}" ]; then
+          (cd openwrt && bash "$POST_FEEDS_SCRIPT")
+        fi
+        (cd openwrt && ./scripts/feeds install -a)
+
+    - name: 由 Kconfig 生成最终配置
+      run: |
+        set -Eeuo pipefail
+        request="$RUNNER_TEMP/config-studio-request.json"
+        if [ "$CONFIG_MODE" = "resolve" ]; then
+          python3 scripts/config-studio.py seed "$request" openwrt/.config
+        else
+          jq -r '.baseConfig // ""' "$request" > openwrt/.config
+        fi
+
+        if [ -n "${DIY_PART2:-}" ]; then
+          (cd openwrt && bash "$DIY_PART2")
+        fi
+
+        (
+          cd openwrt
+          unset FILES_DIR
+          make defconfig
+        )
+
+    - name: 生成可视化菜单数据
+      run: |
+        set -Eeuo pipefail
+        request="$RUNNER_TEMP/config-studio-request.json"
+        mkdir -p "$RUNNER_TEMP/config-studio-output"
+        python3 scripts/config-studio.py catalog openwrt "$RUNNER_TEMP/config-studio-output/catalog.json"
+
+        if [ "$CONFIG_MODE" = "resolve" ]; then
+          python3 scripts/config-studio.py result "$request" openwrt/.config "$RUNNER_TEMP/config-studio-output/result.json"
+          status=resolved
+        else
+          status=ready
+        fi
+
+        jq -n --arg status "$status" --arg mode "$CONFIG_MODE" --arg requestId "$REQUEST_ID" --arg sourceCommit "${SOURCE_COMMIT:-}" \
+          '{status:$status,mode:$mode,requestId:$requestId,sourceCommit:$sourceCommit}' \
+          > "$RUNNER_TEMP/config-studio-output/status.json"
+
+    - name: 上传受控配置结果
+      uses: actions/upload-artifact@v7
+      with:
+        name: OpenWrt_Config_Studio_${{ inputs.request_id }}
+        path: ${{ runner.temp }}/config-studio-output
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 9
+
+    - name: 生成 Summary
+      if: always()
+      run: |
+        {
+          echo '## OpenWrt NG · Config Studio'
+          echo
+          echo "- 模式：\`$CONFIG_MODE\`"
+          echo "- Request：\`$REQUEST_ID\`"
+          echo "- Session：\`$SESSION_BRANCH\`"
+          echo "- 源码：\`${SOURCE_REPO:-unknown} @ ${SOURCE_BRANCH:-unknown}\`"
+          echo
+          echo '配置依赖由 OpenWrt 自己的 `make defconfig` 解析；浏览器只提交用户明确选择。'
+          echo
+          echo '> 本 Workflow 全程只有 contents:read；大型 catalog/result 只通过短期 Artifact 交给 Control Plane，不写入仓库。'
+        } >> "$GITHUB_STEP_SUMMARY"

@@ -10,7 +10,10 @@ on:
       - ".github/workflows/control-plane-ci.yml"
       - ".github/workflows/deploy-control-plane.yml"
       - ".github/workflows/build-openwrt.yml"
+      - ".github/workflows/config-studio.yml"
       - "scripts/compile.sh"
+      - "scripts/config-studio.py"
+      - "scripts/config-studio-kconfig.c"
       - "scripts/cleanup-workflow-runs.sh"
       - "scripts/write-summary.sh"
   pull_request:
@@ -19,7 +22,10 @@ on:
       - ".github/workflows/control-plane-ci.yml"
       - ".github/workflows/deploy-control-plane.yml"
       - ".github/workflows/build-openwrt.yml"
+      - ".github/workflows/config-studio.yml"
       - "scripts/compile.sh"
+      - "scripts/config-studio.py"
+      - "scripts/config-studio-kconfig.c"
       - "scripts/cleanup-workflow-runs.sh"
       - "scripts/write-summary.sh"
 
@@ -62,6 +68,8 @@ jobs:
         node --check control-plane/lib/profile-template.mjs
         node --check control-plane/public/app.js
         node --check control-plane/test.mjs
+        python3 -m py_compile scripts/config-studio.py
+        python3 scripts/test-config-studio.py
         bash -n scripts/compile.sh
         bash -n scripts/cleanup-workflow-runs.sh
         bash -n scripts/write-summary.sh
@@ -99,6 +107,25 @@ jobs:
         grep -q 'actions/runs?per_page=100' scripts/cleanup-workflow-runs.sh
         grep -q '已无对应 yml/yaml' scripts/cleanup-workflow-runs.sh
         grep -q 'return_run_details: true' control-plane/lib/github.mjs
+        grep -q 'CONFIG_STUDIO_WORKFLOW = "config-studio.yml"' control-plane/lib/github.mjs
+        grep -q 'startConfigStudio' control-plane/lib/github.mjs
+        grep -q 'submitConfigStudioSelection' control-plane/lib/github.mjs
+        grep -q 'applyConfigStudioToProfile' control-plane/lib/github.mjs
+        grep -q 'configStudioRootMatch' control-plane/worker.mjs
+        grep -q 'configStudioRootMatch' control-plane/server.mjs
+        grep -q 'make defconfig' .github/workflows/config-studio.yml
+        grep -q 'permissions:' .github/workflows/config-studio.yml
+        grep -q 'contents: read' .github/workflows/config-studio.yml
+        ! grep -q 'contents: write' .github/workflows/config-studio.yml
+        grep -q 'actions/upload-artifact@v7' .github/workflows/config-studio.yml
+        ! grep -q 'actions/download-artifact' .github/workflows/config-studio.yml
+        grep -q 'apiBytes' control-plane/lib/github.mjs
+        grep -q 'unzipSync' control-plane/lib/github.mjs
+        grep -q 'config-studio-kconfig.c' scripts/config-studio.py
+        ! grep -q 'kconfiglib' .github/workflows/config-studio.yml
+        grep -q 'unset FILES_DIR' .github/workflows/config-studio.yml
+        grep -q 'id="config-studio-dialog"' control-plane/public/index.html
+        grep -q 'function renderConfigStudioPackages' control-plane/public/app.js
         grep -q 'friendlyError' control-plane/public/app.js
         grep -q 'Profile 可读取' control-plane/public/app.js
         grep -q 'role="alert"' control-plane/public/index.html

@@ -339,7 +339,49 @@ profiles/<id>/watch-sources.txt
 
 浏览器不能通过该接口提交任意仓库路径；如果目标 Profile 已经存在，返回 `409 profile_already_exists`，不会覆盖。创建前还会再次确认默认分支 head 与检查时的基线 SHA 一致；如果期间仓库发生变化，返回 `409 repository_changed`，不会基于旧 head 静默创建。预览时 `.config` 会发送到用户自己的 Control Plane 做服务端校验，但不会写入 GitHub。
 
-### 11. 在自己的模板实例中启用 GitHub Pages V2 入口
+### 11. V2.0E：Config Studio / Web Menuconfig
+
+V2.0E 解决“创建 `.config` 仍必须在本地搭建编译环境并执行 `make menuconfig`”的问题。Control Plane 现在可以启动一个受控 Config Studio 会话，在 GitHub Actions 中用目标源码和真实 feeds 建立 Kconfig 环境，然后把可选项映射成浏览器图形界面。
+
+用户仍然亲自决定：
+
+- Target System / Subtarget / Target Profile（设备）。
+- 软件包与 LuCI App，保留 `n / y / m` 三态语义。
+- 当前目标下可见的 Kconfig 编译特性，例如开发、镜像、网络、内核和调试相关选项。
+
+Control Plane 不自己计算依赖。用户提交选择后，Action 实际运行 `make defconfig`，再把结果返回前端，标记：
+
+- 用户请求被原样接受的选项。
+- 因依赖条件被 Kconfig 调整或取消的选项。
+- Kconfig 自动加入 / 移除的软件包。
+
+每次 resolve 后会重新生成菜单目录，因此切换 Target 或设备后点击“继续调整”，看到的是新目标上下文下的真实菜单。
+
+安全模型：
+
+```text
+Control Plane 创建临时 session branch
+  仅保存 request.json
+        ↓
+Config Studio Action · contents:read
+  clone 外部源码 / feeds
+  make defconfig
+  生成 catalog / result
+        ↓
+1 天短期 Actions Artifact
+        ↓
+Control Plane 会话鉴权读取并解压
+        ↓
+用户确认
+  ├─ 已有 Profile → 只替换 .config → 新分支 + PR
+  └─ 新 Profile   → 带回 V2.0D 创建表单 → 标准 6 文件 PR
+        ↓
+清理 session branch
+```
+
+执行第三方 OpenWrt 源码和 feeds 的 Workflow 全程不拥有仓库写权限；大型 catalog / result 不再写入 GitHub 分支，避免尺寸限制和第三方代码与写权限共存。原 `.config` 上传 / 文本编辑仍然保留为高级兼容入口。SSH / tmate 不作为正式 Config Studio 主流程。
+
+### 12. 在自己的模板实例中启用 GitHub Pages V2 入口
 
 **公共模板仓库的 `main` 应继续保持默认关闭，不应提交模板维护者自己的 workers.dev 地址或 GitHub App slug。**
 
