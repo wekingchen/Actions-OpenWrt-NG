@@ -9,7 +9,8 @@ export const PROFILE_FILES = Object.freeze([
   "diy-part1.sh",
   "diy-part2.sh",
   "required-packages.txt",
-  "watch-sources.txt"
+  "watch-sources.txt",
+  "feeds.conf"
 ]);
 
 const PROFILE_FILE_MODES = Object.freeze({
@@ -18,7 +19,8 @@ const PROFILE_FILE_MODES = Object.freeze({
   "diy-part1.sh": "100755",
   "diy-part2.sh": "100755",
   "required-packages.txt": "100644",
-  "watch-sources.txt": "100644"
+  "watch-sources.txt": "100644",
+  "feeds.conf": "100644"
 });
 
 const PROFILE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -968,6 +970,7 @@ export class GitHubAppClient {
     let sourceBranch = String(payload.sourceBranch || "").trim();
     let adapter = String(payload.adapter || "direct-openwrt").trim();
     let baseConfig = String(payload.baseConfig || "");
+    let extraFeeds = String(payload.extraFeeds || "");
     const state = await this.repositoryState(token, owner, repo);
 
     if (profileId) {
@@ -983,6 +986,7 @@ export class GitHubAppClient {
       sourceBranch = profileEnvValue(env, "SOURCE_BRANCH");
       adapter = profileEnvValue(env, "ADAPTER") || "direct-openwrt";
       baseConfig = current.profile.files[".config"]?.content || "";
+      extraFeeds = current.profile.files["feeds.conf"]?.content || "";
     }
 
     if (!sourceRepo || /[\r\n]/.test(sourceRepo) || sourceRepo.length > 1000) {
@@ -1000,6 +1004,9 @@ export class GitHubAppClient {
     }
     if (byteLength(baseConfig) > MAX_PROFILE_FILE_BYTES) {
       throw new ConfigStudioError("config_studio_base_config_too_large", 413);
+    }
+    if (byteLength(extraFeeds) > 256 * 1024) {
+      throw new ConfigStudioError("config_studio_extra_feeds_too_large", 413);
     }
 
     const requestId = shortNonce(16);
@@ -1030,6 +1037,7 @@ export class GitHubAppClient {
       sourceBranch,
       adapter,
       baseConfig,
+      extraFeeds,
       baseRefSha: state.baseRefSha,
       selection: { values: {} }
     };
@@ -1062,6 +1070,7 @@ export class GitHubAppClient {
         sourceRepo,
         sourceBranch,
         adapter,
+        extraFeeds,
         ref: state.defaultBranch,
         ...dispatched
       };
@@ -1170,6 +1179,7 @@ export class GitHubAppClient {
       sourceRepo: request.sourceRepo || "",
       sourceBranch: request.sourceBranch || "",
       adapter: request.adapter || "direct-openwrt",
+      extraFeeds: request.extraFeeds || "",
       status,
       run: run
         ? {
