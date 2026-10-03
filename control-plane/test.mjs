@@ -30,7 +30,7 @@ const templateInput = {
   streamLog: true,
   requiredPackages: "curl\nluci\n",
   watchSources: "packages|https://github.com/openwrt/packages|master",
-  extraFeeds: "src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main"
+  extraFeeds: "src-git --force helloworld https://github.com/fw876/helloworld.git"
 };
 
 const controlPlaneTemplateFiles = buildProfileTemplateFiles(templateInput);

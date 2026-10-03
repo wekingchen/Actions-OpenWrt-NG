@@ -15,14 +15,14 @@ const input = {
   streamLog: true,
   requiredPackages: "curl\nluci\n",
   watchSources: "packages|https://github.com/openwrt/packages|master",
-  extraFeeds: "src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main"
+  extraFeeds: "src-git --force helloworld https://github.com/fw876/helloworld.git"
 };
 
 const files = buildProfileFiles(input);
 if (files.length !== 7) throw new Error(`expected 7 files, got ${files.length}`);
 const feeds = files.find((file) => file.path.endsWith("/feeds.conf"))?.text || "";
-if (!feeds.includes("src-git passwall_luci ")) {
-  throw new Error("feeds.conf missing passwall_luci");
+if (!feeds.includes("src-git --force helloworld ")) {
+  throw new Error("feeds.conf missing forced helloworld");
 }
 const env = files.find((file) => file.path.endsWith("/profile.env"))?.text || "";
 for (const needle of [

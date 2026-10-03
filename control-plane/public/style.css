@@ -2989,3 +2989,19 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 .profile-advanced-body .compact-section:last-child {
   border-bottom: 0;
 }
+
+.feed-preset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+@media (max-width: 640px) {
+  .feed-preset-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .feed-preset-actions .button {
+    width: 100%;
+  }
+}
