@@ -345,6 +345,8 @@ profiles/<id>/feeds.conf
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
 
+0.19.1 增加 feed name 级自动去重。Config Studio 与正式 Builder 在 `feeds update -a` 前统一通过 `scripts/apply-extra-feeds.sh` + `scripts/merge-feeds.py` 生成唯一 feed 名列表：额外/常用源优先于源码默认源；额外源内部或源码默认源内部重名时保留第一条。这样源码自带 `helloworld`、用户又加入同名 `helloworld` 时，不再触发 `Duplicate feed name`。Control Plane/Wizard 生成 Profile 时也会先按名称去重，常用源按钮不会重复加入已存在的同名 feed。这里的“feed 名称去重”与后续“不同 feed 的同名 source package 按版本择优”是两层独立机制。
+
 0.19.0 增加 menuconfig 式依赖联动预览。catalog 从 OpenWrt `.packageinfo` 的 `Depends:` 提取 `+` 包依赖与常见条件依赖，浏览器根据当前手动选择递归计算依赖闭包：被必需依赖的可见软件包会自动显示为已选并标记“依赖锁定”，下拉框不可取消，同时展示“由谁依赖”。条件依赖支持常见的 `!`、`&&`、`||` 与括号，并兼容 OpenWrt 包符号中的连字符。自动联动值只用于界面预览，不会作为用户手工修改提交；“检查依赖”仍由真实 OpenWrt `make defconfig` 给出最终结果。界面增加联动数量摘要和“查看联动项 / 返回分类浏览”快捷入口，手机端自动改为纵向布局。
 
 0.18.0 将 Config Studio 的大列表改为更接近传统 menuconfig 的分层浏览：软件包按 OpenWrt `Category → Submenu` 两级筛选，编译特性按真实 Kconfig `menuPath` 的一级/二级菜单筛选。默认不再一次性铺开全部选项；没有搜索词时先进入一级分类，再按二级菜单缩小范围。搜索框仍可跨全部分类直接检索；勾选“只看 LuCI App”时会优先进入 LuCI 分类。

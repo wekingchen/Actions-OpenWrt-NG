@@ -49,6 +49,32 @@ export function normalizeLines(value) {
     .join("\n");
 }
 
+export function feedNameFromLine(line) {
+  const match = String(line ?? "").trim().match(
+    /^src-git(?:-full)?(?:\s+--force)?\s+([A-Za-z0-9._-]+)\s+([^\s]+)$/
+  );
+  return match?.[1] || "";
+}
+
+export function normalizeFeedLines(value) {
+  const lines = normalizeLines(value);
+  if (!lines) return "";
+
+  const seen = new Set();
+  const output = [];
+  for (const line of lines.split("\n")) {
+    if (line.startsWith("#")) {
+      output.push(line);
+      continue;
+    }
+    const name = feedNameFromLine(line);
+    if (name && seen.has(name)) continue;
+    if (name) seen.add(name);
+    output.push(line);
+  }
+  return output.join("\n");
+}
+
 function validateShape(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new ProfileTemplateError(
@@ -139,7 +165,6 @@ export function validateProfileTemplateInput(input) {
   if (extraFeeds.length > 256 * 1024) {
     errors.push("额外 feeds 清单过大。");
   }
-  const feedNames = new Set();
   const normalizedFeeds = normalizeLines(extraFeeds);
   for (const line of normalizedFeeds ? normalizedFeeds.split("\n") : []) {
     if (line.startsWith("#")) continue;
@@ -152,11 +177,6 @@ export function validateProfileTemplateInput(input) {
       );
       break;
     }
-    if (feedNames.has(match[1])) {
-      errors.push(`额外 feed 名称重复：${match[1]}`);
-      break;
-    }
-    feedNames.add(match[1]);
   }
 
   if (watchSources.length > 256 * 1024) {
@@ -201,7 +221,7 @@ export function buildProfileTemplateFiles(input) {
   const base = `profiles/${id}`;
   const requiredPackages = normalizeLines(input.requiredPackages);
   const watchSources = normalizeLines(input.watchSources);
-  const extraFeeds = normalizeLines(input.extraFeeds);
+  const extraFeeds = normalizeFeedLines(input.extraFeeds);
 
   const profileEnv = [
     `PROFILE_NAME=${shellQuote(input.profileName.trim())}`,

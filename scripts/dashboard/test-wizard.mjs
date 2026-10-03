@@ -15,7 +15,9 @@ const input = {
   streamLog: true,
   requiredPackages: "curl\nluci\n",
   watchSources: "packages|https://github.com/openwrt/packages|master",
-  extraFeeds: "src-git --force helloworld https://github.com/fw876/helloworld.git"
+  extraFeeds:
+    "src-git --force helloworld https://github.com/fw876/helloworld.git\n" +
+    "src-git --force helloworld https://example.invalid/duplicate.git"
 };
 
 const files = buildProfileFiles(input);
@@ -23,6 +25,15 @@ if (files.length !== 7) throw new Error(`expected 7 files, got ${files.length}`)
 const feeds = files.find((file) => file.path.endsWith("/feeds.conf"))?.text || "";
 if (!feeds.includes("src-git --force helloworld ")) {
   throw new Error("feeds.conf missing forced helloworld");
+}
+const helloLines = feeds
+  .split(/\r?\n/)
+  .filter((line) => /^src-git(?:-full)?(?:\s+--force)?\s+helloworld\s+/.test(line));
+if (helloLines.length !== 1) {
+  throw new Error(`expected one helloworld feed, got ${helloLines.length}`);
+}
+if (feeds.includes("example.invalid/duplicate.git")) {
+  throw new Error("duplicate helloworld feed was not removed");
 }
 const env = files.find((file) => file.path.endsWith("/profile.env"))?.text || "";
 for (const needle of [

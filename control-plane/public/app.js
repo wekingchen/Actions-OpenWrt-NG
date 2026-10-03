@@ -194,14 +194,25 @@ const SBWML_HELLOWORLD_FEEDS = [
   "src-git --force sbwml_helloworld https://github.com/sbwml/openwrt_helloworld.git;v5"
 ];
 
+function configFeedName(line) {
+  const match = String(line || "").trim().match(
+    /^src-git(?:-full)?(?:\s+--force)?\s+([A-Za-z0-9._-]+)\s+([^\s]+)$/
+  );
+  return match?.[1] || "";
+}
+
 function addFeedPreset(lines) {
   const current = $("new-extra-feeds").value
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
   const merged = [...current];
+  const names = new Set(current.map(configFeedName).filter(Boolean));
   for (const line of lines) {
+    const name = configFeedName(line);
+    if (name && names.has(name)) continue;
     if (!merged.includes(line)) merged.push(line);
+    if (name) names.add(name);
   }
   $("new-extra-feeds").value = merged.join("\n");
   invalidateNewProfilePreview();

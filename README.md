@@ -275,7 +275,7 @@ src-git --force helloworld https://github.com/fw876/helloworld.git
 src-git --force sbwml_helloworld https://github.com/sbwml/openwrt_helloworld.git;v5
 ```
 
-所有通过“常用源”按钮加入的 feed 都会自动写成 `--force`，因此统一优先于 OpenWrt 默认/core 同名 source package。多个优先第三方 feed 同时提供同名 source package 时，项目会在 `feeds update` 后读取各 feed 的真实 `Version:` metadata，逐包保留版本最高者；只有版本完全相同才按 `feeds.conf` 顺序稳定择一。对于自定义 feed，只有明确写 `--force` 才加入同一套“第三方优先 + 版本择优”规则；未写时保持 OpenWrt 默认的保守行为。sbwml 上游还给出了替换 Golang 的做法，但本项目不随源预设自动更换工具链，避免对不同 OpenWrt 分支造成额外影响。
+所有通过“常用源”按钮加入的 feed 都会自动写成 `--force`，因此统一优先于 OpenWrt 默认/core 同名 source package。在 `feeds update -a` 之前，项目先按 **feed name** 自动去重：额外/常用源与源码默认源同名时保留额外源，额外源内部或源码默认源内部重名时保留第一条，因此不会再因 `Duplicate feed name` 中断。随后，如果**不同 feed 名称**仍提供同名 source package，项目会读取各 feed 的真实 `Version:` metadata，逐包保留版本最高者；只有版本完全相同才按 `feeds.conf` 顺序稳定择一。对于自定义 feed，只有明确写 `--force` 才加入“第三方优先 + 版本择优”规则；未写时保持 OpenWrt 默认的保守行为。sbwml 上游还给出了替换 Golang 的做法，但本项目不随源预设自动更换工具链，避免对不同 OpenWrt 分支造成额外影响。
 
 
 工作方式：
