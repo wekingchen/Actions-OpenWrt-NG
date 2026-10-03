@@ -402,6 +402,14 @@ def command_catalog(args: argparse.Namespace) -> None:
             package["changeable"] = state["changeable"]
             package["assignable"] = state["assignable"]
             package["menuPath"] = state["menuPath"]
+        elif feature_error:
+            # Degraded metadata-only fallback. A real Config Studio run should
+            # normally have the native OpenWrt exporter available, but keeping
+            # package metadata usable avoids turning the whole UI empty if the
+            # exporter cannot be built on an unusual source tree.
+            package["visible"] = True
+            package["changeable"] = True
+            package["menuPath"] = []
         else:
             package["visible"] = False
             package["changeable"] = False
