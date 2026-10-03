@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 build_root="${1:-}"
 log_file="${2:-}"
 
@@ -15,7 +16,7 @@ mkdir -p "$(dirname "$log_file")"
 cd "$build_root"
 
 priority_report="${log_file%.log}-priority.json"
-python3 "$OLDPWD/scripts/resolve-feed-priority.py" "$build_root" --report "$priority_report"
+python3 "$script_dir/resolve-feed-priority.py" "$build_root" --report "$priority_report"
 
 set +e
 ./scripts/feeds install -a 2>&1 | tee "$log_file"
