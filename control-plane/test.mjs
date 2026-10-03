@@ -875,6 +875,10 @@ try {
   const sessionBody = await session.json();
   assert.equal(sessionBody.authenticated, true);
   assert.equal(sessionBody.user.login, "tester");
+  assert.equal(
+    sessionBody.user.avatarUrl,
+    "https://avatars.githubusercontent.com/u/1?v=4"
+  );
   assert.equal(JSON.stringify(sessionBody).includes("ghu_"), false);
   assert.equal(JSON.stringify(sessionBody).includes("ghr_"), false);
 

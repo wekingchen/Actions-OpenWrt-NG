@@ -21,27 +21,23 @@
       </div>
 
       <nav class="sidebar-nav" aria-label="主导航">
-        <a class="nav-item active" href="#repo-card" data-nav="workspace">
+        <a class="nav-item active" href="#profile-card" data-nav="workspace">
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h6l1.5 2H20v11H4z"/><path d="M4 9h16"/></svg>
           <span>工作区</span>
         </a>
-        <a class="nav-item" href="#profile-card" data-nav="profiles">
+        <a class="nav-item" href="#editor-card" data-nav="profiles">
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10l3 3v13H4V7z"/><path d="M8 11h8M8 15h8"/></svg>
-          <span>Profiles</span>
+          <span>配置</span>
         </a>
         <a class="nav-item" href="#build-card" data-nav="builder">
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg>
-          <span>Builder</span>
+          <span>构建</span>
         </a>
       </nav>
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <span class="sidebar-status-dot" aria-hidden="true"></span>
-        <div>
-          <strong>服务正常</strong>
-          <small>Control Plane 0.8.0</small>
-        </div>
+        <small>Control Plane 0.9.0</small>
       </div>
     </aside>
 
@@ -51,15 +47,21 @@
           <div class="mobile-brand" aria-hidden="true">
             <div class="brand-mark compact"><span></span><span></span><span></span><span></span></div>
           </div>
-          <div class="topbar-title">
-            <span class="breadcrumb-root">工作台</span>
-            <span class="breadcrumb-separator" aria-hidden="true">/</span>
-            <strong id="current-repo-label">选择仓库</strong>
+          <div class="repo-context-block">
+            <label class="repo-switcher-wrap" id="repo-switcher-wrap" hidden>
+              <span class="sr-only">切换仓库</span>
+              <select id="repo-switcher" class="repo-switcher" aria-label="切换仓库"></select>
+            </label>
+            <div class="repo-meta-line" id="repo-meta-line" hidden>
+              <span class="repo-meta-chip" id="repo-visibility"></span>
+              <span class="repo-meta-chip" id="repo-branch"></span>
+              <span class="repo-meta-chip" id="repo-capability"></span>
+              <span class="repo-meta-security">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.9 8.2 7 10 4.1-1.8 7-5.4 7-10V6z"/><path d="m9.5 12 1.7 1.7 3.6-4"/></svg>
+                Profile 变更只通过分支与 Pull Request 写入
+              </span>
+            </div>
           </div>
-          <label class="repo-switcher-wrap" id="repo-switcher-wrap" hidden>
-            <span class="sr-only">切换仓库</span>
-            <select id="repo-switcher" class="repo-switcher" aria-label="切换仓库"></select>
-          </label>
         </div>
 
         <div class="topbar-actions">
@@ -109,64 +111,24 @@
           </div>
         </section>
 
-        <section class="panel repo-panel" id="repo-card" hidden>
-          <div class="panel-header repo-panel-header">
-            <div>
-              <h2 id="repo-panel-title">选择仓库</h2>
-              <p class="panel-description">进入仓库后即可管理 Profile、发起构建并查看产物。</p>
-            </div>
+        <section class="workspace-empty" id="workspace-empty" hidden>
+          <div class="empty-state">
+            <strong id="workspace-empty-title">选择一个仓库</strong>
+            <span id="workspace-empty-text">从顶栏仓库切换器进入工作区。</span>
           </div>
-          <div id="repositories" class="repo-list"></div>
-          <div class="repo-security-note">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.9 8.2 7 10 4.1-1.8 7-5.4 7-10V6z"/><path d="m9.5 12 1.7 1.7 3.6-4"/></svg>
-            <span>Profile 的创建与修改只生成独立分支和 Pull Request，不直接写入默认分支。</span>
-          </div>
-        </section>
-
-        <section class="summary-grid" id="summary-grid" aria-label="当前仓库概览" hidden>
-          <article class="summary-card">
-            <div class="summary-icon">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10l3 3v13H4V7z"/><path d="M8 11h8M8 15h8"/></svg>
-            </div>
-            <div>
-              <span class="summary-label">Profiles</span>
-              <strong class="summary-value" id="metric-profile-count">—</strong>
-              <small id="metric-profile-caption">选择仓库后统计</small>
-            </div>
-          </article>
-          <article class="summary-card">
-            <div class="summary-icon">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg>
-            </div>
-            <div>
-              <span class="summary-label">最近构建</span>
-              <strong class="summary-value summary-value-text" id="metric-build-status">—</strong>
-              <small id="metric-build-caption">选择 Profile 后显示</small>
-            </div>
-          </article>
-          <article class="summary-card">
-            <div class="summary-icon">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.9 8.2 7 10 4.1-1.8 7-5.4 7-10V6z"/><path d="m9.5 12 1.7 1.7 3.6-4"/></svg>
-            </div>
-            <div>
-              <span class="summary-label">仓库能力</span>
-              <strong class="summary-value summary-value-text" id="metric-capability">—</strong>
-              <small id="metric-capability-caption">读取权限后展示</small>
-            </div>
-          </article>
         </section>
 
         <section class="content-grid">
           <div class="content-primary">
-            <section class="panel" id="profile-card" hidden>
+            <section class="panel profile-panel" id="profile-card" hidden>
               <div class="panel-header">
                 <div>
-                  <p class="eyebrow">Profiles</p>
-                  <h2 id="profile-title">构建配置</h2>
-                  <p class="panel-description">选择已有 Profile，或创建一套新的标准配置。</p>
+                  <h2 id="profile-title">Profiles</h2>
+                  <p class="panel-description">选择一个构建配置查看详情，或直接进入构建。</p>
                 </div>
-                <button class="button primary" id="new-profile-open" type="button">
-                  <span class="button-plus">＋</span> 新建 Profile
+                <button class="button ghost secondary-action" id="new-profile-open" type="button">
+                  <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                  新建
                 </button>
               </div>
               <div id="profiles" class="profile-list"></div>
@@ -368,9 +330,8 @@
             <section class="panel build-panel" id="build-card" hidden>
               <div class="panel-header">
                 <div>
-                  <p class="eyebrow">Builder</p>
-                  <h2 id="build-title">构建 Profile</h2>
-                  <p class="panel-description" id="build-meta"></p>
+                  <h2 id="build-title">最近构建</h2>
+                  <p class="panel-description" id="build-meta">选择一个 Profile 后显示构建记录。</p>
                 </div>
                 <span class="permission-pill" id="actions-permission"></span>
               </div>

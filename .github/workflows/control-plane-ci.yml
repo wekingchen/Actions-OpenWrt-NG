@@ -135,8 +135,9 @@ jobs:
         grep -q 'class="app-shell"' /tmp/control-plane-index.html
         grep -q 'class="sidebar"' /tmp/control-plane-index.html
         grep -q 'id="repo-switcher"' /tmp/control-plane-index.html
+        grep -q 'id="repo-meta-line"' /tmp/control-plane-index.html
         grep -q 'id="account-menu"' /tmp/control-plane-index.html
-        grep -q 'class="summary-grid"' /tmp/control-plane-index.html
+        grep -q 'id="workspace-empty"' /tmp/control-plane-index.html
         grep -q 'id="create-pr"' /tmp/control-plane-index.html
         grep -q 'id="new-profile-open"' /tmp/control-plane-index.html
         grep -q 'id="new-profile-form"' /tmp/control-plane-index.html
@@ -152,20 +153,34 @@ jobs:
         grep -q 'readNewProfileInput' /tmp/control-plane-app.js
         grep -q '/api/v1/profile-templates/preview' /tmp/control-plane-app.js
         grep -q 'profile_already_exists' /tmp/control-plane-app.js
-        grep -q 'updateRepositoryOverview' /tmp/control-plane-app.js
+        grep -q 'updateRepositoryContext' /tmp/control-plane-app.js
         grep -q 'updateBuildOverview' /tmp/control-plane-app.js
         grep -q 'data.repositories.length === 1' /tmp/control-plane-app.js
+        grep -q 'data.profiles.length === 1' /tmp/control-plane-app.js
+        grep -q 'profile-build-action' /tmp/control-plane-app.js
         grep -q 'account-dropdown' /tmp/control-plane-app.js
         grep -q '.app-shell' /tmp/control-plane-style.css
         grep -q '.content-grid' /tmp/control-plane-style.css
-        grep -q '.summary-grid' /tmp/control-plane-style.css
-        grep -q '.repo-enter' /tmp/control-plane-style.css
+        grep -q '.profile-build-action' /tmp/control-plane-style.css
+        grep -q 'display: grid !important' /tmp/control-plane-style.css
         if grep -q 'class="hero"' /tmp/control-plane-index.html; then
           echo "ERROR: 登录后工作台不应重新引入营销 Hero" >&2
           exit 1
         fi
         if grep -q 'id="metric-repo-count"' /tmp/control-plane-index.html; then
           echo "ERROR: 仓库数量统计不应重复占用首屏" >&2
+          exit 1
+        fi
+        if grep -q 'id="repo-card"' /tmp/control-plane-index.html; then
+          echo "ERROR: 顶栏仓库切换器启用后不应再保留当前仓库卡" >&2
+          exit 1
+        fi
+        if grep -q 'class="summary-grid"' /tmp/control-plane-index.html; then
+          echo "ERROR: 工作台不应重新引入重复统计卡" >&2
+          exit 1
+        fi
+        if grep -q '>Profiles</span>' /tmp/control-plane-index.html || grep -q '>Builder</span>' /tmp/control-plane-index.html; then
+          echo "ERROR: 底部 / 侧栏导航应保持中文标签" >&2
           exit 1
         fi
 

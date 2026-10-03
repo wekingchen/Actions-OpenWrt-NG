@@ -410,44 +410,28 @@ function repositoryCapabilityText(repo) {
   return [read, edit, build].join(" · ");
 }
 
-function setMetric(id, value, captionId, caption) {
-  const valueNode = $(id);
-  const captionNode = $(captionId);
-  if (valueNode) valueNode.textContent = value;
-  if (captionNode) captionNode.textContent = caption;
-}
-
-function updateRepositoryOverview(repo) {
-  $("summary-grid").hidden = false;
-  const capability = canWriteRepo(repo) && canRunRepo(repo)
-    ? "完整"
-    : canReadRepo(repo)
-      ? "受限"
-      : "不可用";
-  setMetric(
-    "metric-capability",
-    capability,
-    "metric-capability-caption",
-    repositoryCapabilityText(repo)
-  );
+function updateRepositoryContext(repo) {
+  $("repo-meta-line").hidden = false;
+  $("repo-visibility").textContent = repo.private ? "Private" : "Public";
+  $("repo-branch").textContent = repo.defaultBranch;
+  const ready = canWriteRepo(repo) && canRunRepo(repo);
+  $("repo-capability").textContent = ready ? "完整能力" : "权限受限";
+  $("repo-capability").className =
+    "repo-meta-chip " + (ready ? "ready" : "limited");
 }
 
 function updateBuildOverview(run) {
-  if (!run) {
-    setMetric(
-      "metric-build-status",
-      "暂无",
-      "metric-build-caption",
-      "当前 Profile 没有运行记录"
-    );
+  if (!buildState.profileId) {
+    $("build-meta").textContent = "选择一个 Profile 后显示构建记录。";
     return;
   }
-  setMetric(
-    "metric-build-status",
-    buildStatusLabel(run),
-    "metric-build-caption",
-    `#${run.runNumber} · ${formatTime(run.updatedAt || run.createdAt)}`
-  );
+  if (!run) {
+    $("build-meta").textContent =
+      `当前 Profile：${buildState.profileId} · 暂无构建记录`;
+    return;
+  }
+  $("build-meta").textContent =
+    `当前 Profile：${buildState.profileId} · 最近 #${run.runNumber} ${buildStatusLabel(run)}`;
 }
 
 function canReadActions(repo) {
@@ -762,9 +746,8 @@ async function setupBuildControl(repo, profileId) {
   buildState.activeRunId = 0;
 
   $("build-card").hidden = false;
-  $("build-title").textContent = `${repo.fullName} · ${profileId}`;
-  $("build-meta").textContent =
-    "固定触发 OpenWrt NG Builder；Control Plane 不接受任意 workflow 或 ref。";
+  $("build-title").textContent = "最近构建";
+  $("build-meta").textContent = `当前 Profile：${profileId}`;
   $("publish-release").checked = false;
   $("build-detail").hidden = true;
   showBuildResult();
@@ -793,11 +776,30 @@ async function setupBuildControl(repo, profileId) {
   await loadBuildRuns();
 }
 
-async function openProfile(repo, profileId) {
+function markSelectedProfile(profileId) {
+  const root = $("profiles");
+  for (const item of root.querySelectorAll(".profile-item")) {
+    const selected = item.dataset.profileId === profileId;
+    item.classList.toggle("selected", selected);
+    if (selected) item.setAttribute("aria-current", "true");
+    else item.removeAttribute("aria-current");
+  }
+}
+
+async function selectProfileForBuild(repo, profileId, options = {}) {
+  markSelectedProfile(profileId);
+  await setupBuildControl(repo, profileId);
+  if (options.scroll) {
+    $("build-card").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+async function openProfile(repo, profileId, options = {}) {
   showError();
   showWriteResult();
   $("new-profile-card").hidden = true;
   invalidateNewProfilePreview();
+  markSelectedProfile(profileId);
   await setupBuildControl(repo, profileId);
 
   const data = await request(
@@ -819,7 +821,7 @@ async function openProfile(repo, profileId) {
   }
 
   $("editor-card").hidden = false;
-  $("editor-title").textContent = `${repo.fullName} · ${profileId}`;
+  $("editor-title").textContent = `编辑 ${profileId}`;
   $("editor-meta").textContent =
     `基线：${data.defaultBranch}@${data.baseRefSha.slice(0, 12)} · 保存时只创建新分支和 Pull Request`;
 
@@ -842,7 +844,9 @@ async function openProfile(repo, profileId) {
   $("editor-content").readOnly = !writeReady;
   $("create-pr").disabled = true;
   $("preview-card").hidden = true;
-  $("editor-card").scrollIntoView({ behavior: "smooth", block: "start" });
+  if (options.scroll !== false) {
+    $("editor-card").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 async function loadProfiles(repo) {
@@ -850,53 +854,75 @@ async function loadProfiles(repo) {
   clearBuildPolling();
   createState.repo = repo;
   repositoryState.selectedFullName = repo.fullName;
-  $("current-repo-label").textContent = repo.fullName;
-  $("repo-panel-title").textContent = "当前仓库";
   $("repo-switcher").value = repo.fullName;
-  setMetric(
-    "metric-build-status",
-    "暂无",
-    "metric-build-caption",
-    "选择 Profile 后显示"
-  );
+  $("workspace-empty").hidden = true;
   $("editor-card").hidden = true;
-  $("build-card").hidden = true;
   $("new-profile-card").hidden = true;
+  updateRepositoryContext(repo);
+
   $("new-profile-open").disabled = !canWriteRepo(repo);
   $("new-profile-open").title = canWriteRepo(repo)
-    ? "在此仓库通过 Pull Request 新建标准 Profile"
+    ? "通过 Pull Request 新建标准 Profile"
     : "需要 Contents 与 Pull requests 写权限";
+
   const data = await request(
     `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles`
   );
+
   $("profile-card").hidden = false;
-  $("profile-title").textContent = repo.fullName;
-  setMetric(
-    "metric-profile-count",
-    String(data.profiles.length),
-    "metric-profile-caption",
-    data.profiles.length
-      ? `${repo.name} 中可用的标准 Profile`
-      : "当前仓库没有可用 Profile"
-  );
-  updateRepositoryOverview(repo);
+  $("profile-title").textContent = "Profiles";
+
+  buildState.repo = repo;
+  buildState.profileId = "";
+  $("build-card").hidden = false;
+  $("build-title").textContent = "最近构建";
+  $("build-meta").textContent = data.profiles.length
+    ? "选择一个 Profile 后显示构建记录。"
+    : "当前仓库还没有 Profile。";
+  $("publish-release").checked = false;
+  $("build-detail").hidden = true;
+  $("trigger-build").disabled = true;
+  $("refresh-builds").disabled = true;
+  $("actions-permission").textContent = canRunRepo(repo)
+    ? "Actions 可调度"
+    : canReadActions(repo)
+      ? "Actions 只读"
+      : "需 Actions 权限";
+  const buildRoot = $("build-runs");
+  buildRoot.replaceChildren();
 
   const root = $("profiles");
-  root.textContent = "";
+  root.replaceChildren();
 
   if (!data.profiles.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.innerHTML =
-      "<strong>还没有 Profile</strong><span>可以从右上角创建第一套标准构建配置。</span>";
+    const title = document.createElement("strong");
+    title.textContent = "还没有 Profile";
+    const detail = document.createElement("span");
+    detail.textContent = "先新建一套标准构建配置。";
+    empty.append(title, detail);
     root.appendChild(empty);
+
+    const buildEmpty = document.createElement("div");
+    buildEmpty.className = "empty-state build-empty";
+    const buildTitle = document.createElement("strong");
+    buildTitle.textContent = "暂无可构建配置";
+    const buildText = document.createElement("span");
+    buildText.textContent = "创建 Profile 后，这里会显示构建操作与最近运行。";
+    buildEmpty.append(buildTitle, buildText);
+    buildRoot.appendChild(buildEmpty);
     return;
   }
 
   for (const profile of data.profiles) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "profile-item";
+    const row = document.createElement("div");
+    row.className = "profile-item";
+    row.dataset.profileId = profile.id;
+
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.className = "profile-open";
 
     const leading = document.createElement("span");
     leading.className = "list-leading";
@@ -912,33 +938,44 @@ async function loadProfiles(repo) {
     copy.append(strong, meta);
     leading.append(icon, copy);
 
-    const action = document.createElement("span");
-    action.className = "list-action";
-    action.textContent = "打开 →";
-
-    button.append(leading, action);
-    button.addEventListener("click", () => {
-      for (const item of root.querySelectorAll(".profile-item")) {
-        item.classList.remove("selected");
-        item.removeAttribute("aria-current");
-      }
-      button.classList.add("selected");
-      button.setAttribute("aria-current", "true");
+    const arrow = document.createElement("span");
+    arrow.className = "profile-open-arrow";
+    arrow.innerHTML = iconSvg("arrow");
+    openButton.append(leading, arrow);
+    openButton.addEventListener("click", () => {
       openProfile(repo, profile.id).catch((error) => showError(error));
     });
-    root.appendChild(button);
+
+    const buildButton = document.createElement("button");
+    buildButton.type = "button";
+    buildButton.className = "profile-build-action";
+    buildButton.textContent = "构建";
+    buildButton.title = `选择 ${profile.id} 并进入构建面板`;
+    buildButton.addEventListener("click", () => {
+      selectProfileForBuild(repo, profile.id, { scroll: true })
+        .catch((error) => showError(error));
+    });
+
+    row.append(openButton, buildButton);
+    root.appendChild(row);
+  }
+
+  if (data.profiles.length === 1) {
+    await selectProfileForBuild(repo, data.profiles[0].id);
+  } else {
+    const empty = document.createElement("div");
+    empty.className = "empty-state build-empty";
+    const title = document.createElement("strong");
+    title.textContent = "选择一个 Profile";
+    const detail = document.createElement("span");
+    detail.textContent = "选择后会在这里显示最近构建和构建操作。";
+    empty.append(title, detail);
+    buildRoot.appendChild(empty);
   }
 }
 
 async function selectRepository(repo) {
   if (!repo) return;
-  const root = $("repositories");
-  for (const item of root.querySelectorAll(".repo-item")) {
-    const selected = item.dataset.repoFullName === repo.fullName;
-    item.classList.toggle("selected", selected);
-    if (selected) item.setAttribute("aria-current", "true");
-    else item.removeAttribute("aria-current");
-  }
   await loadProfiles(repo);
 }
 
@@ -953,7 +990,6 @@ async function init() {
     loginAction.hidden = true;
     setupStatus.textContent =
       "Worker 已上线，但 GitHub App Secret 尚未配置。完成 GitHub App 创建后再启用登录。";
-    $("repo-card").hidden = true;
     return;
   }
 
@@ -965,16 +1001,14 @@ async function init() {
 
   if (!session.authenticated) {
     $("login-card").hidden = false;
-    $("repo-card").hidden = true;
     return;
   }
 
   $("login-card").hidden = true;
-  $("repo-card").hidden = false;
 
   const userBox = $("user-box");
   const avatar = document.createElement("img");
-  avatar.src = session.user.avatarUrl;
+  avatar.src = session.user.avatarUrl || "";
   avatar.alt = `${session.user.login} 的 GitHub 头像`;
   avatar.width = 32;
   avatar.height = 32;
@@ -996,96 +1030,42 @@ async function init() {
 
   const data = await request("/api/v1/repositories");
   repositoryState.repositories = data.repositories;
-  const root = $("repositories");
-  root.textContent = "";
 
   const switcher = $("repo-switcher");
   switcher.replaceChildren();
-  if (data.repositories.length > 1) {
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = "选择仓库";
-    switcher.appendChild(placeholder);
-  }
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = data.repositories.length
+    ? "选择仓库"
+    : "暂无可访问仓库";
+  switcher.appendChild(placeholder);
+
   for (const repo of data.repositories) {
     const option = document.createElement("option");
     option.value = repo.fullName;
     option.textContent = repo.fullName;
     switcher.appendChild(option);
   }
-  $("repo-switcher-wrap").hidden = !data.repositories.length;
 
-  for (const repo of data.repositories) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "repo-item";
-    button.dataset.repoFullName = repo.fullName;
+  $("repo-switcher-wrap").hidden = false;
+  installLink.hidden = false;
 
-    const leading = document.createElement("span");
-    leading.className = "list-leading";
-    const icon = document.createElement("span");
-    icon.className = "list-icon repo-icon";
-    icon.innerHTML = iconSvg("repo");
-
-    const copy = document.createElement("span");
-    copy.className = "list-copy";
-    const title = document.createElement("strong");
-    title.textContent = repo.fullName;
-
-    const chips = document.createElement("span");
-    chips.className = "repo-chips";
-    for (const value of [
-      repo.private ? "Private" : "Public",
-      repo.defaultBranch
-    ]) {
-      const chip = document.createElement("span");
-      chip.className = "repo-chip";
-      chip.textContent = value;
-      chips.appendChild(chip);
-    }
-    const capability = document.createElement("span");
-    capability.className =
-      "repo-chip repo-capability " +
-      (canWriteRepo(repo) && canRunRepo(repo) ? "ready" : "limited");
-    capability.textContent =
-      canWriteRepo(repo) && canRunRepo(repo) ? "完整能力" : "权限受限";
-    chips.appendChild(capability);
-
-    copy.append(title, chips);
-    leading.append(icon, copy);
-
-    const action = document.createElement("span");
-    action.className = "repo-enter";
-    const actionText = document.createElement("span");
-    actionText.textContent = "进入工作区";
-    const actionIcon = document.createElement("span");
-    actionIcon.innerHTML = iconSvg("arrow");
-    action.append(actionText, actionIcon);
-
-    button.title =
-      "contents:" +
-      repo.permissions.contents +
-      " · pull-requests:" +
-      repo.permissions.pullRequests +
-      " · actions:" +
-      repo.permissions.actions;
-    button.append(leading, action);
-    button.addEventListener("click", () => {
-      selectRepository(repo).catch((error) => showError(error));
-    });
-    root.appendChild(button);
+  if (!data.repositories.length) {
+    $("repo-meta-line").hidden = true;
+    $("workspace-empty").hidden = false;
+    $("workspace-empty-title").textContent = "还没有可访问仓库";
+    $("workspace-empty-text").textContent =
+      "请从头像菜单调整 GitHub App 的仓库授权范围。";
+    return;
   }
 
-  installLink.hidden = false;
-  if (!data.repositories.length) {
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.innerHTML =
-      "<strong>还没有可访问仓库</strong><span>请从头像菜单调整 GitHub App 的仓库授权范围。</span>";
-    root.appendChild(empty);
-    $("current-repo-label").textContent = "暂无仓库";
-  } else if (data.repositories.length === 1) {
+  if (data.repositories.length === 1) {
     await selectRepository(data.repositories[0]);
+  } else {
+    $("workspace-empty").hidden = false;
+    $("workspace-empty-title").textContent = "选择一个仓库";
+    $("workspace-empty-text").textContent =
+      "从顶栏仓库切换器进入 Profile 与构建工作区。";
   }
 }
 for (const item of document.querySelectorAll(".sidebar-nav .nav-item")) {

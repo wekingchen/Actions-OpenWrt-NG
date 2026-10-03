@@ -431,7 +431,27 @@ const session = await handleControlPlaneRequest(
 const sessionBody = await session.json();
 assert.equal(sessionBody.authenticated, true);
 assert.equal(sessionBody.user.login, "worker-user");
+assert.equal(
+  sessionBody.user.avatarUrl,
+  "https://avatars.githubusercontent.com/u/1?v=4"
+);
 assert.equal(JSON.stringify(sessionBody).includes("ghu_"), false);
+
+for (const stored of deps.store.sessions.values()) {
+  stored.avatarUrl = "";
+}
+const refreshedAvatarSession = await handleControlPlaneRequest(
+  new Request("https://worker.example/api/v1/session", {
+    headers: { Cookie: sessionCookie }
+  }),
+  configuredEnv,
+  deps
+);
+const refreshedAvatarBody = await refreshedAvatarSession.json();
+assert.equal(
+  refreshedAvatarBody.user.avatarUrl,
+  "https://avatars.githubusercontent.com/u/1?v=4"
+);
 
 const repos = await handleControlPlaneRequest(
   new Request("https://worker.example/api/v1/repositories", {
