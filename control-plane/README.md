@@ -345,6 +345,8 @@ profiles/<id>/feeds.conf
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
 
+0.17.0 补齐软件包自己的 Kconfig 子配置：OpenWrt 的 `Package/<name>/config` 会以 `configOptions` 附着到对应软件包，不再把所有 `CONFIG_PACKAGE_*` 一律误判为独立包状态。前端在主软件包下提供可展开“子选项”，并识别 Kconfig `choice` 为单选组；例如 `luci-app-ssr-plus` 的透明代理后端、Shadowsocks 客户端/服务端、Xray/Mihomo/ChinaDNS-NG 等选项会跟传统 menuconfig 一样出现在该 App 下。对本次刚启用、原始 catalog 中因父包未选而不可见的子项，页面允许先做选择，最终仍由下一步真实 `make defconfig` 校验依赖与架构可用性。
+
 0.16.1 修复 Config Studio 进度条 DOM 契约：补齐 `config-studio-progress-track` 节点 ID，并在回归测试中校验 `app.js` 的所有 `$(&quot;id&quot;)` 引用都必须能在 `index.html` 找到对应元素，避免再次出现 `null is not an object` 类前端运行时错误。
 
 V2.0E 解决“创建 `.config` 仍必须在本地搭建编译环境并执行 `make menuconfig`”的问题。0.16.0 在统一 Actions 实时进度的基础上补齐 Profile PR 生命周期：保存后自动 squash 合并、清理临时分支，并在新保存成功后清理同一 Profile 已被取代的旧 Control Plane PR；自动合并受阻时保留 PR 供人工处理。0.15.0 把真实 GitHub Actions step 进度提升为整个 Control Plane 的统一等待模型：Config Studio 与 Builder 均显示真实 Action 阶段；feed 优先级/同名包覆盖语义保持不变。额外 feeds 保存为 `profiles/<id>/feeds.conf`，Config Studio 与正式 Builder 都在 `feeds update -a` 前应用它；带 `--force` 的 feed 由 OpenWrt 在 `feeds install` 阶段覆盖 core/default 同名包。
