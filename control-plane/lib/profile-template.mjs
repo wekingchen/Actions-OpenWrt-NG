@@ -14,7 +14,8 @@ export const PROFILE_TEMPLATE_KEYS = Object.freeze([
   "maximizeSpace",
   "streamLog",
   "requiredPackages",
-  "watchSources"
+  "watchSources",
+  "extraFeeds"
 ]);
 
 const BOOLEAN_KEYS = Object.freeze([
@@ -85,6 +86,7 @@ export function validateProfileTemplateInput(input) {
   const configText = String(input.configText ?? "");
   const requiredPackages = String(input.requiredPackages ?? "");
   const watchSources = String(input.watchSources ?? "");
+  const extraFeeds = String(input.extraFeeds ?? "");
 
   if (!PROFILE_ID_RE.test(profileId)) {
     errors.push(
@@ -134,6 +136,29 @@ export function validateProfileTemplateInput(input) {
     }
   }
 
+  if (extraFeeds.length > 256 * 1024) {
+    errors.push("额外 feeds 清单过大。");
+  }
+  const feedNames = new Set();
+  const normalizedFeeds = normalizeLines(extraFeeds);
+  for (const line of normalizedFeeds ? normalizedFeeds.split("\n") : []) {
+    if (line.startsWith("#")) continue;
+    const match = line.match(
+      /^src-git(?:-full)?\s+([A-Za-z0-9._-]+)\s+([^\s]+)$/
+    );
+    if (!match) {
+      errors.push(
+        "额外 feed 格式必须是：src-git 名称 Git地址[;分支]。"
+      );
+      break;
+    }
+    if (feedNames.has(match[1])) {
+      errors.push(`额外 feed 名称重复：${match[1]}`);
+      break;
+    }
+    feedNames.add(match[1]);
+  }
+
   if (watchSources.length > 256 * 1024) {
     errors.push("额外 Git 上游清单过大。");
   }
@@ -176,6 +201,7 @@ export function buildProfileTemplateFiles(input) {
   const base = `profiles/${id}`;
   const requiredPackages = normalizeLines(input.requiredPackages);
   const watchSources = normalizeLines(input.watchSources);
+  const extraFeeds = normalizeLines(input.extraFeeds);
 
   const profileEnv = [
     `PROFILE_NAME=${shellQuote(input.profileName.trim())}`,
@@ -190,6 +216,7 @@ export function buildProfileTemplateFiles(input) {
       `${base}/required-packages.txt`
     )}`,
     `WATCH_SOURCES_FILE=${shellQuote(`${base}/watch-sources.txt`)}`,
+    `EXTRA_FEEDS_FILE=${shellQuote(`${base}/feeds.conf`)}`,
     "",
     `AUTO_UPDATE=${shellQuote(input.autoUpdate ? "true" : "false")}`,
     `MAXIMIZE_BUILD_SPACE=${shellQuote(
@@ -239,7 +266,17 @@ set -Eeuo pipefail
       text: required,
       mode: "100644"
     },
-    { path: `${base}/watch-sources.txt`, text: watch, mode: "100644" }
+    { path: `${base}/watch-sources.txt`, text: watch, mode: "100644" },
+    {
+      path: `${base}/feeds.conf`,
+      text: [
+        "# 在 ./scripts/feeds update -a 前插入的额外 feeds。",
+        "# 格式：src-git 名称 Git地址[;分支]",
+        ...(extraFeeds ? ["", extraFeeds] : []),
+        ""
+      ].join("\n"),
+      mode: "100644"
+    }
   ];
 }
 
