@@ -27,6 +27,16 @@ elif command -v ccache >/dev/null 2>&1; then
   ccache_bin="$(command -v ccache)"
 fi
 
+write_ccache_stats() {
+  [ -n "$ccache_bin" ] || return 0
+
+  echo "=== OpenWrt ccache 本轮统计 ==="
+  echo "CCACHE_DIR=$PWD/.ccache"
+  du -sh .ccache 2>/dev/null || true
+  CCACHE_DIR="$PWD/.ccache" "$ccache_bin" -s |
+    tee "${GITHUB_WORKSPACE:-$PWD}/ccache-stats.txt" || true
+}
+
 if [ -n "$ccache_bin" ]; then
   mkdir -p .ccache
   echo "=== OpenWrt ccache 编译前状态 ==="
@@ -76,16 +86,11 @@ if [ "$build_status" -eq 0 ]; then
   echo "build.log 最后 40 行："
   tail -n 40 "$log_file" || true
 
-  if [ -n "$ccache_bin" ]; then
-    echo "=== OpenWrt ccache 本轮统计 ==="
-    echo "CCACHE_DIR=$PWD/.ccache"
-    du -sh .ccache 2>/dev/null || true
-    CCACHE_DIR="$PWD/.ccache" "$ccache_bin" -s |
-      tee "${GITHUB_WORKSPACE:-$PWD}/ccache-stats.txt" || true
-  fi
-
+  write_ccache_stats
   exit 0
 fi
+
+write_ccache_stats
 
 echo "::group::并行编译错误摘要"
 grep -nE '(^|[[:space:]])(fatal error:|error:|Error [0-9]+|FAILED:|No rule to make target|undefined reference)' "$log_file" | tail -n 200 || true
