@@ -2834,3 +2834,138 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
     display: none;
   }
 }
+
+
+/* V0.12 guided Profile / Config Studio flow */
+.feed-preset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+.feed-preset-row > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.feed-preset-row strong {
+  font-size: 12px;
+}
+.feed-preset-row span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.feeds-editor {
+  min-height: 126px;
+}
+.advanced-disclosure {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+.advanced-disclosure > summary {
+  padding: 11px 13px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 720;
+}
+.advanced-disclosure[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+.advanced-disclosure > .field {
+  padding: 12px;
+}
+.config-studio-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin: 14px 0 10px;
+}
+.config-studio-step {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  color: var(--muted);
+  background: var(--panel-soft);
+}
+.config-studio-step span {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  font-size: 9px;
+  font-weight: 800;
+}
+.config-studio-step strong {
+  min-width: 0;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.config-studio-step.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 22%, var(--panel));
+}
+.config-studio-step.active span {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+.config-studio-step.done {
+  color: var(--text);
+}
+.config-studio-step.done span::after {
+  content: "✓";
+}
+.config-studio-step.done span {
+  font-size: 0;
+}
+.config-studio-technical {
+  flex: 0 0 auto;
+  text-align: right;
+}
+.config-studio-technical summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 9px;
+}
+.config-studio-technical .text-link {
+  display: inline-block;
+  margin-top: 5px;
+}
+@media (max-width: 640px) {
+  .feed-preset-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .feed-preset-row .button {
+    width: 100%;
+  }
+  .config-studio-steps {
+    gap: 4px;
+  }
+  .config-studio-step {
+    padding: 7px 6px;
+    gap: 5px;
+  }
+  .config-studio-step span {
+    width: 20px;
+    height: 20px;
+  }
+  .config-studio-status-row {
+    align-items: flex-start;
+  }
+}
