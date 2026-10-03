@@ -1206,8 +1206,36 @@ async function loadBuildRuns(options = {}) {
   renderBuildRows($("recent-build-runs"), data.runs, { compact: true });
   renderBuildRows($("build-runs"), data.runs);
 
+  const requestedRun = requestedRunId
+    ? data.runs.find((run) => Number(run.id) === requestedRunId) || null
+    : null;
+
+  if (requestId && requestedRunId && !requestedRun) {
+    buildState.requestId = requestId;
+    buildState.activeRunId = requestedRunId;
+    buildState.hasActiveRuns = true;
+    renderActionProgressCard(
+      "recent-build-progress",
+      null,
+      { id: requestedRunId, url: options.runUrl || "" },
+      {
+        force: true,
+        waitingTitle: "等待 GitHub 同步运行记录",
+        waitingDetail: "已经拿到 Run ID；GitHub 列表接口同步后会自动显示真实构建步骤。"
+      }
+    );
+    showBuildResult("构建已建立，正在等待 GitHub 同步运行详情。");
+    buildState.pollAttempts += 1;
+    scheduleBuildPoll(2500, generation);
+    return;
+  }
+
+  if (requestedRun) {
+    buildState.requestId = "";
+  }
+
   const activeRun =
-    data.runs.find((run) => Number(run.id) === requestedRunId) ||
+    requestedRun ||
     data.runs.find((run) => ACTIVE_BUILD_STATUSES.has(run.status)) ||
     null;
 
@@ -3046,14 +3074,32 @@ $("trigger-build").addEventListener("click", async () => {
     if (currentRepository()?.fullName !== repo.fullName) return;
 
     buildState.requestId = result.requestId || "";
+    buildState.activeRunId = Number(result.runId || 0);
     buildState.pollAttempts = 0;
     const generation = buildState.generation;
     if (requestVersion === buildDialogState.requestVersion) {
       closeBuildDialog();
     }
 
+    renderActionProgressCard(
+      "recent-build-progress",
+      null,
+      result.runId
+        ? { id: Number(result.runId), url: result.runUrl || "" }
+        : null,
+      {
+        force: true,
+        waitingTitle: result.runId
+          ? "构建运行已建立"
+          : "等待 GitHub 建立运行记录",
+        waitingDetail: "正在获取本次构建的真实 Job / Step 进度。"
+      }
+    );
+
     await loadBuildRuns({
       requestId: result.requestId || "",
+      runId: Number(result.runId || 0),
+      runUrl: result.runUrl || "",
       generation
     });
   } catch (error) {
@@ -3071,7 +3117,11 @@ $("trigger-build").addEventListener("click", async () => {
         );
       }
       buildState.requestId = "";
-      await loadBuildRuns({ generation: buildState.generation });
+      buildState.activeRunId = Number(run.id || 0);
+      await loadBuildRuns({
+        runId: Number(run.id || 0),
+        generation: buildState.generation
+      });
     } else if (
       requestVersion === buildDialogState.requestVersion &&
       !$("build-dialog").hidden
