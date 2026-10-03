@@ -92,6 +92,58 @@ function configStudioRunMode(run) {
   return title.includes("Config · resolve ·") ? "resolve" : "catalog";
 }
 
+const CONFIG_STUDIO_PROGRESS_LABELS = Object.freeze({
+  "校验会话并读取请求": "读取配置请求",
+  "安装配置解析依赖": "安装配置工具",
+  "加载 Profile 上下文": "加载 Profile",
+  "准备 OpenWrt 源码": "拉取并准备 OpenWrt 源码",
+  "应用源码预处理与额外 Feeds": "应用源码预处理与额外 Feeds",
+  "更新 Feeds": "更新 Feeds",
+  "安装 Feeds": "安装 Feeds",
+  "由 Kconfig 生成最终配置": "运行 Kconfig / make defconfig",
+  "生成可视化菜单数据": "生成图形菜单数据",
+  "上传受控配置结果": "上传配置结果"
+});
+
+export function configStudioProgressFromJobs(jobs) {
+  const safeJobs = Array.isArray(jobs) ? jobs : [];
+  const job = safeJobs.find((item) => item?.name === "解析 OpenWrt 配置") || safeJobs[0];
+  const rawSteps = Array.isArray(job?.steps) ? job.steps : [];
+  const steps = rawSteps
+    .filter((step) => CONFIG_STUDIO_PROGRESS_LABELS[step?.name])
+    .map((step) => ({
+      name: CONFIG_STUDIO_PROGRESS_LABELS[step.name],
+      status: String(step.status || "pending"),
+      conclusion: String(step.conclusion || "")
+    }));
+  if (!steps.length) return null;
+
+  const completed = steps.filter((step) => step.status === "completed").length;
+  const currentIndex = steps.findIndex((step) => step.status !== "completed");
+  const current =
+    currentIndex >= 0
+      ? steps[currentIndex]
+      : steps[steps.length - 1];
+  const failed = steps.find(
+    (step) =>
+      step.status === "completed" &&
+      step.conclusion &&
+      !["success", "skipped", "neutral"].includes(step.conclusion)
+  );
+  const percent = failed
+    ? Math.floor((Math.max(0, completed - 1) / steps.length) * 100)
+    : Math.floor((completed / steps.length) * 100);
+
+  return {
+    completed,
+    total: steps.length,
+    percent: Math.max(0, Math.min(100, percent)),
+    current: failed?.name || current?.name || "",
+    failed: failed?.name || "",
+    steps
+  };
+}
+
 export function selectConfigStudioRun(
   runs,
   requestId,
@@ -1159,9 +1211,21 @@ export class GitHubAppClient {
     };
     let catalog = null;
     let result = null;
+    let progress = null;
 
     if (run) {
       const mode = configStudioRunMode(run);
+      try {
+        const jobsBody = await this.api(
+          `/repos/${safeOwner}/${safeRepo}/actions/runs/${Number(run.id)}/jobs?per_page=20`,
+          token
+        );
+        progress = configStudioProgressFromJobs(
+          Array.isArray(jobsBody.jobs) ? jobsBody.jobs : []
+        );
+      } catch (progressError) {
+        console.error("Failed to read Config Studio progress", progressError);
+      }
       if (run.status !== "completed") {
         status = {
           status: mode === "resolve" ? "resolving" : "preparing",
@@ -1221,9 +1285,11 @@ export class GitHubAppClient {
             status: run.status || "unknown",
             conclusion: run.conclusion || "",
             url: run.html_url || "",
+            startedAt: run.run_started_at || run.created_at || "",
             updatedAt: run.updated_at || ""
           }
         : null,
+      progress,
       catalog,
       result
     };
