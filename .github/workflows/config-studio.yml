@@ -148,7 +148,9 @@ jobs:
             > "$RUNNER_TEMP/config-studio-output/status.json"
         else
           python3 scripts/config-studio.py result "$request" openwrt/.config "$RUNNER_TEMP/config-studio-output/result.json"
+          python3 scripts/config-studio.py catalog openwrt "$RUNNER_TEMP/config-studio-output/catalog.json"
           gzip -9 -c "$RUNNER_TEMP/config-studio-output/result.json" | base64 -w0 > "$RUNNER_TEMP/config-studio-output/result.json.gz.b64"
+          gzip -9 -c "$RUNNER_TEMP/config-studio-output/catalog.json" | base64 -w0 > "$RUNNER_TEMP/config-studio-output/catalog.json.gz.b64"
           jq -n --arg mode "$CONFIG_MODE" --arg requestId "$REQUEST_ID" --arg sourceCommit "${SOURCE_COMMIT:-}" \
             '{status:"resolved",mode:$mode,requestId:$requestId,sourceCommit:$sourceCommit}' \
             > "$RUNNER_TEMP/config-studio-output/status.json"
@@ -175,9 +177,8 @@ jobs:
         }
 
         put_file "$RUNNER_TEMP/config-studio-output/status.json" "$session_root/status.json"
-        if [ "$CONFIG_MODE" = "catalog" ]; then
-          put_file "$RUNNER_TEMP/config-studio-output/catalog.json.gz.b64" "$session_root/catalog.json.gz.b64"
-        else
+        put_file "$RUNNER_TEMP/config-studio-output/catalog.json.gz.b64" "$session_root/catalog.json.gz.b64"
+        if [ "$CONFIG_MODE" = "resolve" ]; then
           put_file "$RUNNER_TEMP/config-studio-output/result.json.gz.b64" "$session_root/result.json.gz.b64"
         fi
 
