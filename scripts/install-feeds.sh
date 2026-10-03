@@ -24,20 +24,20 @@ status=${PIPESTATUS[0]}
 set -e
 
 echo
-echo "=== Feeds 同名包处理摘要 ==="
+echo "=== OpenWrt core 覆盖摘要 ==="
 
 override_count="$(grep -c '^Overriding core package ' "$log_file" 2>/dev/null || true)"
 skip_count="$(grep -c 'Not overriding core package ' "$log_file" 2>/dev/null || true)"
 
-echo "已覆盖默认同名包：$override_count"
+echo "OpenWrt core 直接 override：$override_count"
 if [ "$override_count" -gt 0 ]; then
   grep '^Overriding core package ' "$log_file" | sed 's/^/  ✓ /'
 fi
 
-echo "检测到未覆盖默认同名包：$skip_count"
+echo "检测到未覆盖 core 同名包：$skip_count"
 if [ "$skip_count" -gt 0 ]; then
   grep 'Not overriding core package ' "$log_file" | sed 's/^/  ! /'
-  echo "提示：如果你希望第三方 feed 优先，请在 feeds.conf 对应行加 --force。"
+  echo "提示：自定义 feed 若需要加入第三方优先规则，请在 feeds.conf 对应行加 --force。"
 fi
 
 exit "$status"
