@@ -53,6 +53,23 @@ function currentRepository() {
   ) || null;
 }
 
+function currentProfileId(repo) {
+  if (!repo) return "";
+  if (
+    buildState.repo?.fullName === repo.fullName &&
+    buildState.profileId
+  ) {
+    return buildState.profileId;
+  }
+  if (
+    editorState.repo?.fullName === repo.fullName &&
+    editorState.profileId
+  ) {
+    return editorState.profileId;
+  }
+  return "";
+}
+
 function setActiveNavigation(name) {
   for (const item of document.querySelectorAll(".sidebar-nav .nav-item")) {
     const active = item.dataset.nav === name;
@@ -96,7 +113,7 @@ async function navigateControlPlane(destination) {
       return;
     }
 
-    const profileId = buildState.profileId || editorState.profileId;
+    const profileId = currentProfileId(repo);
     if (!profileId) {
       showError("请先在工作区选择一个 Profile，再进入配置。");
       setActiveNavigation("workspace");
@@ -121,7 +138,7 @@ async function navigateControlPlane(destination) {
   }
 
   if (destination === "builder") {
-    const profileId = buildState.profileId || editorState.profileId;
+    const profileId = currentProfileId(repo);
     if (!profileId) {
       showError("请先在工作区选择一个 Profile，再进入构建。");
       setActiveNavigation("workspace");
