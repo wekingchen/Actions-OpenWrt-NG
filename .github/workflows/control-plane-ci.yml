@@ -152,7 +152,7 @@ jobs:
         grep -q 'renderBuildRows' /tmp/control-plane-app.js
         grep -q 'builds?limit=100' /tmp/control-plane-app.js
         grep -q 'Math.min(100' lib/github.mjs
-        grep -q 'result.runId' /tmp/control-plane-app.js
+        grep -q 'result.requestId' /tmp/control-plane-app.js
         grep -q 'build_already_active' /tmp/control-plane-app.js
         grep -q 'readNewProfileInput' /tmp/control-plane-app.js
         grep -q '/api/v1/profile-templates/preview' /tmp/control-plane-app.js
