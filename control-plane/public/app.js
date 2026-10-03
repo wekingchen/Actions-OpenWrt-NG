@@ -42,6 +42,21 @@ const createState = {
   previewValid: false
 };
 
+const repositoryState = {
+  repositories: [],
+  selectedFullName: ""
+};
+
+function iconSvg(name) {
+  const paths = {
+    repo: '<path d="M4 5.5h6l1.5 2H20v11H4z"/><path d="M4 9h16"/>',
+    profile: '<path d="M7 4h10l3 3v13H4V7z"/><path d="M8 11h8M8 15h8"/>',
+    arrow: '<path d="M5 12h14M14 7l5 5-5 5"/>',
+    chevron: '<path d="m7 9 5 5 5-5"/>'
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || ""}</svg>`;
+}
+
 const SOURCE_PRESETS = Object.freeze({
   lean: {
     repo: "https://github.com/coolsnowwolf/lede",
@@ -403,6 +418,7 @@ function setMetric(id, value, captionId, caption) {
 }
 
 function updateRepositoryOverview(repo) {
+  $("summary-grid").hidden = false;
   const capability = canWriteRepo(repo) && canRunRepo(repo)
     ? "完整"
     : canReadRepo(repo)
@@ -667,11 +683,28 @@ async function loadBuildRuns(options = {}) {
 
   if (!data.runs.length) {
     updateBuildOverview(null);
-    const empty = document.createElement("p");
-    empty.className = "muted";
-    empty.textContent = requestId
-      ? "已提交到 GitHub，正在等待 Actions Run 建立…"
-      : "这个 Profile 暂无 Builder 运行记录。";
+    const empty = document.createElement("div");
+    empty.className = "empty-state build-empty";
+
+    const title = document.createElement("strong");
+    title.textContent = requestId
+      ? "正在等待 GitHub 建立运行记录"
+      : "还没有构建记录";
+    const detail = document.createElement("span");
+    detail.textContent = requestId
+      ? "Builder 请求已提交，页面会自动继续刷新。"
+      : "可以直接从这里发起这个 Profile 的第一次构建。";
+    empty.append(title, detail);
+
+    if (!requestId && canRunRepo(repo)) {
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "button primary compact-action";
+      action.textContent = "发起构建";
+      action.addEventListener("click", () => $("trigger-build").click());
+      empty.appendChild(action);
+    }
+
     root.appendChild(empty);
 
     if (requestId) {
@@ -816,6 +849,16 @@ async function loadProfiles(repo) {
   showError();
   clearBuildPolling();
   createState.repo = repo;
+  repositoryState.selectedFullName = repo.fullName;
+  $("current-repo-label").textContent = repo.fullName;
+  $("repo-panel-title").textContent = "当前仓库";
+  $("repo-switcher").value = repo.fullName;
+  setMetric(
+    "metric-build-status",
+    "暂无",
+    "metric-build-caption",
+    "选择 Profile 后显示"
+  );
   $("editor-card").hidden = true;
   $("build-card").hidden = true;
   $("new-profile-card").hidden = true;
@@ -859,7 +902,7 @@ async function loadProfiles(repo) {
     leading.className = "list-leading";
     const icon = document.createElement("span");
     icon.className = "list-icon";
-    icon.textContent = "◇";
+    icon.innerHTML = iconSvg("profile");
     const copy = document.createElement("span");
     copy.className = "list-copy";
     const strong = document.createElement("strong");
@@ -885,6 +928,18 @@ async function loadProfiles(repo) {
     });
     root.appendChild(button);
   }
+}
+
+async function selectRepository(repo) {
+  if (!repo) return;
+  const root = $("repositories");
+  for (const item of root.querySelectorAll(".repo-item")) {
+    const selected = item.dataset.repoFullName === repo.fullName;
+    item.classList.toggle("selected", selected);
+    if (selected) item.setAttribute("aria-current", "true");
+    else item.removeAttribute("aria-current");
+  }
+  await loadProfiles(repo);
 }
 
 async function init() {
@@ -916,58 +971,96 @@ async function init() {
 
   $("login-card").hidden = true;
   $("repo-card").hidden = false;
+
+  const userBox = $("user-box");
   const avatar = document.createElement("img");
   avatar.src = session.user.avatarUrl;
-  avatar.alt = "";
-  avatar.width = 28;
-  avatar.height = 28;
+  avatar.alt = `${session.user.login} 的 GitHub 头像`;
+  avatar.width = 32;
+  avatar.height = 32;
+  avatar.referrerPolicy = "no-referrer";
+  avatar.addEventListener("error", () => {
+    const fallback = document.createElement("span");
+    fallback.className = "user-avatar-fallback";
+    fallback.textContent = session.user.login.slice(0, 1).toUpperCase();
+    avatar.replaceWith(fallback);
+  }, { once: true });
   const login = document.createElement("strong");
   login.textContent = session.user.login;
-  $("user-box").replaceChildren(avatar, login);
+  const caret = document.createElement("span");
+  caret.className = "user-caret";
+  caret.innerHTML = iconSvg("chevron");
+  userBox.replaceChildren(avatar, login, caret);
+  userBox.hidden = false;
+  $("account-login").textContent = session.user.login;
 
   const data = await request("/api/v1/repositories");
+  repositoryState.repositories = data.repositories;
   const root = $("repositories");
   root.textContent = "";
 
-  setMetric(
-    "metric-repo-count",
-    String(data.repositories.length),
-    "metric-repo-caption",
-    data.repositories.length
-      ? "GitHub App 当前可访问"
-      : "尚未授权任何仓库"
-  );
+  const switcher = $("repo-switcher");
+  switcher.replaceChildren();
+  if (data.repositories.length > 1) {
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "选择仓库";
+    switcher.appendChild(placeholder);
+  }
+  for (const repo of data.repositories) {
+    const option = document.createElement("option");
+    option.value = repo.fullName;
+    option.textContent = repo.fullName;
+    switcher.appendChild(option);
+  }
+  $("repo-switcher-wrap").hidden = !data.repositories.length;
 
   for (const repo of data.repositories) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "repo-item";
+    button.dataset.repoFullName = repo.fullName;
 
     const leading = document.createElement("span");
     leading.className = "list-leading";
     const icon = document.createElement("span");
     icon.className = "list-icon repo-icon";
-    icon.textContent = "◫";
+    icon.innerHTML = iconSvg("repo");
+
     const copy = document.createElement("span");
     copy.className = "list-copy";
     const title = document.createElement("strong");
     title.textContent = repo.fullName;
-    const meta = document.createElement("small");
-    meta.textContent =
-      (repo.private ? "Private" : "Public") +
-      " · " +
-      repo.defaultBranch +
-      " · " +
-      repositoryCapabilityText(repo);
-    copy.append(title, meta);
+
+    const chips = document.createElement("span");
+    chips.className = "repo-chips";
+    for (const value of [
+      repo.private ? "Private" : "Public",
+      repo.defaultBranch
+    ]) {
+      const chip = document.createElement("span");
+      chip.className = "repo-chip";
+      chip.textContent = value;
+      chips.appendChild(chip);
+    }
+    const capability = document.createElement("span");
+    capability.className =
+      "repo-chip repo-capability " +
+      (canWriteRepo(repo) && canRunRepo(repo) ? "ready" : "limited");
+    capability.textContent =
+      canWriteRepo(repo) && canRunRepo(repo) ? "完整能力" : "权限受限";
+    chips.appendChild(capability);
+
+    copy.append(title, chips);
     leading.append(icon, copy);
 
-    const badge = document.createElement("span");
-    badge.className =
-      "repo-capability " +
-      (canWriteRepo(repo) && canRunRepo(repo) ? "ready" : "limited");
-    badge.textContent =
-      canWriteRepo(repo) && canRunRepo(repo) ? "完整能力" : "权限受限";
+    const action = document.createElement("span");
+    action.className = "repo-enter";
+    const actionText = document.createElement("span");
+    actionText.textContent = "进入工作区";
+    const actionIcon = document.createElement("span");
+    actionIcon.innerHTML = iconSvg("arrow");
+    action.append(actionText, actionIcon);
 
     button.title =
       "contents:" +
@@ -976,15 +1069,9 @@ async function init() {
       repo.permissions.pullRequests +
       " · actions:" +
       repo.permissions.actions;
-    button.append(leading, badge);
+    button.append(leading, action);
     button.addEventListener("click", () => {
-      for (const item of root.querySelectorAll(".repo-item")) {
-        item.classList.remove("selected");
-        item.removeAttribute("aria-current");
-      }
-      button.classList.add("selected");
-      button.setAttribute("aria-current", "true");
-      loadProfiles(repo).catch((error) => showError(error));
+      selectRepository(repo).catch((error) => showError(error));
     });
     root.appendChild(button);
   }
@@ -994,11 +1081,13 @@ async function init() {
     const empty = document.createElement("div");
     empty.className = "empty-state";
     empty.innerHTML =
-      "<strong>还没有可访问仓库</strong><span>调整 GitHub App 安装范围后再刷新页面。</span>";
+      "<strong>还没有可访问仓库</strong><span>请从头像菜单调整 GitHub App 的仓库授权范围。</span>";
     root.appendChild(empty);
+    $("current-repo-label").textContent = "暂无仓库";
+  } else if (data.repositories.length === 1) {
+    await selectRepository(data.repositories[0]);
   }
 }
-
 for (const item of document.querySelectorAll(".sidebar-nav .nav-item")) {
   item.addEventListener("click", () => {
     for (const nav of document.querySelectorAll(".sidebar-nav .nav-item")) {
@@ -1007,6 +1096,34 @@ for (const item of document.querySelectorAll(".sidebar-nav .nav-item")) {
     item.classList.add("active");
   });
 }
+
+$("repo-switcher").addEventListener("change", () => {
+  const repo = repositoryState.repositories.find(
+    (item) => item.fullName === $("repo-switcher").value
+  );
+  if (repo) selectRepository(repo).catch((error) => showError(error));
+});
+
+$("user-box").addEventListener("click", (event) => {
+  event.stopPropagation();
+  const dropdown = $("account-dropdown");
+  dropdown.hidden = !dropdown.hidden;
+  $("user-box").setAttribute("aria-expanded", String(!dropdown.hidden));
+});
+
+document.addEventListener("click", (event) => {
+  if (!$("account-menu").contains(event.target)) {
+    $("account-dropdown").hidden = true;
+    $("user-box").setAttribute("aria-expanded", "false");
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    $("account-dropdown").hidden = true;
+    $("user-box").setAttribute("aria-expanded", "false");
+  }
+});
 
 $("new-profile-open").addEventListener("click", openNewProfileForm);
 
