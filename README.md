@@ -68,8 +68,8 @@ profiles/default/
 最简单的使用方式：
 
 1. 使用本仓库作为模板创建自己的仓库。
-2. 用目标 OpenWrt 源码生成 `.config`。
-3. 用它替换 `profiles/default/.config`。
+2. 推荐在 V2 Control Plane 使用 **Config Studio / Web Menuconfig**，从真实源码与 feeds 中图形选择 Target、设备、App 与构建特性；也可以沿用原生 `make menuconfig` 生成 `.config`。
+3. Config Studio 会让 OpenWrt 自己执行 `make defconfig` 解析依赖，并通过 Pull Request 写入 Profile；手工方式则用生成结果替换 `profiles/default/.config`。
 4. 如果源码仓库或分支不同，修改 `profiles/default/profile.env`。
 5. 第一次先保持 `AUTO_UPDATE=false`，手动验证配置能够成功构建。
 6. Actions → **OpenWrt NG Builder** → **Run workflow**。
@@ -236,6 +236,41 @@ Profile ID 必须以字母或数字开头，只允许字母、数字、点、下
 - Wizard 不调用 GitHub API，不持有 Token，也不拥有仓库写权限。
 - 生成 ZIP 已通过真实 `profile.sh validate/export`、Update Checker 和 Manifest 验收器兼容测试。
 - V1.3 Wizard 本身仍只负责本地生成 Profile；如果已部署 V2 Control Plane，也可以在控制面中直接新建标准 Profile，并通过独立分支 + Pull Request 安全写入仓库。
+
+## Config Studio / Web Menuconfig
+
+Control Plane 0.11.0 增加 **Config Studio**，把初始化 `.config` 时必须人工完成的 `make menuconfig` 选择流程搬到浏览器，同时保留 OpenWrt Kconfig 作为唯一依赖解析器。
+
+工作方式：
+
+```text
+选择源码 / 已有 Profile
+        ↓
+Config Studio Action（真实源码 + feeds）
+        ↓
+Target / Subtarget / Device 元数据
+软件包 / LuCI App / 可见 Kconfig 特性
+        ↓
+浏览器由用户手动选择 n / y / m
+        ↓
+make defconfig
+        ↓
+展示：原样接受 / 依赖调整 / 自动加入软件包
+        ↓
+现有 Profile → 独立分支 + PR 更新 .config
+新 Profile   → 带回创建向导 → 标准 Profile PR
+```
+
+这里的“图形配置”不是由 Control Plane 猜依赖，也不会用静态设备数据库替代 OpenWrt。浏览器只记录用户明确的选择；最终配置始终由目标源码当前版本的 Kconfig 和 feeds 解析。
+
+安全边界：
+
+- 每次配置使用 `openwrt-ng/config-session-<id>` 临时分支保存会话，默认分支不被直接修改。
+- 真正执行外部 OpenWrt 源码 / feeds 的 Config Studio Job 只有 `contents: read`。
+- 写回会话结果由单独 Job 完成，才拥有 `contents: write`，避免第三方源码在执行阶段拿到仓库写权限。
+- 完成或取消配置后清理临时会话分支。
+- 原 `.config` 上传 / 文本编辑继续保留，作为高级兼容方式。
+- SSH / tmate 不作为正式配置入口；未来若增加，只作为高级排障模式。
 
 ## V2 Control Plane
 
