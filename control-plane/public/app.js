@@ -2261,7 +2261,7 @@ async function startConfigStudio(repo, options) {
     : repo.fullName + " · " + options.sourceRepo + " @ " + options.sourceBranch;
   $("config-studio-loading").hidden = false;
   $("config-studio-workbench").hidden = true;
-  resetConfigStudioProgress(options.resumeRequestId ? "catalog" : "catalog");
+  resetConfigStudioProgress("catalog");
   $("config-studio-result").hidden = true;
   $("config-studio-run-link").hidden = true;
   $("config-studio-resolve").hidden = false;
