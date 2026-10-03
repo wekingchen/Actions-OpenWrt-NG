@@ -202,6 +202,7 @@ def parse_packageinfo(path: Path, config: dict[str, str]) -> list[dict[str, Any]
                 "menuDepends": [],
                 "hidden": False,
                 "buildOnly": False,
+                "types": [],
                 "sourceMakefile": source_makefile,
             }
             packages.append(current)
@@ -224,6 +225,8 @@ def parse_packageinfo(path: Path, config: dict[str, str]) -> list[dict[str, Any]
             current["hidden"] = True
         elif line.startswith("Build-Only:"):
             current["buildOnly"] = True
+        elif line.startswith("Type:"):
+            current["types"] = line.split(":", 1)[1].strip().split()
 
     visible: list[dict[str, Any]] = []
     for package in packages:
@@ -233,6 +236,9 @@ def parse_packageinfo(path: Path, config: dict[str, str]) -> list[dict[str, Any]
         package["value"] = config_value_for_json(raw_value)
         package["selected"] = raw_value in {"y", "m"}
         package["luciApp"] = package["name"].startswith("luci-app-")
+        package["assignable"] = (
+            ["n", "m", "y"] if "ipkg" in package["types"] else ["n", "y"]
+        )
         visible.append(package)
     return visible
 
