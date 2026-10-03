@@ -529,6 +529,14 @@ const builderFetch = async (url, options = {}) => {
       published_at: "2026-10-02T00:10:00Z"
     }]);
   }
+  if (method === "GET" && path === "/actions/artifacts/77/zip") {
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: "https://downloads.example.test/artifacts/77.zip"
+      }
+    });
+  }
 
   return Response.json({ message: "unexpected builder request " + path }, { status: 500 });
 };
@@ -571,6 +579,18 @@ assert.equal(
 );
 assert.equal(builderDetail.release.tag, "2026.10.02-0810-9");
 assert.equal(builderDetail.summaryUrl, builderDetail.url);
+
+const artifactDownloadUrl = await builderClient.getBuilderArtifactDownloadUrl(
+  "ghu_builder",
+  "acme",
+  "router",
+  123,
+  77
+);
+assert.equal(
+  artifactDownloadUrl,
+  "https://downloads.example.test/artifacts/77.zip"
+);
 
 const calls = [];
 const fakeFetch = async (url, options = {}) => {
@@ -758,7 +778,25 @@ const fakeFetch = async (url, options = {}) => {
   }
 
   if (path === "/repos/acme/router/actions/runs/123/artifacts") {
-    return Response.json({ artifacts: [] });
+    return Response.json({
+      artifacts: [{
+        id: 77,
+        name: "OpenWrt_firmware_default_20261002",
+        size_in_bytes: 12345,
+        expired: false,
+        created_at: "2026-10-02T00:09:00Z",
+        expires_at: "2026-11-01T00:09:00Z"
+      }]
+    });
+  }
+
+  if (path === "/repos/acme/router/actions/artifacts/77/zip") {
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: "https://downloads.example.test/self-hosted/77.zip"
+      }
+    });
   }
 
   if (path === "/repos/acme/router/releases") {
@@ -950,6 +988,19 @@ try {
   );
   assert.equal(buildDetail.status, 200);
   assert.equal((await buildDetail.json()).run.id, 123);
+
+  const artifactDownload = await fetch(
+    base + "/api/v1/repositories/acme/router/builds/123/artifacts/77/download",
+    {
+      headers: { Cookie: cookie },
+      redirect: "manual"
+    }
+  );
+  assert.equal(artifactDownload.status, 302);
+  assert.equal(
+    artifactDownload.headers.get("location"),
+    "https://downloads.example.test/self-hosted/77.zip"
+  );
 
   const trigger = await fetch(
     base + "/api/v1/repositories/acme/router/profiles/default/builds",
