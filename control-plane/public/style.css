@@ -2634,10 +2634,22 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 }
 .config-studio-filterbar {
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) minmax(160px, .7fr) auto;
   gap: 8px;
   align-items: center;
   margin-bottom: 10px;
+}
+.config-studio-package-filters {
+  grid-template-columns:
+    minmax(220px, 1.35fr)
+    minmax(150px, .72fr)
+    minmax(150px, .72fr)
+    auto;
+}
+.config-studio-feature-filters {
+  grid-template-columns:
+    minmax(220px, 1.35fr)
+    minmax(170px, .8fr)
+    minmax(170px, .8fr);
 }
 .config-studio-filterbar input[type="search"],
 .config-studio-filterbar select {
@@ -2808,6 +2820,11 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   color: var(--muted);
   font-size: 10px;
   text-align: center;
+}
+.config-studio-menu-hint {
+  min-height: 150px;
+  padding: 28px;
+  line-height: 1.7;
 }
 .config-studio-change-summary {
   display: flex;
