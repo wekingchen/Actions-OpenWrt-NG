@@ -81,8 +81,7 @@ jobs:
       run: |
         set -Eeuo pipefail
         sudo apt-get -qq update
-        sudo apt-get -qq install -y build-essential gawk gettext git libncurses-dev python3-pip rsync unzip wget zlib1g-dev
-        python3 -m pip install --disable-pip-version-check --break-system-packages 'kconfiglib==14.1.0'
+        sudo apt-get -qq install -y build-essential gawk gettext git libncurses-dev rsync unzip wget zlib1g-dev
 
     - name: 加载 Profile 上下文
       run: |
