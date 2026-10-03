@@ -12,6 +12,8 @@ import argparse
 import json
 import os
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -243,88 +245,125 @@ def parse_packageinfo(path: Path, config: dict[str, str]) -> list[dict[str, Any]
     return visible
 
 
-def menu_path(node: Any) -> list[str]:
-    out: list[str] = []
-    parent = getattr(node, "parent", None)
-    while parent is not None:
-        prompt = getattr(parent, "prompt", None)
-        if prompt and prompt[0]:
-            out.append(str(prompt[0]))
-        parent = getattr(parent, "parent", None)
-    out.reverse()
-    return out[-6:]
-
-
 def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], str]:
-    try:
-        import kconfiglib  # type: ignore
-    except Exception as error:
-        return [], f"kconfiglib unavailable: {error}"
+    config_dir = root / "scripts" / "config"
+    exporter_source = Path(__file__).with_name("config-studio-kconfig.c")
+    object_names = [
+        "confdata.o",
+        "expr.o",
+        "lexer.lex.o",
+        "menu.o",
+        "parser.tab.o",
+        "preprocess.o",
+        "symbol.o",
+        "util.o",
+    ]
 
-    previous = Path.cwd()
-    old_srctree = os.environ.get("srctree")
+    if not exporter_source.is_file():
+        return [], f"OpenWrt Kconfig exporter missing: {exporter_source}"
+    if not config_dir.is_dir():
+        return [], f"OpenWrt scripts/config missing: {config_dir}"
+
     try:
-        os.chdir(root)
-        os.environ["srctree"] = str(root)
-        kconf = kconfiglib.Kconfig("Config.in", warn=False)
-        kconf.load_config(".config", replace=True)
+        subprocess.run(
+            ["make", "-C", str(config_dir), "conf"],
+            cwd=root,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        objects = [config_dir / name for name in object_names]
+        missing = [str(path) for path in objects if not path.is_file()]
+        if missing:
+            return [], "OpenWrt Kconfig objects missing: " + ", ".join(missing)
+
+        with tempfile.TemporaryDirectory(prefix="openwrt-ng-kconfig-") as raw:
+            binary = Path(raw) / "config-studio-kconfig"
+            compile_cmd = [
+                os.environ.get("CC", "cc"),
+                "-O2",
+                "-I",
+                str(config_dir),
+                "-o",
+                str(binary),
+                str(exporter_source),
+                *map(str, objects),
+            ]
+            compiled = subprocess.run(
+                compile_cmd,
+                cwd=root,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if compiled.returncode != 0:
+                detail = (compiled.stderr or compiled.stdout).strip()
+                return [], f"OpenWrt Kconfig exporter compile failed: {detail[-1200:]}"
+
+            env = os.environ.copy()
+            env["srctree"] = str(root)
+            exported = subprocess.run(
+                [str(binary), "Config.in", ".config"],
+                cwd=root,
+                env=env,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if exported.returncode != 0:
+                detail = (exported.stderr or exported.stdout).strip()
+                return [], f"OpenWrt Kconfig exporter failed: {detail[-1200:]}"
 
         features: list[dict[str, Any]] = []
         seen: set[str] = set()
-        for symbol in kconf.unique_defined_syms:
-            name = getattr(symbol, "name", None)
-            if not name or name in seen:
+        for number, raw_line in enumerate(exported.stdout.splitlines(), 1):
+            line = raw_line.strip()
+            if not line:
                 continue
-            if (
-                name.startswith("PACKAGE_")
-                or name.startswith("TARGET_")
-                or name.startswith("DEFAULT_")
-                or name.startswith("MODULE_DEFAULT_")
-            ):
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError as error:
+                return [], f"OpenWrt Kconfig exporter invalid JSON at line {number}: {error}"
+
+            name = str(item.get("name") or "")
+            symbol = str(item.get("symbol") or "")
+            if not name or not SYMBOL_RE.fullmatch(symbol) or symbol in seen:
+                continue
+            if name in {"MODULES", "HAVE_DOT_CONFIG"} or name.startswith("HOST_OS_"):
                 continue
 
-            node = next(
-                (
-                    item
-                    for item in symbol.nodes
-                    if getattr(item, "prompt", None)
-                    and item.prompt
-                    and item.prompt[0]
-                ),
-                None,
-            )
-            if node is None:
-                continue
-            seen.add(name)
-            symbol_name = "CONFIG_" + name
-            type_name = kconfiglib.TYPE_TO_STR.get(symbol.type, "unknown")
-            assignable = [
-                kconfiglib.TRI_TO_STR[item]
-                for item in getattr(symbol, "assignable", ())
-                if item in kconfiglib.TRI_TO_STR
+            seen.add(symbol)
+            item["help"] = str(item.get("help") or "").strip()[:800]
+            item["menuPath"] = [
+                str(part)
+                for part in (item.get("menuPath") or [])
+                if str(part).strip()
+            ][-8:]
+            item["assignable"] = [
+                str(value)
+                for value in (item.get("assignable") or [])
+                if str(value) in {"n", "m", "y"}
             ]
-            help_text = (getattr(node, "help", None) or "").strip()
-            features.append({
-                "name": name,
-                "symbol": symbol_name,
-                "prompt": str(node.prompt[0]),
-                "type": type_name,
-                "value": symbol.str_value,
-                "assignable": assignable,
-                "visible": bool(symbol.visibility),
-                "menuPath": menu_path(node),
-                "help": help_text[:800],
-            })
-        features.sort(key=lambda item: (item["menuPath"], item["prompt"], item["name"]))
+            item["visible"] = bool(item.get("visible"))
+            features.append(item)
+
+        features.sort(
+            key=lambda item: (
+                tuple(item.get("menuPath") or []),
+                str(item.get("prompt") or "").casefold(),
+                str(item.get("name") or "").casefold(),
+            )
+        )
         return features, ""
+    except subprocess.CalledProcessError as error:
+        detail = (error.stderr or error.stdout or str(error)).strip()
+        return [], f"OpenWrt Kconfig prepare failed: {detail[-1200:]}"
     except Exception as error:
-        return [], f"kconfig parse failed: {type(error).__name__}: {error}"
-    finally:
-        os.chdir(previous)
-        if old_srctree is None:
-            os.environ.pop("srctree", None)
-        else:
-            os.environ["srctree"] = old_srctree
+        return [], f"OpenWrt Kconfig export failed: {type(error).__name__}: {error}"
 
 
 def command_catalog(args: argparse.Namespace) -> None:
