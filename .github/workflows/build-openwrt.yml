@@ -352,7 +352,7 @@ jobs:
       run: |
         set -Eeuo pipefail
         cd openwrt
-        ./scripts/feeds install -a
+        bash "$GITHUB_WORKSPACE/scripts/install-feeds.sh" "$GITHUB_WORKSPACE/openwrt" "$RUNNER_TEMP/openwrt-ng-feeds-install.log"
 
     - name: 加载配置并运行 DIY Part 2
       run: |
