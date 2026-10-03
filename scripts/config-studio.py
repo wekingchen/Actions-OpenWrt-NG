@@ -246,7 +246,7 @@ def dependency_condition_names(rules: list[dict[str, str]]) -> set[str]:
         condition = str(rule.get("condition") or "")
         names.update(
             name
-            for name in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", condition)
+            for name in re.findall(r"[A-Za-z_][A-Za-z0-9_.+@/-]*", condition)
             if name not in {"y", "m", "n"}
         )
     return names
