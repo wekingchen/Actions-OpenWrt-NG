@@ -47,6 +47,12 @@ assert.match(
 assert.match(controlPlaneAppJs, /configStudioPackageChildren/);
 assert.match(controlPlaneAppJs, /choicePrompt/);
 assert.match(controlPlaneAppJs, /configOptions/);
+assert.match(controlPlaneAppJs, /renderConfigStudioPackageSubmenus/);
+assert.match(controlPlaneAppJs, /renderConfigStudioFeatureMenus/);
+assert.match(controlPlaneAppJs, /renderConfigStudioFeatureSubmenus/);
+assert.match(controlPlaneIndexHtml, /id="config-studio-submenu"/);
+assert.match(controlPlaneIndexHtml, /id="config-studio-feature-menu"/);
+assert.match(controlPlaneIndexHtml, /id="config-studio-feature-submenu"/);
 
 const builderProgress = builderProgressFromJobs([
   {
