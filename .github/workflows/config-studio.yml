@@ -114,6 +114,7 @@ jobs:
           (cd openwrt && bash "$DIY_PART1")
         fi
 
+        extra_feeds="$(jq -r '.extraFeeds // ""' "$RUNNER_TEMP/config-studio-request.json")"
         extra_feeds_file="${EXTRA_FEEDS_FILE:-}"
         if [ -n "$extra_feeds" ]; then
           extra_feeds_file="$RUNNER_TEMP/config-studio-extra-feeds.conf"
