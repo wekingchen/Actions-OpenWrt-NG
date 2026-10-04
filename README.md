@@ -6,6 +6,8 @@
 
 > 当前稳定基础为 **V1.3**；**V2.0A / V2.0B / V2.0C / V2.0D Control Plane 的核心链路均已完成真实端到端验证**。V2.0D 已验证“在 Control Plane 直接新建标准 Profile → 服务端预览 → 新分支 → Pull Request”，且默认分支未被直接修改。
 
+> **Builder Runner：** 固定使用 `ubuntu-24.04`，不使用 `ubuntu-latest`。这是为兼容持续追新的第三方 host 工具（例如 fw876/helloworld 的 GN/C++23）；固定版本也避免 `ubuntu-latest` 后续迁移造成不可预期的工具链变化。
+
 ## V1 验证状态
 
 V1 已使用默认通用 Profile 完成真实端到端验证：
