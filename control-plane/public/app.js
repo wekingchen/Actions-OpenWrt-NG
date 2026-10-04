@@ -1333,6 +1333,48 @@ function buildStatusIcon(run) {
   return icon;
 }
 
+async function controlBuilderRun(run, action, button) {
+  const repo = buildState.repo || currentRepository();
+  if (!repo || !canRunRepo(repo)) {
+    showError("当前 GitHub App 没有 Actions 写权限，不能控制构建。");
+    return;
+  }
+  if (!["cancel", "rerun"].includes(action)) return;
+
+  const originalText = button?.textContent || "";
+  if (button) {
+    button.disabled = true;
+    button.textContent = action === "cancel" ? "取消中…" : "重跑中…";
+  }
+  showError();
+
+  try {
+    const result = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds/${run.id}/${action}`,
+      { method: "POST", body: "{}" }
+    );
+    buildState.activeRunId = Number(result.runId || run.id || 0);
+    buildState.requestId = "";
+    buildState.pollAttempts = 0;
+    buildState.hasActiveRuns = true;
+    showBuildResult(
+      action === "cancel"
+        ? `已请求取消构建 #${run.runNumber}，状态会自动刷新。`
+        : `已请求重跑构建 #${run.runNumber}，将进入第 ${result.nextAttempt || "下一"} 次尝试。`
+    );
+    scheduleBuildPoll(1200, buildState.generation);
+    window.setTimeout(() => {
+      loadBuildRuns({ generation: buildState.generation })
+        .catch((error) => showError(error));
+    }, 1400);
+  } catch (error) {
+    showError(error);
+    if (button) button.disabled = false;
+  } finally {
+    if (button) button.textContent = originalText;
+  }
+}
+
 function renderBuildRows(root, runs, options = {}) {
   root.replaceChildren();
   const compact = Boolean(options.compact);
@@ -1388,6 +1430,30 @@ function renderBuildRows(root, runs, options = {}) {
 
     const actions = document.createElement("span");
     actions.className = "build-record-actions";
+
+    if (ACTIVE_BUILD_STATUSES.has(run.status)) {
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "build-record-action danger-action";
+      cancel.textContent = "取消";
+      cancel.disabled = !canRunRepo(buildState.repo || currentRepository());
+      cancel.title = cancel.disabled ? "需要 Actions 写权限" : "取消这次构建";
+      cancel.addEventListener("click", () => {
+        controlBuilderRun(run, "cancel", cancel).catch((error) => showError(error));
+      });
+      actions.appendChild(cancel);
+    } else if (run.status === "completed") {
+      const rerun = document.createElement("button");
+      rerun.type = "button";
+      rerun.className = "build-record-action";
+      rerun.textContent = "重跑";
+      rerun.disabled = !canRunRepo(buildState.repo || currentRepository());
+      rerun.title = rerun.disabled ? "需要 Actions 写权限" : "完整重跑这次 Builder";
+      rerun.addEventListener("click", () => {
+        controlBuilderRun(run, "rerun", rerun).catch((error) => showError(error));
+      });
+      actions.appendChild(rerun);
+    }
 
     if (run.status === "completed" && run.conclusion === "success") {
       const outputs = document.createElement("button");
