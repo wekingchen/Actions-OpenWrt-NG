@@ -45,6 +45,9 @@ assert.match(
   /id="config-studio-progress-track"[^>]*role="progressbar"/
 );
 assert.match(controlPlaneAppJs, /configStudioPackageChildren/);
+assert.match(controlPlaneAppJs, /configStudioPackageMenuTree/);
+assert.match(controlPlaneAppJs, /configStudioPackageSubmenu/);
+assert.match(controlPlaneAppJs, /relativeMenuTrail/);
 assert.match(controlPlaneAppJs, /choicePrompt/);
 assert.match(controlPlaneAppJs, /configOptions/);
 assert.match(controlPlaneAppJs, /renderConfigStudioPackageSubmenus/);
@@ -58,7 +61,7 @@ assert.match(controlPlaneAppJs, /configStudioDependencyConditionMatches/);
 assert.match(controlPlaneAppJs, /configStudioEffectiveModifiedEntries/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-dependency-summary"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-show-dependencies"/);
-assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.19\.2<\/span>/);
+assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.20\.0<\/span>/);
 
 const builderProgress = builderProgressFromJobs([
   {
