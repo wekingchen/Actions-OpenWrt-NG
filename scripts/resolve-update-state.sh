@@ -12,7 +12,7 @@ git_ls_remote() {
   # 坏源 / DNS / 远端半开连接不能拖到整个 Update Checker job 超时。
   # timeout 的失败会被调用点当作“该 ref 无法解析”，随后给出统一错误。
   timeout --signal=TERM --kill-after=5s "$git_timeout" \
-    git_ls_remote "$@"
+    git ls-remote --exit-code "$@"
 }
 
 [[ "$profile_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || {
