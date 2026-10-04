@@ -380,9 +380,22 @@ function validateProfileFilesPayload(submitted) {
 
 function profileActionLabel(action) {
   if (action === "create") return "create";
+  if (action === "copy") return "copy";
+  if (action === "rename") return "rename";
   if (action === "delete") return "delete";
   if (action === "baseline") return "set-baseline";
   return "update";
+}
+
+function rewriteProfileFiles(files, sourceProfileId, targetProfileId) {
+  const from = `profiles/${sourceProfileId}/`;
+  const to = `profiles/${targetProfileId}/`;
+  return Object.fromEntries(
+    PROFILE_FILES.map((name) => [
+      name,
+      String(files[name] || "").split(from).join(to)
+    ])
+  );
 }
 
 function branchSlug(profileId) {
@@ -1011,6 +1024,81 @@ export class GitHubAppClient {
             publishedAt: release.published_at || ""
           }
         : null
+    };
+  }
+
+  async cancelBuilderRun(token, owner, repo, runId) {
+    const numericRunId = Number(runId);
+    if (!Number.isSafeInteger(numericRunId) || numericRunId <= 0) {
+      throw new BuildControlError("invalid_run_id", 400);
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const run = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}`,
+      token
+    );
+    const workflowPath = String(run.path || "").split("@", 1)[0];
+    if (workflowPath !== ".github/workflows/" + BUILDER_WORKFLOW) {
+      throw new BuildControlError("not_builder_run", 404);
+    }
+    if (!ACTIVE_BUILD_STATUSES.has(String(run.status || ""))) {
+      throw new BuildControlError("build_not_active", 409);
+    }
+
+    try {
+      await this.api(
+        `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}/cancel`,
+        token,
+        { method: "POST" }
+      );
+    } catch (error) {
+      if (error?.httpStatus !== 409) throw error;
+    }
+
+    return {
+      accepted: true,
+      action: "cancel",
+      runId: numericRunId,
+      runNumber: Number(run.run_number || 0),
+      url: run.html_url || ""
+    };
+  }
+
+  async rerunBuilderRun(token, owner, repo, runId) {
+    const numericRunId = Number(runId);
+    if (!Number.isSafeInteger(numericRunId) || numericRunId <= 0) {
+      throw new BuildControlError("invalid_run_id", 400);
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const run = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}`,
+      token
+    );
+    const workflowPath = String(run.path || "").split("@", 1)[0];
+    if (workflowPath !== ".github/workflows/" + BUILDER_WORKFLOW) {
+      throw new BuildControlError("not_builder_run", 404);
+    }
+    if (String(run.status || "") !== "completed") {
+      throw new BuildControlError("build_not_completed", 409);
+    }
+
+    await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}/rerun`,
+      token,
+      { method: "POST" }
+    );
+
+    return {
+      accepted: true,
+      action: "rerun",
+      runId: numericRunId,
+      runNumber: Number(run.run_number || 0),
+      nextAttempt: Number(run.run_attempt || 1) + 1,
+      url: run.html_url || ""
     };
   }
 
