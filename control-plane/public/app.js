@@ -56,6 +56,15 @@ const deleteProfileState = {
   restoreFocus: null
 };
 
+const profileLifecycleState = {
+  repo: null,
+  profileId: "",
+  mode: "copy",
+  baseRefSha: "",
+  requestVersion: 0,
+  restoreFocus: null
+};
+
 const baselineProfileState = {
   repo: null,
   profileId: "",
@@ -178,6 +187,8 @@ function iconSvg(name) {
     profile: '<path d="M7 4h10l3 3v13H4V7z"/><path d="M8 11h8M8 15h8"/>',
     arrow: '<path d="M5 12h14M14 7l5 5-5 5"/>',
     chevron: '<path d="m7 9 5 5 5-5"/>',
+    copy: '<path d="M9 9h10v10H9z"/><path d="M5 15H4V5h10v1"/>',
+    rename: '<path d="M4 17.5V20h2.5L17.8 8.7l-2.5-2.5z"/><path d="m14.9 6.6 2.5 2.5"/>',
     star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9z"/>',
     trash: '<path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/>'
   };
@@ -381,6 +392,10 @@ const ERROR_MESSAGES = {
     "请求内容格式无效，请刷新页面后重试。",
   invalid_profile_id:
     "Profile ID 不符合规则，请检查目录名称。",
+  invalid_target_profile_id:
+    "新的 Profile ID 不符合规则，只能使用字母、数字、点、下划线和连字符。",
+  profile_target_same_as_source:
+    "新的 Profile ID 不能与当前 Profile 相同。",
   profile_not_found:
     "该 Profile 不存在、已移动，或当前默认分支中不可用。",
   profile_already_exists:
@@ -413,6 +428,12 @@ const ERROR_MESSAGES = {
     "暂时无法从 GitHub 读取 Builder 状态。",
   github_builder_dispatch_failed:
     "GitHub 未能启动 Builder，请检查 Actions 权限与 workflow 是否存在。",
+  github_builder_control_failed:
+    "GitHub 未能完成 Builder 取消 / 重跑操作。",
+  build_not_active:
+    "这个构建已经不在运行，不能再取消。",
+  build_not_completed:
+    "这个构建尚未结束，不能重跑。",
   github_config_studio_failed:
     "GitHub 未能启动图形配置会话，请检查 Actions / Contents 权限与 Config Studio workflow。",
   github_config_studio_apply_failed:
