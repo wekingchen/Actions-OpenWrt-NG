@@ -37,7 +37,7 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.20.0</small>
+        <small>Control Plane 0.20.1</small>
       </div>
     </aside>
 
@@ -65,7 +65,7 @@
         </div>
 
         <div class="topbar-actions">
-          <span class="mobile-version-badge" aria-label="Control Plane 版本">0.20.0</span>
+          <span class="mobile-version-badge" aria-label="Control Plane 版本">0.20.1</span>
           <div class="connection-badge" title="Control Plane 服务可用">
             <span class="status-dot"></span>
             <span>服务正常</span>
@@ -187,11 +187,12 @@
                     </label>
                   </div>
 
-                  <label class="field">
-                    <span>Adapter</span>
+                  <label class="field" id="new-adapter-field" hidden>
+                    <span>源码接入方式</span>
                     <select id="new-adapter">
-                      <option value="direct-openwrt" selected>direct-openwrt</option>
+                      <option value="direct-openwrt" selected>标准 OpenWrt 源码</option>
                     </select>
+                    <small>仅在存在多种源码接入方式时显示；普通 OpenWrt / LEDE / ImmortalWrt 无需调整。</small>
                   </label>
                 </div>
 

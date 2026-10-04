@@ -620,6 +620,18 @@ function renderNewProfilePreview() {
   $("new-profile-preview-card").hidden = !selected;
 }
 
+function renderNewAdapterVisibility() {
+  const field = $("new-adapter-field");
+  const select = $("new-adapter");
+  const options = [...select.options].filter((option) => option.value);
+
+  if (!select.value && options.length) {
+    select.value = options[0].value;
+  }
+
+  field.hidden = options.length <= 1;
+}
+
 function resetNewProfileForm() {
   $("new-profile-form").reset();
   $("new-profile-id").value = "my-openwrt";
@@ -628,6 +640,7 @@ function resetNewProfileForm() {
   $("new-source-repo").value = SOURCE_PRESETS.lean.repo;
   $("new-source-branch").value = SOURCE_PRESETS.lean.branch;
   $("new-adapter").value = "direct-openwrt";
+  renderNewAdapterVisibility();
   $("new-upload-release").checked = true;
   $("new-upload-firmware").checked = true;
   $("new-stream-log").checked = true;
