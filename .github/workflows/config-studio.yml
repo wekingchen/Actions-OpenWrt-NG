@@ -43,6 +43,7 @@ jobs:
     - name: 检出控制仓库
       uses: actions/checkout@v7
       with:
+        ref: ${{ inputs.session_branch }}
         persist-credentials: false
 
     - name: 同步主仓运行时脚本
@@ -113,12 +114,63 @@ jobs:
           {
             echo "ADAPTER=$CONFIG_STUDIO_ADAPTER"
             echo "ADAPTER_SCRIPT=$GITHUB_WORKSPACE/adapters/$CONFIG_STUDIO_ADAPTER.sh"
+            echo "PREFLIGHT_SCRIPT="
             echo "DIY_PART1="
             echo "DIY_PART2="
             echo "POST_FEEDS_SCRIPT="
             echo "PROFILE_FILES_DIR="
             echo "EXTRA_FEEDS_FILE="
           } >> "$GITHUB_ENV"
+        fi
+
+    - name: 运行 Profile Preflight
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -Eeuo pipefail
+
+        metadata_file="$RUNNER_TEMP/openwrt-ng-preflight.env"
+        : > "$metadata_file"
+
+        if [ -n "${PREFLIGHT_SCRIPT:-}" ]; then
+          echo "执行 Profile Preflight：$PREFLIGHT_SCRIPT"
+          OPENWRT_NG_PREFLIGHT_ENV="$metadata_file" bash "$PREFLIGHT_SCRIPT"
+        fi
+
+        python3 - "$metadata_file" <<'PY'
+        import re
+        import sys
+        from pathlib import Path
+
+        path = Path(sys.argv[1])
+        seen = set()
+
+        for number, raw in enumerate(path.read_text().splitlines(), 1):
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if not re.fullmatch(r"[A-Z][A-Z0-9_]*=[^\r\n]*", line):
+                raise SystemExit(
+                    f"Invalid preflight metadata at line {number}: {raw!r}"
+                )
+            key = line.split("=", 1)[0]
+            if key in seen:
+                raise SystemExit(f"Duplicate preflight metadata key: {key}")
+            seen.add(key)
+
+        print(f"Preflight metadata validated: {len(seen)} entries")
+        PY
+
+        while IFS= read -r line; do
+          [ -n "$line" ] || continue
+          [[ "$line" = \#* ]] && continue
+          printf '%s\n' "$line" >> "$GITHUB_ENV"
+        done < "$metadata_file"
+
+        # 与正式 Builder 一致：Preflight 元数据先加载，随后 Profile 固定字段
+        # 再次导出，避免元数据意外覆盖 SOURCE_REPO / ADAPTER 等核心字段。
+        if [ -n "$CONFIG_STUDIO_PROFILE_ID" ]; then
+          scripts/profile.sh export "$CONFIG_STUDIO_PROFILE_ID"
         fi
 
     - name: 准备 OpenWrt 源码
@@ -164,6 +216,11 @@ jobs:
           python3 scripts/config-studio.py seed "$request" openwrt/.config
         else
           jq -r '.baseConfig // ""' "$request" > openwrt/.config
+        fi
+
+        if [ -n "${PROFILE_FILES_DIR:-}" ] && [ -d "$PROFILE_FILES_DIR" ]; then
+          rm -rf openwrt/files
+          cp -a "$PROFILE_FILES_DIR" openwrt/files
         fi
 
         if [ -n "${DIY_PART2:-}" ]; then

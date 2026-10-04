@@ -141,6 +141,12 @@ jobs:
         grep -q 'apply-extra-feeds.sh' .github/workflows/config-studio.yml
         grep -q 'extraFeeds // ""' .github/workflows/config-studio.yml
         grep -q 'config-studio-request.json' .github/workflows/config-studio.yml
+        grep -Fq 'ref: ${{ inputs.session_branch }}' .github/workflows/config-studio.yml
+        grep -q 'name: 运行 Profile Preflight' .github/workflows/config-studio.yml
+        grep -q 'OPENWRT_NG_PREFLIGHT_ENV=' .github/workflows/config-studio.yml
+        grep -q 'PROFILE_FILES_DIR' .github/workflows/config-studio.yml
+        grep -q 'profileSnapshot: Boolean(profileSnapshot)' control-plane/lib/github.mjs
+        grep -q 'profileFiles: Object.fromEntries' control-plane/public/app.js
         grep -q 'apply-extra-feeds.sh' .github/workflows/build-openwrt.yml
         grep -q 'merge-feeds.py' scripts/apply-extra-feeds.sh
         grep -q '同步主仓运行时脚本' .github/workflows/config-studio.yml

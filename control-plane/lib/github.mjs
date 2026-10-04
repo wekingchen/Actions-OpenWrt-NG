@@ -96,6 +96,7 @@ const CONFIG_STUDIO_PROGRESS_LABELS = Object.freeze({
   "校验会话并读取请求": "读取配置请求",
   "安装配置解析依赖": "安装配置工具",
   "加载 Profile 上下文": "加载 Profile",
+  "运行 Profile Preflight": "运行 Profile 预检",
   "准备 OpenWrt 源码": "拉取并准备 OpenWrt 源码",
   "应用源码预处理与额外 Feeds": "应用源码预处理与额外 Feeds",
   "更新 Feeds": "更新 Feeds",
@@ -1055,18 +1056,26 @@ export class GitHubAppClient {
     }
 
     const treeEntries = [];
-    for (const [path, content] of Object.entries(files)) {
+    for (const [path, value] of Object.entries(files)) {
+      const entry =
+        value && typeof value === "object" && !Array.isArray(value)
+          ? value
+          : { content: value };
+      const mode = String(entry.mode || "100644");
+      if (!["100644", "100755"].includes(mode)) {
+        throw new ConfigStudioError("invalid_config_studio_file_mode", 400);
+      }
       const blob = await this.api(
         `/repos/${safeOwner}/${safeRepo}/git/blobs`,
         token,
         {
           method: "POST",
-          body: { content: String(content), encoding: "utf-8" }
+          body: { content: String(entry.content ?? ""), encoding: "utf-8" }
         }
       );
       treeEntries.push({
         path,
-        mode: "100644",
+        mode,
         type: "blob",
         sha: blob.sha
       });
@@ -1150,6 +1159,7 @@ export class GitHubAppClient {
     let adapter = String(payload.adapter || "direct-openwrt").trim();
     let baseConfig = String(payload.baseConfig || "");
     let extraFeeds = String(payload.extraFeeds || "");
+    let profileSnapshot = null;
     const state = await this.repositoryState(token, owner, repo);
 
     if (profileId) {
@@ -1160,12 +1170,40 @@ export class GitHubAppClient {
       if (current.baseRefSha !== state.baseRefSha) {
         throw new ConfigStudioError("repository_changed", 409);
       }
-      const env = current.profile.files["profile.env"]?.content || "";
+
+      if (payload.profileFiles !== undefined && payload.profileFiles !== null) {
+        try {
+          validateProfileFilesPayload(payload.profileFiles);
+        } catch (error) {
+          if (error instanceof ProfileWriteError) {
+            throw new ConfigStudioError(error.code, error.status);
+          }
+          throw error;
+        }
+        const requestedBaseRef = String(payload.baseRefSha || "").trim();
+        if (!/^[0-9a-f]{40}$/i.test(requestedBaseRef)) {
+          throw new ConfigStudioError("invalid_base_ref", 400);
+        }
+        if (requestedBaseRef !== current.baseRefSha) {
+          throw new ConfigStudioError("repository_changed", 409);
+        }
+        profileSnapshot = Object.fromEntries(
+          PROFILE_FILES.map((name) => [name, String(payload.profileFiles[name])])
+        );
+      }
+
+      const files = profileSnapshot || Object.fromEntries(
+        PROFILE_FILES.map((name) => [
+          name,
+          current.profile.files[name]?.content || ""
+        ])
+      );
+      const env = files["profile.env"] || "";
       sourceRepo = profileEnvValue(env, "SOURCE_REPO");
       sourceBranch = profileEnvValue(env, "SOURCE_BRANCH");
       adapter = profileEnvValue(env, "ADAPTER") || "direct-openwrt";
-      baseConfig = current.profile.files[".config"]?.content || "";
-      extraFeeds = current.profile.files["feeds.conf"]?.content || "";
+      baseConfig = files[".config"] || "";
+      extraFeeds = files["feeds.conf"] || "";
     }
 
     if (!sourceRepo || /[\r\n]/.test(sourceRepo) || sourceRepo.length > 1000) {
@@ -1220,18 +1258,28 @@ export class GitHubAppClient {
       baseRefSha: state.baseRefSha,
       selection: { values: {} },
       pendingMode: "catalog",
-      afterRunId: 0
+      afterRunId: 0,
+      profileSnapshot: Boolean(profileSnapshot)
     };
     const root = `.openwrt-ng/config-studio/${requestId}`;
     try {
+      const sessionFiles = {
+        [`${root}/request.json`]: JSON.stringify(request)
+      };
+      if (profileSnapshot) {
+        for (const name of PROFILE_FILES) {
+          sessionFiles[`profiles/${profileId}/${name}`] = {
+            content: profileSnapshot[name],
+            mode: PROFILE_FILE_MODES[name]
+          };
+        }
+      }
       await this.commitConfigStudioFiles(
         token,
         owner,
         repo,
         branchName,
-        {
-          [`${root}/request.json`]: JSON.stringify(request)
-        },
+        sessionFiles,
         `config-studio(${requestId}): start session`
       );
       const dispatched = await this.dispatchConfigStudio(
@@ -1252,6 +1300,7 @@ export class GitHubAppClient {
         sourceBranch,
         adapter,
         extraFeeds,
+        profileSnapshot: Boolean(profileSnapshot),
         ref: state.defaultBranch,
         ...dispatched
       };
@@ -1571,8 +1620,20 @@ export class GitHubAppClient {
     }
 
     const files = {};
-    for (const name of PROFILE_FILES) {
-      files[name] = current.profile.files[name]?.content || "";
+    if (request.profileSnapshot) {
+      for (const name of PROFILE_FILES) {
+        files[name] = await this.readBranchTextFile(
+          token,
+          owner,
+          repo,
+          session.branch,
+          `profiles/${profileId}/${name}`
+        );
+      }
+    } else {
+      for (const name of PROFILE_FILES) {
+        files[name] = current.profile.files[name]?.content || "";
+      }
     }
     files[".config"] = session.result.finalConfig;
     const result = await this.createProfilePullRequest(

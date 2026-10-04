@@ -25,6 +25,11 @@ import { buildProfileFiles as buildWizardProfileFiles } from "../dashboard/asset
 
 const controlPlaneAppJs = readFileSync("./public/app.js", "utf8");
 const controlPlaneIndexHtml = readFileSync("./public/index.html", "utf8");
+const githubClientSource = readFileSync("./lib/github.mjs", "utf8");
+const configStudioWorkflow = readFileSync(
+  "../.github/workflows/config-studio.yml",
+  "utf8"
+);
 const referencedDomIds = [
   ...new Set(
     [...controlPlaneAppJs.matchAll(/\$\("([^"]+)"\)/g)].map((match) => match[1])
@@ -61,7 +66,7 @@ assert.match(controlPlaneAppJs, /configStudioDependencyConditionMatches/);
 assert.match(controlPlaneAppJs, /configStudioEffectiveModifiedEntries/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-dependency-summary"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-show-dependencies"/);
-assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.20\.2<\/span>/);
+assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.0<\/span>/);
 assert.match(controlPlaneIndexHtml, /id="new-adapter-field" hidden/);
 assert.match(controlPlaneIndexHtml, /id="profile-list-result"/);
 assert.match(controlPlaneAppJs, /showProfileListResult/);
@@ -70,6 +75,16 @@ assert.match(controlPlaneAppJs, /cache: "no-store"/);
 assert.match(controlPlaneAppJs, /profile-item-refreshed/);
 assert.match(controlPlaneAppJs, /renderNewAdapterVisibility/);
 assert.match(controlPlaneIndexHtml, />标准 OpenWrt 源码<\/option>/);
+assert.match(controlPlaneAppJs, /baseRefSha: editorState\.baseRefSha/);
+assert.match(controlPlaneAppJs, /profileFiles: Object\.fromEntries/);
+assert.match(controlPlaneAppJs, /saveCurrentEditorFile\(\);[\s\S]*profileFiles:/);
+assert.match(githubClientSource, /profileSnapshot: Boolean\(profileSnapshot\)/);
+assert.match(githubClientSource, /PROFILE_FILE_MODES\[name\]/);
+assert.match(githubClientSource, /request\.profileSnapshot/);
+assert.match(configStudioWorkflow, /ref: \$\{\{ inputs\.session_branch \}\}/);
+assert.match(configStudioWorkflow, /name: 运行 Profile Preflight/);
+assert.match(configStudioWorkflow, /OPENWRT_NG_PREFLIGHT_ENV=/);
+assert.match(configStudioWorkflow, /PROFILE_FILES_DIR/);
 
 const builderProgress = builderProgressFromJobs([
   {
