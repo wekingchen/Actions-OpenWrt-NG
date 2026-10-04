@@ -483,8 +483,7 @@ const ERROR_MESSAGES = {
   deleted_profile_snapshot_unavailable:
     "删除前的 Profile 快照已经不可用。",
   deleted_profile_snapshot_incomplete:
-    "删除前快照缺少标准 Profile 文件，无法安全恢复。"
-
+    "删除前快照缺少标准 Profile 文件，无法安全恢复。",
   build_not_active:
     "这个构建已经不在运行，不能再取消。",
   build_not_completed:
