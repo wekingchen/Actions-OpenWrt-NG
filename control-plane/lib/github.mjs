@@ -873,6 +873,139 @@ export class GitHubAppClient {
   }
 
 
+  async listDeletedProfiles(token, owner, repo, options = {}) {
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const limit = Math.min(30, Math.max(1, Number(options.limit) || 10));
+    const currentProfiles = await this.listProfiles(token, owner, repo);
+    const currentIds = new Set(currentProfiles.map((item) => item.id));
+    const commits = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/commits?per_page=100`,
+      token
+    );
+
+    const deleted = [];
+    const seen = new Set();
+    const pattern = /^profile\(([A-Za-z0-9][A-Za-z0-9._-]{0,63})\): delete via Control Plane(?:\s+\(#\d+\))?/;
+
+    for (const commit of Array.isArray(commits) ? commits : []) {
+      const message = String(commit?.commit?.message || "").split("\n", 1)[0];
+      const match = message.match(pattern);
+      if (!match) continue;
+      const profileId = match[1];
+      if (currentIds.has(profileId) || seen.has(profileId)) continue;
+      const sha = String(commit?.sha || "");
+      if (!/^[0-9a-f]{40}$/i.test(sha)) continue;
+
+      seen.add(profileId);
+      deleted.push({
+        id: profileId,
+        deletionCommitSha: sha,
+        deletedAt:
+          commit?.commit?.committer?.date ||
+          commit?.commit?.author?.date ||
+          "",
+        commitUrl: commit?.html_url || "",
+        message
+      });
+      if (deleted.length >= limit) break;
+    }
+
+    return deleted;
+  }
+
+  async restoreDeletedProfilePullRequest(
+    token,
+    owner,
+    repo,
+    profileId,
+    payload = {}
+  ) {
+    if (!PROFILE_ID_RE.test(String(profileId || ""))) {
+      throw new ProfileWriteError("invalid_profile_id", 400);
+    }
+    const deletionCommitSha = String(payload.deletionCommitSha || "").trim();
+    if (!/^[0-9a-f]{40}$/i.test(deletionCommitSha)) {
+      throw new ProfileWriteError("invalid_deletion_commit", 400);
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const safeProfile = encodeSegment(profileId);
+    const state = await this.repositoryState(token, owner, repo);
+
+    try {
+      const current = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/contents/profiles/${safeProfile}?ref=${encodeSegment(state.baseRefSha)}`,
+        token
+      );
+      if (Array.isArray(current)) {
+        throw new ProfileWriteError("profile_already_exists", 409);
+      }
+    } catch (error) {
+      if (error instanceof ProfileWriteError) throw error;
+      if (error?.httpStatus !== 404) throw error;
+    }
+
+    const deletion = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/commits/${encodeSegment(deletionCommitSha)}`,
+      token
+    );
+    const title = String(deletion?.commit?.message || "").split("\n", 1)[0];
+    const expected =
+      `profile(${profileId}): delete via Control Plane`;
+    if (!title.startsWith(expected)) {
+      throw new ProfileWriteError("deletion_commit_mismatch", 409);
+    }
+    const parentSha = String(deletion?.parents?.[0]?.sha || "");
+    if (!/^[0-9a-f]{40}$/i.test(parentSha)) {
+      throw new ProfileWriteError("deleted_profile_snapshot_unavailable", 410);
+    }
+
+    const files = {};
+    for (const name of PROFILE_FILES) {
+      let body;
+      try {
+        body = await this.api(
+          `/repos/${safeOwner}/${safeRepo}/contents/profiles/${safeProfile}/${encodeSegment(name)}?ref=${encodeSegment(parentSha)}`,
+          token
+        );
+      } catch (error) {
+        if (error?.httpStatus === 404) {
+          throw new ProfileWriteError(
+            "deleted_profile_snapshot_incomplete",
+            410
+          );
+        }
+        throw error;
+      }
+      if (body?.encoding !== "base64" || typeof body.content !== "string") {
+        throw new ProfileWriteError("unsupported_profile_file", 502);
+      }
+      files[name] = decodeBase64Utf8(body.content);
+    }
+    validateProfileFilesPayload(files);
+
+    const latest = await this.repositoryState(token, owner, repo);
+    if (latest.baseRefSha !== state.baseRefSha) {
+      throw new ProfileWriteError("repository_changed", 409);
+    }
+
+    return this.createProfileFilesPullRequest(
+      token,
+      owner,
+      repo,
+      {
+        profileId,
+        state: latest,
+        files,
+        changedFiles: [...PROFILE_FILES],
+        action: "restore"
+      }
+    );
+  }
+
+
   async listBuilderRuns(token, owner, repo, options = {}) {
     const safeOwner = encodeSegment(owner);
     const safeRepo = encodeSegment(repo);
