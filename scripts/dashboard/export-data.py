@@ -240,20 +240,37 @@ def artifact_record(gh: GitHub, run_id: int) -> tuple[str | None, dict[str, str]
         return profile_id, {}
 
 
-def build_job_duration(gh: GitHub, run_id: int) -> int | None:
+def build_job_summary(gh: GitHub, run_id: int) -> dict[str, Any]:
     try:
         data = gh.json(gh.repo_path(f"/actions/runs/{run_id}/jobs?per_page=100"))
     except Exception as exc:
         print(f"warning: cannot read jobs for run {run_id}: {exc}", file=sys.stderr)
-        return None
+        return {
+            "conclusion": None,
+            "succeeded": False,
+            "duration_seconds": None,
+        }
 
     job = next(
         (job for job in data.get("jobs", []) if job.get("name") == "编译 OpenWrt 固件"),
         None,
     )
     if not job:
-        return None
-    return duration_seconds(job.get("started_at"), job.get("completed_at"))
+        return {
+            "conclusion": None,
+            "succeeded": False,
+            "duration_seconds": None,
+        }
+
+    conclusion = job.get("conclusion")
+    return {
+        "conclusion": conclusion,
+        "succeeded": conclusion == "success",
+        "duration_seconds": duration_seconds(
+            job.get("started_at"),
+            job.get("completed_at"),
+        ),
+    }
 
 
 def load_builds(
@@ -285,7 +302,8 @@ def load_builds(
             profile_id = only_profile or "unknown"
 
         status = run.get("conclusion") or run.get("status") or "unknown"
-        build_duration = build_job_duration(gh, run_id)
+        build_job = build_job_summary(gh, run_id)
+        build_duration = build_job["duration_seconds"]
         if build_duration is None:
             build_duration = duration_seconds(
                 run.get("run_started_at") or run.get("created_at"),
@@ -298,6 +316,8 @@ def load_builds(
                 "run_number": run.get("run_number"),
                 "profile": profile_id,
                 "status": status,
+                "build_conclusion": build_job["conclusion"],
+                "build_succeeded": build_job["succeeded"],
                 "event": run.get("event"),
                 "repository_commit": run.get("head_sha"),
                 "commit": info.get("source_commit"),
@@ -357,7 +377,10 @@ def attach_profile_status(
         item = dict(profile)
         matching = [build for build in builds if build["profile"] == profile["id"]]
         latest = matching[0] if matching else None
-        latest_success = next((build for build in matching if build["status"] == "success"), None)
+        latest_success = next(
+            (build for build in matching if build.get("build_succeeded") is True),
+            None,
+        )
 
         item["last_build_status"] = latest["status"] if latest else "unknown"
         item["last_build_url"] = latest["url"] if latest else None
@@ -377,7 +400,7 @@ def load_update_status(
             build
             for build in builds
             if build["profile"] == profile["id"]
-            and build["status"] == "success"
+            and build.get("build_succeeded") is True
             and build.get("commit")
         ]
         last_built = matching[0]["commit"] if matching else None
