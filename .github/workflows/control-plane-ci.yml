@@ -48,6 +48,12 @@ jobs:
       with:
         persist-credentials: false
 
+    - name: 测试仓共享代码同步门禁
+      if: github.repository == 'wekingchen/Actions-OpenWrt-NG-Test'
+      run: |
+        set -Eeuo pipefail
+        python3 scripts/verify-shared-sync.py
+
     - name: 准备 Node.js 24
       uses: actions/setup-node@v7
       with:
@@ -72,6 +78,7 @@ jobs:
         node --check control-plane/lib/profile-template.mjs
         node --check control-plane/public/app.js
         node --check control-plane/test.mjs
+        python3 -m py_compile scripts/verify-shared-sync.py
         python3 -m py_compile scripts/config-studio.py
         python3 scripts/test-config-studio.py
         python3 scripts/test_detect_failed_target.py
