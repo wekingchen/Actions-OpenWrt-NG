@@ -391,7 +391,13 @@ export function createControlPlaneHandler({ config, store, github }) {
           owner,
           repo
         );
-        return json(res, 200, { owner, repo, profiles });
+        return json(res, 200, {
+          owner,
+          repo,
+          baselineProfileId:
+            profiles.find((profile) => profile.baseline)?.id || "",
+          profiles
+        });
       }
 
       if (req.method === "POST" && profileMatch) {
@@ -510,6 +516,54 @@ export function createControlPlaneHandler({ config, store, github }) {
           if (error?.name === "GitHubRequestError") {
             return json(res, 502, {
               error: "github_profile_delete_failed",
+              reason: githubErrorReason(error)
+            });
+          }
+          throw error;
+        }
+      }
+
+
+      const profileBaselineMatch = url.pathname.match(
+        /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/([^/]+)\/baseline$/
+      );
+      if (req.method === "POST" && profileBaselineMatch) {
+        if (!validMutationRequest(req, config.origin)) {
+          return json(res, 403, { error: "csrf_validation_failed" });
+        }
+        const session = await authenticatedSession(req);
+        if (!session) {
+          return json(res, 401, { error: "authentication_required" });
+        }
+
+        let payload;
+        try {
+          payload = await readJsonBody(req);
+        } catch (error) {
+          return json(res, error.status || 400, {
+            error: error.message || "invalid_json"
+          });
+        }
+
+        const owner = decodeURIComponent(profileBaselineMatch[1]);
+        const repo = decodeURIComponent(profileBaselineMatch[2]);
+        const profileId = decodeURIComponent(profileBaselineMatch[3]);
+        try {
+          const result = await github.setBaselineProfilePullRequest(
+            session.accessToken,
+            owner,
+            repo,
+            profileId,
+            payload
+          );
+          return json(res, 201, result);
+        } catch (error) {
+          if (error instanceof ProfileWriteError) {
+            return json(res, error.status, { error: error.code });
+          }
+          if (error?.name === "GitHubRequestError") {
+            return json(res, 502, {
+              error: "github_profile_write_failed",
               reason: githubErrorReason(error)
             });
           }
