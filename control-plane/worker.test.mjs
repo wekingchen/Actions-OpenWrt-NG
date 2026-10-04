@@ -715,6 +715,7 @@ const config = await handleControlPlaneRequest(
 );
 assert.deepEqual(await config.json(), {
   configured: true,
+  profileMergePolicy: "immediate",
   githubAppInstallUrl:
     "https://github.com/apps/openwrt-ng-worker-test/installations/new"
 });

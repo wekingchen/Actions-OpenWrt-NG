@@ -679,11 +679,31 @@ function profileWriteResultMessage(result, subject = "Profile") {
     );
   }
 
+  if (pull.autoMergeEnabled && pull.mergePolicy === "after-checks") {
+    return (
+      subject +
+      " 已创建 PR #" +
+      number +
+      "，并已启用 GitHub Auto-merge；满足仓库必需检查与审核后会自动 squash 合并。"
+    );
+  }
+
+  if (pull.mergePolicy === "manual" || pull.mergeReason === "manual_review_required") {
+    return (
+      subject +
+      " 已创建 PR #" +
+      number +
+      "；当前策略为 manual，不会自动合并。请在 GitHub 审核后手动合并。"
+    );
+  }
+
   const reason =
     pull.mergeReason === "github_http_405" ||
     pull.mergeReason === "github_http_409"
       ? "仓库规则、必需检查或分支状态暂时阻止了自动合并"
-      : "自动合并未完成";
+      : pull.mergePolicy === "after-checks"
+        ? "GitHub Auto-merge 未能启用"
+        : "自动合并未完成";
   return (
     subject +
     " 已创建 PR #" +

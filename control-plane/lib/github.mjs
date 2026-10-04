@@ -18,6 +18,22 @@ export const REQUIRED_PROFILE_FILES = Object.freeze([
   "profile.env"
 ]);
 
+export const PROFILE_MERGE_POLICIES = Object.freeze([
+  "immediate",
+  "after-checks",
+  "manual"
+]);
+
+export function normalizeProfileMergePolicy(value = "immediate") {
+  const policy = String(value || "immediate").trim().toLowerCase();
+  if (!PROFILE_MERGE_POLICIES.includes(policy)) {
+    throw new Error(
+      "PROFILE_MERGE_POLICY must be immediate, after-checks or manual"
+    );
+  }
+  return policy;
+}
+
 const PROFILE_FILE_MODES = Object.freeze({
   ".config": "100644",
   "profile.env": "100644",
@@ -501,6 +517,9 @@ export class GitHubAppClient {
     this.clientSecret = config.clientSecret;
     this.redirectUri = config.redirectUri;
     this.apiVersion = config.apiVersion || "2022-11-28";
+    this.profileMergePolicy = normalizeProfileMergePolicy(
+      config.profileMergePolicy || "immediate"
+    );
     this.fetchImpl = (...args) => fetchImpl(...args);
   }
 
@@ -592,6 +611,95 @@ export class GitHubAppClient {
     }
     if (!response.ok) throw asJsonError(response, body);
     return body;
+  }
+
+  async graphql(query, variables, token) {
+    const response = await this.fetchImpl(GITHUB_API + "/graphql", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: "Bearer " + token,
+        "Content-Type": "application/json",
+        "User-Agent": "OpenWrt-NG-Control-Plane"
+      },
+      body: JSON.stringify({ query, variables })
+    });
+
+    const text = await response.text();
+    let body = {};
+    try {
+      body = text ? JSON.parse(text) : {};
+    } catch {
+      body = {};
+    }
+    if (!response.ok) throw asJsonError(response, body);
+    if (Array.isArray(body?.errors) && body.errors.length) {
+      const error = new Error(
+        String(body.errors[0]?.message || "GitHub GraphQL request failed")
+      );
+      error.name = "GitHubGraphQLError";
+      error.githubError = "github_graphql_error";
+      throw error;
+    }
+    return body?.data || {};
+  }
+
+  async enableProfileAutoMerge(token, pull, commitSha, profileId, action) {
+    const pullRequestId = String(pull?.node_id || "");
+    if (!pullRequestId) {
+      const error = new Error("Pull Request node_id is unavailable");
+      error.githubError = "auto_merge_unavailable";
+      throw error;
+    }
+
+    const data = await this.graphql(
+      `mutation EnableProfileAutoMerge(
+        $pullRequestId: ID!,
+        $expectedHeadOid: GitObjectID!,
+        $mergeMethod: PullRequestMergeMethod!,
+        $commitHeadline: String!,
+        $commitBody: String!
+      ) {
+        enablePullRequestAutoMerge(input: {
+          pullRequestId: $pullRequestId,
+          expectedHeadOid: $expectedHeadOid,
+          mergeMethod: $mergeMethod,
+          commitHeadline: $commitHeadline,
+          commitBody: $commitBody
+        }) {
+          pullRequest {
+            id
+            autoMergeRequest {
+              enabledAt
+              mergeMethod
+            }
+          }
+        }
+      }`,
+      {
+        pullRequestId,
+        expectedHeadOid: commitSha,
+        mergeMethod: "SQUASH",
+        commitHeadline:
+          "profile(" +
+          profileId +
+          "): " +
+          profileActionLabel(action) +
+          " via Control Plane",
+        commitBody:
+          "由 OpenWrt NG Control Plane 设置 after-checks 自动合并；GitHub 将在仓库必需检查与审核满足后执行。"
+      },
+      token
+    );
+
+    const request =
+      data?.enablePullRequestAutoMerge?.pullRequest?.autoMergeRequest;
+    if (!request) {
+      const error = new Error("GitHub did not enable auto-merge");
+      error.githubError = "auto_merge_unavailable";
+      throw error;
+    }
+    return request;
   }
 
   async apiBytes(path, token) {
@@ -2529,43 +2637,63 @@ export class GitHubAppClient {
     const safeOwner = encodeSegment(owner);
     const safeRepo = encodeSegment(repo);
     const number = Number(pull?.number || 0);
+    const mergePolicy = this.profileMergePolicy;
     let merged = false;
+    let autoMergeEnabled = false;
     let mergeCommitSha = "";
     let mergeReason = "";
 
-    try {
-      const merge = await this.api(
-        "/repos/" +
-          safeOwner +
-          "/" +
-          safeRepo +
-          "/pulls/" +
-          number +
-          "/merge",
-        token,
-        {
-          method: "PUT",
-          body: {
-            merge_method: "squash",
-            sha: commitSha,
-            commit_title:
-              "profile(" +
-              profileId +
-              "): " +
-              profileActionLabel(action) +
-              " via Control Plane",
-            commit_message:
-              "由 OpenWrt NG Control Plane 自动合并；原始 Pull Request 保留用于审计。"
-          }
-        }
-      );
-      merged = merge?.merged === true;
-      mergeCommitSha = String(merge?.sha || "");
-      if (!merged) {
-        mergeReason = "github_merge_not_completed";
+    if (mergePolicy === "manual") {
+      mergeReason = "manual_review_required";
+    } else if (mergePolicy === "after-checks") {
+      try {
+        await this.enableProfileAutoMerge(
+          token,
+          pull,
+          commitSha,
+          profileId,
+          action
+        );
+        autoMergeEnabled = true;
+        mergeReason = "auto_merge_enabled";
+      } catch (error) {
+        mergeReason = githubErrorReason(error);
       }
-    } catch (error) {
-      mergeReason = githubErrorReason(error);
+    } else {
+      try {
+        const merge = await this.api(
+          "/repos/" +
+            safeOwner +
+            "/" +
+            safeRepo +
+            "/pulls/" +
+            number +
+            "/merge",
+          token,
+          {
+            method: "PUT",
+            body: {
+              merge_method: "squash",
+              sha: commitSha,
+              commit_title:
+                "profile(" +
+                profileId +
+                "): " +
+                profileActionLabel(action) +
+                " via Control Plane",
+              commit_message:
+                "由 OpenWrt NG Control Plane 自动合并；原始 Pull Request 保留用于审计。"
+            }
+          }
+        );
+        merged = merge?.merged === true;
+        mergeCommitSha = String(merge?.sha || "");
+        if (!merged) {
+          mergeReason = "github_merge_not_completed";
+        }
+      } catch (error) {
+        mergeReason = githubErrorReason(error);
+      }
     }
 
     const cleanup = {
@@ -2594,6 +2722,8 @@ export class GitHubAppClient {
         number,
         url: pull?.html_url || "",
         merged,
+        autoMergeEnabled,
+        mergePolicy,
         mergeCommitSha,
         mergeReason
       },
@@ -2722,7 +2852,7 @@ export class GitHubAppClient {
                     `- \`profiles/${profileId}/${name}\``
                 )
                 .join("\n") +
-              "\n\nControl Plane 会在创建后自动尝试 squash 合并并清理临时分支；如果仓库规则或检查阻止合并，本 PR 会保留供人工处理。"
+              "\n\nProfile 合并策略由 Control Plane 部署配置决定：immediate 会立即尝试 squash 合并；after-checks 交由 GitHub Auto-merge 等待必需检查/审核；manual 只创建 PR。未立即合并的 PR 会保留供后续处理。"
           }
         }
       );

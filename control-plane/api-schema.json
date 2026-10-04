@@ -324,7 +324,9 @@
             "url",
             "merged",
             "mergeCommitSha",
-            "mergeReason"
+            "mergeReason",
+            "autoMergeEnabled",
+            "mergePolicy"
           ],
           "additionalProperties": false,
           "properties": {
@@ -343,6 +345,17 @@
             },
             "mergeReason": {
               "type": "string"
+            },
+            "autoMergeEnabled": {
+              "type": "boolean"
+            },
+            "mergePolicy": {
+              "type": "string",
+              "enum": [
+                "immediate",
+                "after-checks",
+                "manual"
+              ]
             }
           }
         },
@@ -930,7 +943,9 @@
             "url",
             "merged",
             "mergeCommitSha",
-            "mergeReason"
+            "mergeReason",
+            "autoMergeEnabled",
+            "mergePolicy"
           ],
           "additionalProperties": false,
           "properties": {
@@ -949,6 +964,17 @@
             },
             "mergeReason": {
               "type": "string"
+            },
+            "autoMergeEnabled": {
+              "type": "boolean"
+            },
+            "mergePolicy": {
+              "type": "string",
+              "enum": [
+                "immediate",
+                "after-checks",
+                "manual"
+              ]
             }
           }
         },

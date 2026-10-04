@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Cleanup Control Plane profile lifecycle leftovers after a PR is merged.
 
-This is a compensating path for repositories where branch protection or
-rulesets prevent the Control Plane from merging its PR immediately. It only
-acts on same-repository Control Plane delete/rename PRs after GitHub reports
-merged=true.
+This is a compensating path for Profile PRs that are merged after the
+Control Plane request returns, including after-checks auto-merge and manual
+review. It acts only on same-repository signed Control Plane Profile PRs.
+Delete/rename additionally clean associated Config Studio sessions.
 """
 
 from __future__ import annotations
@@ -26,7 +26,10 @@ API_ROOT = "https://api.github.com"
 API_VERSION = "2022-11-28"
 CONTROL_PLANE_SIGNATURE = "由 OpenWrt NG Control Plane 创建。"
 PROFILE_ID = r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}"
-DELETE_TITLE_RE = re.compile(rf"^profile\(({PROFILE_ID})\): delete via Control Plane$")
+STANDARD_TITLE_RE = re.compile(
+    rf"^profile\(({PROFILE_ID})\): "
+    r"(create|copy|restore|delete|update|set-baseline) via Control Plane$"
+)
 RENAME_TITLE_RE = re.compile(
     rf"^profile\(({PROFILE_ID})\): rename to ({PROFILE_ID}) via Control Plane$"
 )
@@ -74,15 +77,16 @@ def parse_cleanup_target(event: dict[str, Any], repository: str) -> CleanupTarge
         return None
 
     title = str(pull.get("title") or "")
-    match = DELETE_TITLE_RE.fullmatch(title)
-    action = "delete"
-    if not match:
-        match = RENAME_TITLE_RE.fullmatch(title)
+    match = RENAME_TITLE_RE.fullmatch(title)
+    if match:
         action = "rename"
-    if not match:
-        return None
-
-    profile_id = match.group(1)
+        profile_id = match.group(1)
+    else:
+        match = STANDARD_TITLE_RE.fullmatch(title)
+        if not match:
+            return None
+        profile_id = match.group(1)
+        action = match.group(2)
     expected_prefix = f"openwrt-ng/profile-{branch_slug(profile_id)}-"
     if not head_ref.startswith(expected_prefix):
         return None
@@ -253,32 +257,33 @@ def cleanup_profile_merge(
     repository: str,
 ) -> dict[str, Any]:
     sessions: list[tuple[str, str]] = []
-    for branch in api.list_branches():
-        if not branch.startswith(SESSION_BRANCH_PREFIX):
-            continue
-        request_id = branch[len(SESSION_BRANCH_PREFIX):]
-        if not SESSION_ID_RE.fullmatch(request_id):
-            continue
-        request = api.read_session_request(branch, request_id)
-        if str((request or {}).get("profileId") or "") == target.profile_id:
-            sessions.append((request_id, branch))
-
-    runs = api.list_config_studio_runs() if sessions else []
     canceled_runs: list[int] = []
     deleted_session_branches: list[str] = []
 
-    for request_id, branch in sessions:
-        marker = f"cs:{request_id}"
-        for run in runs:
-            title = str(run.get("display_title") or run.get("name") or "")
-            status = str(run.get("status") or "")
-            run_id = int(run.get("id") or 0)
-            if marker in title and status in ACTIVE_RUN_STATUSES and run_id > 0:
-                api.cancel_run(run_id)
-                canceled_runs.append(run_id)
+    if target.action in {"delete", "rename"}:
+        for branch in api.list_branches():
+            if not branch.startswith(SESSION_BRANCH_PREFIX):
+                continue
+            request_id = branch[len(SESSION_BRANCH_PREFIX):]
+            if not SESSION_ID_RE.fullmatch(request_id):
+                continue
+            request = api.read_session_request(branch, request_id)
+            if str((request or {}).get("profileId") or "") == target.profile_id:
+                sessions.append((request_id, branch))
 
-        api.delete_branch(branch)
-        deleted_session_branches.append(branch)
+        runs = api.list_config_studio_runs() if sessions else []
+        for request_id, branch in sessions:
+            marker = f"cs:{request_id}"
+            for run in runs:
+                title = str(run.get("display_title") or run.get("name") or "")
+                status = str(run.get("status") or "")
+                run_id = int(run.get("id") or 0)
+                if marker in title and status in ACTIVE_RUN_STATUSES and run_id > 0:
+                    api.cancel_run(run_id)
+                    canceled_runs.append(run_id)
+
+            api.delete_branch(branch)
+            deleted_session_branches.append(branch)
 
     profile_prefix = (
         f"openwrt-ng/profile-{branch_slug(target.profile_id)}-"
@@ -357,7 +362,7 @@ def main() -> int:
     event = json.loads(Path(args.event).read_text(encoding="utf-8"))
     target = parse_cleanup_target(event, repository)
     if target is None:
-        print("跳过：不是需要补偿清理的 Control Plane delete/rename 合并事件。")
+        print("跳过：不是需要补偿清理的 Control Plane Profile 合并事件。")
         return 0
 
     api = GitHubApi(repository, os.environ.get("GITHUB_TOKEN", ""))
