@@ -178,6 +178,15 @@ jobs:
         grep -q 'CCACHE_MAXSIZE: 2G' .github/workflows/build-openwrt.yml
         test "$(grep -c 'runs-on: ubuntu-24.04' .github/workflows/build-openwrt.yml)" -eq 4
         ! grep -q 'runs-on: ubuntu-22.04' .github/workflows/build-openwrt.yml
+        awk '
+          /name: 编译 OpenWrt 固件/ { in_build=1 }
+          in_build && /timeout-minutes:/ {
+            if ($2 != 360) exit 1
+            found=1
+            exit 0
+          }
+          END { if (!found) exit 1 }
+        ' .github/workflows/build-openwrt.yml
         grep -q 'detect_failed_target.py' scripts/compile.sh
         grep -q 'extract_failure_context.py' scripts/compile.sh
         grep -q 'OPENWRT_NG_DEBUG_STREAM_LOG' scripts/compile.sh
