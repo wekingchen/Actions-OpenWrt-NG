@@ -58,6 +58,16 @@ rename_target = module.parse_cleanup_target(rename, "acme/router")
 assert rename_target is not None
 assert rename_target.action == "rename"
 
+for action in ("create", "copy", "restore", "delete", "update", "set-baseline"):
+    standard = event(
+        pull_request={
+            "title": f"profile(old): {action} via Control Plane",
+        }
+    )
+    standard_target = module.parse_cleanup_target(standard, "acme/router")
+    assert standard_target is not None
+    assert standard_target.action == action
+
 assert module.parse_cleanup_target(
     event(pull_request={"merged": False}), "acme/router"
 ) is None
@@ -93,8 +103,10 @@ class FakeApi:
         self.canceled = []
         self.deleted = []
         self.closed = []
+        self.branch_lists = 0
 
     def list_branches(self):
+        self.branch_lists += 1
         return [
             "main",
             "openwrt-ng/config-session-aabbccddeeff0011",
@@ -163,6 +175,21 @@ assert "openwrt-ng/config-session-aabbccddeeff0011" in fake.deleted
 assert "openwrt-ng/profile-old-99999999-deadbeef" in fake.deleted
 assert target.head_ref in fake.deleted
 assert "openwrt-ng/config-session-0011223344556677" not in fake.deleted
+
+update_fake = FakeApi()
+update_target = module.parse_cleanup_target(
+    event(
+        pull_request={
+            "title": "profile(old): update via Control Plane",
+        }
+    ),
+    "acme/router",
+)
+assert update_target is not None
+update_result = module.cleanup_profile_merge(update_target, update_fake, "acme/router")
+assert update_result["sessionsFound"] == 0
+assert update_fake.branch_lists == 0
+assert update_target.head_ref in update_fake.deleted
 
 workflow = WORKFLOW.read_text(encoding="utf-8")
 assert "pull_request:" in workflow

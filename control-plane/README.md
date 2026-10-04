@@ -39,8 +39,8 @@ GitHub App / GitHub API
 - 权限按能力最小化设计：V2.0A 只读需要 Metadata read + Contents read；V2.0B 编辑再增加 Contents write + Pull requests write；V2.0C Builder 再增加 Actions write。
 - 对当前完整 V2 功能的新部署，推荐一次配置最终权限：Metadata read、Contents write、Pull requests write、Actions write；不需要 Administration / Workflows。
 - V2.0B 创建、修改与删除都严格限定在 `profiles/<id>/` 的标准文件，默认分支永不由控制面直接修改。仓库通过 `profiles/.baseline` 记录唯一基准 Profile；基准身份可以切换，不与 `default` 目录名绑定，当前基准不可删除。
-- V2.0B 使用 Git Database API 原子创建 commit，再创建独立分支与 Pull Request；Control Plane 默认立即 squash 合并，成功后删除临时分支。
-- 若仓库规则阻止即时自动合并，人工后续合并 Control Plane 生成的删除/重命名 PR 后，`profile-post-merge-cleanup.yml` 会补偿清理关联 Config Studio 会话、仍在运行的配置 Action、本次临时分支及被合并结果取代的旧 Control Plane PR。
+- V2.0B 使用 Git Database API 原子创建 commit，再创建独立分支与 Pull Request；`PROFILE_MERGE_POLICY` 控制后续合并：默认 `immediate` 立即尝试 squash；`after-checks` 使用 GitHub Auto-merge 等待仓库必需检查/审核；`manual` 只创建 PR。
+- 对未在请求内立即合并的 Control Plane Profile PR，`profile-post-merge-cleanup.yml` 会在后续实际合并后统一补偿清理本次临时分支与被取代的旧 PR；删除/重命名还会清理关联 Config Studio 会话和仍在运行的配置 Action。
 - 所有状态变更请求同时校验精确 Origin 与 `X-OpenWrt-NG-CSRF` 请求头。
 - 保存前携带默认分支基线 SHA；若仓库已变化，返回 `409 repository_changed`，要求重新加载后再编辑。
 - V2.0C 只允许调度固定的 `.github/workflows/build-openwrt.yml`，不接受浏览器传入任意 workflow、ref 或额外 inputs。
@@ -61,6 +61,8 @@ GitHub App / GitHub API
 - `Dockerfile`：可选自托管镜像。
 
 ## 推荐部署：GitHub Actions + Cloudflare
+
+Profile 合并策略由 Control Plane 运行时变量控制。默认无需配置即为 `PROFILE_MERGE_POLICY=immediate`；如需 CI 后自动合并，可在 Worker 变量中改为 `after-checks`，并在 GitHub 仓库启用 Auto-merge 与所需分支规则；完全人工审核则设为 `manual`。自托管版本使用同名环境变量。
 
 不需要本地安装 Wrangler。
 
@@ -348,6 +350,8 @@ profiles/<id>/feeds.conf
 浏览器不能通过该接口提交任意仓库路径；如果目标 Profile 已经存在，返回 `409 profile_already_exists`，不会覆盖。创建前还会再次确认默认分支 head 与检查时的基线 SHA 一致；如果期间仓库发生变化，返回 `409 repository_changed`，不会基于旧 head 静默创建。预览时 `.config` 会发送到用户自己的 Control Plane 做服务端校验，但不会写入 GitHub。
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
+
+0.21.9 增加 Profile Merge Policy。部署变量 `PROFILE_MERGE_POLICY` 支持 `immediate`（默认，保持原行为）、`after-checks`（通过 GitHub Auto-merge 在必需检查/审核满足后 squash 合并）和 `manual`（只创建 PR）。`after-checks` 依赖仓库已启用 Auto-merge 且存在会阻止立即合并的规则；如果 GitHub 无法启用 Auto-merge，PR 会保留供人工处理，不会退回即时合并。合并后补偿清理扩展到所有 Control Plane Profile PR，删除/重命名继续额外处理 Config Studio 会话。
 
 0.21.6 为全项目代码审计修复版：自托管 Docker 镜像显式安装 production 依赖并在 CI 中真实启动验证；Worker 与 Node 的 JSON 请求体统一 5 MiB 上限；Config Studio 会话清理返回部分失败明细，前端不再把“发现会话”误报为“全部清理成功”；Pages Wizard 与服务端 Profile 模板校验建立精确生成结果一致性测试，并移除已失效的流式日志开关；Dashboard / Update Checker 的上游 Git 查询增加单次超时，Dashboard 同时区分 workflow 总体结论与“编译 OpenWrt 固件”job 是否成功，从而正确识别“编译成功、Release 失败”的构建；Dashboard PR 不再把 GITHUB_TOKEN 显式交给待审代码。中央 CI 的路径范围扩展到 scripts / adapters / profiles / dashboard，并实际启动自托管容器。\n\n0.21.5 补齐恢复和运维闭环。Builder 详情会根据真实 Artifact / Release 状态判断是否可以“发布现有构建”：仅当来源 run 确实属于 `build-openwrt.yml` 且已结束、“编译 OpenWrt 固件”job 成功、没有已关联 Release、并且 `OpenWrt_NG_release_bundle_<run_id>` 未过期时允许触发 `release-existing.yml`；来源 run 可以因为后续 Release job 失败而整体 conclusion=failure；恢复 workflow 自身也再次校验来源 workflow 身份与成功状态，前端持续显示真实 Action 步骤。Profile 列表新增手动 Update Checker 入口，支持全部自动追新 Profile、指定单 Profile 和 `force`，同样显示真实步骤并阻止重复活动任务。最近通过 Control Plane 删除、当前仍不存在的 Profile 会出现在“最近删除”；恢复时服务端验证删除 commit 的审计标题，固定读取该删除 commit 的第一个父提交作为删除前快照，要求 7 个标准文件完整存在，再通过新的独立分支和 PR 恢复，不对默认分支执行 reset / revert。
 

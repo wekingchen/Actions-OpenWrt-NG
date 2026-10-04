@@ -340,6 +340,8 @@ V2.0D 补齐新建 Profile：用户只提交结构化参数，服务端按与 Pr
 
 Control Plane 0.21.4 继续补齐操作闭环：Profile 支持安全复制和原子重命名；重命名基准 Profile 时 `.baseline` 同步迁移。Profile 删除/重命名完成后会自动清理关联 Config Studio 会话与活动 Action。Builder 历史支持直接取消运行中构建，以及对已结束构建执行完整重跑；所有操作均校验目标 workflow 身份并保留 GitHub Actions 审计记录。
 
+Control Plane 0.21.9 增加可配置的 Profile 合并策略：`PROFILE_MERGE_POLICY=immediate` 保持原有即时 squash 合并；`after-checks` 使用 GitHub Auto-merge 等待仓库必需检查/审核；`manual` 只创建 PR。任何后续实际合并的 Control Plane Profile PR 都由补偿 workflow 清理临时 Profile 分支与被取代的旧 PR，删除/重命名继续额外清理 Config Studio 会话。
+
 Control Plane 0.21.5 补齐剩余恢复与运维入口：已结束的 Builder 只要“编译 OpenWrt 固件”job 成功、仍保留未过期的 `OpenWrt_NG_release_bundle_<run_id>` 且尚无 Release，就能从构建详情直接执行 **Release Existing Build**，全程不重新编译并显示真实 Actions 步骤；Profile 列表可手动触发 **Update Checker**，既支持全部 `AUTO_UPDATE=true` Profile，也支持指定单个 Profile 与 `force`；通过 Control Plane 删除且当前仍不存在的 Profile 会出现在“最近删除”，可从删除 commit 的父提交恢复完整 7 个标准文件，恢复仍走独立分支 → Pull Request → 自动合并，而不是 reset/revert。
 
 项目提供 **Deploy V2 Control Plane** 手动 Workflow：第一次可以无 GitHub App Secret bootstrap 部署，拿到 workers.dev URL 后再创建 GitHub App 并同步 Secret。当前完整 V2 推荐 GitHub App 一次配置 Metadata read、Contents write、Pull requests write、Actions write；不需要 Administration / Workflows。Node.js + SQLite + Docker 仅保留为可选自托管方式。

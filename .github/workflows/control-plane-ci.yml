@@ -85,6 +85,7 @@ jobs:
         node --check control-plane/server-routes.test.mjs
         node --check control-plane/contract.test.mjs
         node --check control-plane/github-profile-restore.test.mjs
+        node --check control-plane/github-profile-merge-policy.test.mjs
         python3 -m py_compile scripts/verify-shared-sync.py
         python3 scripts/test-verify-shared-sync.py
         python3 -m py_compile scripts/config-studio.py
@@ -326,6 +327,10 @@ jobs:
         grep -q 'Administration / Workflows' .github/workflows/deploy-control-plane.yml
         grep -q 'buildProfileTemplateFiles' control-plane/worker.mjs
         grep -q 'profile_already_exists' control-plane/lib/github.mjs
+        grep -q 'PROFILE_MERGE_POLICY' control-plane/worker.mjs
+        grep -q 'PROFILE_MERGE_POLICY' control-plane/server.mjs
+        grep -q '"PROFILE_MERGE_POLICY": "immediate"' control-plane/wrangler.jsonc
+        grep -q 'enablePullRequestAutoMerge' control-plane/lib/github.mjs
         grep -q 'unexpectedPath' control-plane/test.mjs
 
         bad_github_secrets="$(

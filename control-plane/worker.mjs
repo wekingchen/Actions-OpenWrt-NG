@@ -3,7 +3,8 @@ import {
   ConfigStudioError,
   GitHubAppClient,
   ProfileWriteError,
-  githubErrorReason
+  githubErrorReason,
+  normalizeProfileMergePolicy
 } from "./lib/github.mjs";
 import { D1ControlPlaneStore } from "./lib/d1-store.mjs";
 import {
@@ -47,6 +48,9 @@ export function runtimeConfig(request, env) {
     githubAppSlug,
     encryptionSecret,
     apiVersion: value(env, "GITHUB_API_VERSION") || "2022-11-28",
+    profileMergePolicy: normalizeProfileMergePolicy(
+      value(env, "PROFILE_MERGE_POLICY") || "immediate"
+    ),
     sessionTtlMs: positiveSeconds(
       env,
       "SESSION_TTL_SECONDS",
@@ -156,7 +160,8 @@ function createDependencies(request, env, config, overrides = {}) {
         clientId: config.clientId,
         clientSecret: config.clientSecret,
         redirectUri: config.origin + "/api/v1/auth/callback",
-        apiVersion: config.apiVersion
+        apiVersion: config.apiVersion,
+        profileMergePolicy: config.profileMergePolicy
       },
       overrides.fetchImpl || fetch
     );
@@ -223,6 +228,7 @@ export async function handleControlPlaneRequest(
     if (request.method === "GET" && url.pathname === "/api/v1/config") {
       return json(200, {
         configured: config.configured,
+        profileMergePolicy: config.profileMergePolicy,
         githubAppInstallUrl: config.githubAppSlug
           ? "https://github.com/apps/" +
             encodeURIComponent(config.githubAppSlug) +

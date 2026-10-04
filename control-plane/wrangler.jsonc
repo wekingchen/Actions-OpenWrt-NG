@@ -21,6 +21,7 @@
   ],
   "vars": {
     "GITHUB_API_VERSION": "2022-11-28",
+    "PROFILE_MERGE_POLICY": "immediate",
     "SESSION_TTL_SECONDS": "604800",
     "SESSION_IDLE_TTL_SECONDS": "86400"
   }

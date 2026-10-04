@@ -7,7 +7,8 @@ import {
   ConfigStudioError,
   GitHubAppClient,
   ProfileWriteError,
-  githubErrorReason
+  githubErrorReason,
+  normalizeProfileMergePolicy
 } from "./lib/github.mjs";
 import {
   hashOpaque,
@@ -58,6 +59,9 @@ export function loadConfigFromEnv() {
     dbPath: process.env.CONTROL_PLANE_DB || "./control-plane.db",
     port: Number(process.env.PORT || 8787),
     apiVersion: process.env.GITHUB_API_VERSION || "2022-11-28",
+    profileMergePolicy: normalizeProfileMergePolicy(
+      process.env.PROFILE_MERGE_POLICY || "immediate"
+    ),
     githubAppSlug: requiredEnv("GITHUB_APP_SLUG"),
     sessionTtlMs:
       Number(process.env.SESSION_TTL_SECONDS || 604800) * 1000,
@@ -280,6 +284,7 @@ export function createControlPlaneHandler({ config, store, github }) {
       if (req.method === "GET" && url.pathname === "/api/v1/config") {
         return json(res, 200, {
           configured: true,
+          profileMergePolicy: config.profileMergePolicy || "immediate",
           githubAppInstallUrl:
             "https://github.com/apps/" +
             encodeURIComponent(config.githubAppSlug) +
@@ -1234,7 +1239,8 @@ export function createApplication(config, options = {}) {
         clientId: config.clientId,
         clientSecret: config.clientSecret,
         redirectUri: config.origin + "/api/v1/auth/callback",
-        apiVersion: config.apiVersion
+        apiVersion: config.apiVersion,
+        profileMergePolicy: config.profileMergePolicy || "immediate"
       },
       options.fetchImpl
     );
