@@ -453,7 +453,10 @@ const github = {
       configStudioCleanup: {
         sessionsFound: 1,
         branchesDeleted: 1,
-        canceledRuns: [456]
+        canceledRuns: [456],
+        cancelFailedRuns: [],
+        branchDeleteFailures: [],
+        runLookupFailed: false
       },
       pullRequest: {
         number: 13,
@@ -1127,6 +1130,10 @@ const renameProfileBody = await renameProfile.json();
 assert.equal(renameProfileBody.action, "rename");
 assert.equal(renameProfileBody.targetProfileId, "default-renamed");
 assert.equal(renameProfileBody.configStudioCleanup.sessionsFound, 1);
+assert.equal(renameProfileBody.configStudioCleanup.branchesDeleted, 1);
+assert.deepEqual(renameProfileBody.configStudioCleanup.cancelFailedRuns, []);
+assert.deepEqual(renameProfileBody.configStudioCleanup.branchDeleteFailures, []);
+assert.equal(renameProfileBody.configStudioCleanup.runLookupFailed, false);
 
 const rejectedBaseline = await handleControlPlaneRequest(
   new Request(
