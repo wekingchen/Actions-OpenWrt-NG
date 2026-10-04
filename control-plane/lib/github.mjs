@@ -1170,12 +1170,40 @@ export class GitHubAppClient {
       ? artifactsBody.artifacts
       : [];
     const release = Array.isArray(releases)
-      ? releases.find(
-          (item) =>
-            String(item.target_commitish || "") === String(run.head_sha || "") &&
-            String(item.tag_name || "").endsWith(`-${run.run_number}`)
+      ? (
+          releases.find(
+            (item) =>
+              String(item.target_commitish || "") === String(run.head_sha || "") &&
+              String(item.tag_name || "").endsWith(`-${run.run_number}`)
+          ) ||
+          releases.find((item) => {
+            const body = String(item?.body || "");
+            const marker = `- 原 Run ID: ${numericRunId}`;
+            return body.includes(marker);
+          })
         )
       : null;
+    const releaseBundle = artifacts.find(
+      (artifact) =>
+        String(artifact?.name || "") ===
+        `OpenWrt_NG_release_bundle_${numericRunId}`
+    );
+    const releaseRecoveryEligible =
+      run.status === "completed" &&
+      run.conclusion === "success" &&
+      !release &&
+      Boolean(releaseBundle) &&
+      !Boolean(releaseBundle?.expired);
+    let releaseRecoveryReason = "";
+    if (run.status !== "completed" || run.conclusion !== "success") {
+      releaseRecoveryReason = "build_not_successful";
+    } else if (release) {
+      releaseRecoveryReason = "release_already_exists";
+    } else if (!releaseBundle) {
+      releaseRecoveryReason = "release_bundle_missing";
+    } else if (releaseBundle.expired) {
+      releaseRecoveryReason = "release_bundle_expired";
+    }
 
     return {
       id: numericRunId,
@@ -1222,9 +1250,14 @@ export class GitHubAppClient {
             tag: release.tag_name || "",
             name: release.name || release.tag_name || "",
             url: release.html_url || "",
-            publishedAt: release.published_at || ""
+            publishedAt: release.published_at || "",
+            recovered: String(release.body || "").includes(
+              `- 原 Run ID: ${numericRunId}`
+            )
           }
-        : null
+        : null,
+      releaseRecoveryEligible,
+      releaseRecoveryReason
     };
   }
 
@@ -1302,6 +1335,200 @@ export class GitHubAppClient {
       url: run.html_url || ""
     };
   }
+
+  async getManagedWorkflowRun(
+    token,
+    owner,
+    repo,
+    runId,
+    workflowFile
+  ) {
+    const numericRunId = Number(runId);
+    if (!Number.isSafeInteger(numericRunId) || numericRunId <= 0) {
+      throw new BuildControlError("invalid_run_id", 400);
+    }
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const run = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}`,
+      token
+    );
+    const workflowPath = String(run.path || "").split("@", 1)[0];
+    if (workflowPath !== ".github/workflows/" + workflowFile) {
+      throw new BuildControlError("unexpected_workflow_run", 404);
+    }
+    const jobsBody = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}/jobs?per_page=100`,
+      token
+    );
+    const jobs = Array.isArray(jobsBody?.jobs) ? jobsBody.jobs : [];
+    return basicWorkflowRun(run, jobs);
+  }
+
+  async triggerReleaseExisting(token, owner, repo, sourceRunId) {
+    const numericSourceRunId = Number(sourceRunId);
+    if (!Number.isSafeInteger(numericSourceRunId) || numericSourceRunId <= 0) {
+      throw new BuildControlError("invalid_run_id", 400);
+    }
+    const source = await this.getBuilderRun(
+      token,
+      owner,
+      repo,
+      numericSourceRunId
+    );
+    if (!source.releaseRecoveryEligible) {
+      throw new BuildControlError(
+        source.releaseRecoveryReason || "release_existing_unavailable",
+        409
+      );
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const activeBody = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/workflows/${RELEASE_EXISTING_WORKFLOW}/runs?event=workflow_dispatch&per_page=50`,
+      token
+    );
+    const active = (Array.isArray(activeBody?.workflow_runs)
+      ? activeBody.workflow_runs
+      : []
+    ).find((run) => {
+      const title = String(run?.display_title || run?.name || "");
+      return (
+        title.includes(`source:${numericSourceRunId}`) &&
+        ACTIVE_BUILD_STATUSES.has(String(run?.status || ""))
+      );
+    });
+    if (active) {
+      const error = new BuildControlError("release_existing_already_active", 409);
+      error.activeRun = {
+        id: Number(active.id || 0),
+        runNumber: Number(active.run_number || 0),
+        status: active.status || "unknown",
+        url: active.html_url || ""
+      };
+      throw error;
+    }
+
+    const state = await this.repositoryState(token, owner, repo);
+    const dispatched = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/workflows/${RELEASE_EXISTING_WORKFLOW}/dispatches`,
+      token,
+      {
+        method: "POST",
+        body: {
+          ref: state.defaultBranch,
+          return_run_details: true,
+          inputs: { run_id: String(numericSourceRunId) }
+        }
+      }
+    );
+    return {
+      accepted: true,
+      sourceRunId: numericSourceRunId,
+      ref: state.defaultBranch,
+      runId: Number(dispatched?.workflow_run_id || 0),
+      runUrl: dispatched?.html_url || ""
+    };
+  }
+
+  async getReleaseExistingRun(token, owner, repo, runId) {
+    return this.getManagedWorkflowRun(
+      token,
+      owner,
+      repo,
+      runId,
+      RELEASE_EXISTING_WORKFLOW
+    );
+  }
+
+  async triggerUpdateChecker(token, owner, repo, payload = {}) {
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      Array.isArray(payload) ||
+      Object.keys(payload).some(
+        (key) => !["profileId", "force"].includes(key)
+      )
+    ) {
+      throw new BuildControlError("invalid_update_check_request", 400);
+    }
+    const profileId = String(payload.profileId || "").trim();
+    const force = payload.force === true;
+    if (profileId && !PROFILE_ID_RE.test(profileId)) {
+      throw new BuildControlError("invalid_profile_id", 400);
+    }
+    if (payload.force !== undefined && typeof payload.force !== "boolean") {
+      throw new BuildControlError("invalid_update_check_force", 400);
+    }
+    if (profileId) {
+      try {
+        await this.getProfile(token, owner, repo, profileId);
+      } catch (error) {
+        if (error instanceof ProfileWriteError) {
+          throw new BuildControlError(error.code, error.status);
+        }
+        throw error;
+      }
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const runsBody = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/workflows/${UPDATE_CHECKER_WORKFLOW}/runs?per_page=20`,
+      token
+    );
+    const active = (Array.isArray(runsBody?.workflow_runs)
+      ? runsBody.workflow_runs
+      : []
+    ).find((run) => ACTIVE_BUILD_STATUSES.has(String(run?.status || "")));
+    if (active) {
+      const error = new BuildControlError("update_check_already_active", 409);
+      error.activeRun = {
+        id: Number(active.id || 0),
+        runNumber: Number(active.run_number || 0),
+        status: active.status || "unknown",
+        url: active.html_url || ""
+      };
+      throw error;
+    }
+
+    const state = await this.repositoryState(token, owner, repo);
+    const dispatched = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/workflows/${UPDATE_CHECKER_WORKFLOW}/dispatches`,
+      token,
+      {
+        method: "POST",
+        body: {
+          ref: state.defaultBranch,
+          return_run_details: true,
+          inputs: {
+            profile: profileId,
+            force
+          }
+        }
+      }
+    );
+    return {
+      accepted: true,
+      profileId,
+      force,
+      ref: state.defaultBranch,
+      runId: Number(dispatched?.workflow_run_id || 0),
+      runUrl: dispatched?.html_url || ""
+    };
+  }
+
+  async getUpdateCheckerRun(token, owner, repo, runId) {
+    return this.getManagedWorkflowRun(
+      token,
+      owner,
+      repo,
+      runId,
+      UPDATE_CHECKER_WORKFLOW
+    );
+  }
+
 
   async getBuilderArtifactDownloadUrl(
     token,
