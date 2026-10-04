@@ -8,12 +8,14 @@ on:
     paths:
       - "dashboard/**"
       - "scripts/dashboard/**"
+      - "control-plane/lib/profile-template.mjs"
       - "profiles/**"
       - ".github/workflows/pages-dashboard.yml"
   pull_request:
     paths:
       - "dashboard/**"
       - "scripts/dashboard/**"
+      - "control-plane/lib/profile-template.mjs"
       - "profiles/**"
       - ".github/workflows/pages-dashboard.yml"
   workflow_run:
@@ -35,7 +37,7 @@ concurrency:
 jobs:
   build-site:
     name: 生成 Dashboard 静态站点
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -104,7 +106,7 @@ jobs:
     name: 部署 GitHub Pages
     if: github.ref == 'refs/heads/main'
     needs: build-site
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
