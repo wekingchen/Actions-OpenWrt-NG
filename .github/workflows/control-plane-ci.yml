@@ -95,8 +95,8 @@ jobs:
         grep -q 'resolve_baseline_profile' scripts/profile.sh
         grep -q 'profiles/.baseline' control-plane/lib/github.mjs
         grep -q 'setBaselineProfilePullRequest' control-plane/lib/github.mjs
-        grep -q 'baselineProfileMatch' control-plane/worker.mjs
-        grep -q 'baselineProfileMatch' control-plane/server.mjs
+        grep -q 'profileBaselineMatch' control-plane/worker.mjs
+        grep -q 'profileBaselineMatch' control-plane/server.mjs
         grep -q 'id="baseline-profile-dialog"' control-plane/public/index.html
         grep -q 'openBaselineProfileDialog' control-plane/public/app.js
         python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
