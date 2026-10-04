@@ -66,13 +66,19 @@ assert.match(controlPlaneAppJs, /configStudioDependencyConditionMatches/);
 assert.match(controlPlaneAppJs, /configStudioEffectiveModifiedEntries/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-dependency-summary"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-show-dependencies"/);
-assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.1<\/span>/);
+assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.2<\/span>/);
 assert.match(controlPlaneIndexHtml, /id="new-adapter-field" hidden/);
 assert.match(controlPlaneIndexHtml, /id="profile-list-result"/);
 assert.match(controlPlaneAppJs, /showProfileListResult/);
 assert.match(controlPlaneAppJs, /forceRefresh: true/);
 assert.match(controlPlaneAppJs, /cache: "no-store"/);
 assert.match(controlPlaneAppJs, /profile-item-refreshed/);
+assert.match(controlPlaneIndexHtml, /id="delete-profile-dialog"/);
+assert.match(controlPlaneIndexHtml, /id="confirm-delete-profile"/);
+assert.match(controlPlaneAppJs, /method: "DELETE"/);
+assert.match(controlPlaneAppJs, /protected_profile/);
+assert.match(githubClientSource, /deleteProfilePullRequest/);
+assert.match(githubClientSource, /action === "delete"/);
 assert.match(controlPlaneAppJs, /renderNewAdapterVisibility/);
 assert.match(controlPlaneIndexHtml, />标准 OpenWrt 源码<\/option>/);
 assert.doesNotMatch(controlPlaneIndexHtml, /id="new-stream-log"/);
@@ -410,6 +416,20 @@ const profileFetch = async (url, options = {}) => {
   }
   if (
     method === "GET" &&
+    path === "/contents/profiles/deletable" &&
+    parsed.searchParams.get("ref") === "main"
+  ) {
+    return Response.json(
+      Object.keys(profileFileContents).map((name) => ({
+        type: "file",
+        name,
+        path: "profiles/deletable/" + name,
+        sha: "old-delete-" + name
+      }))
+    );
+  }
+  if (
+    method === "GET" &&
     path === "/contents/profiles/new-profile" &&
     parsed.searchParams.get("ref") === profileBaseSha
   ) {
@@ -438,6 +458,29 @@ const profileFetch = async (url, options = {}) => {
       encoding: "base64",
       content: Buffer.from(profileFileContents[name], "utf8").toString("base64")
     });
+  }
+  if (
+    method === "GET" &&
+    path.startsWith("/contents/profiles/deletable/") &&
+    parsed.searchParams.get("ref") === "main"
+  ) {
+    const name = decodeURIComponent(
+      path.slice("/contents/profiles/deletable/".length)
+    );
+    return Response.json({
+      type: "file",
+      name,
+      path: "profiles/deletable/" + name,
+      sha: "old-delete-" + name,
+      encoding: "base64",
+      content: Buffer.from(profileFileContents[name], "utf8").toString("base64")
+    });
+  }
+  if (
+    method === "GET" &&
+    path === "/actions/workflows/build-openwrt.yml/runs"
+  ) {
+    return Response.json({ workflow_runs: [] });
   }
   if (method === "GET" && path === "/git/commits/" + profileBaseSha) {
     return Response.json({ sha: profileBaseSha, tree: { sha: "base-tree" } });
@@ -575,6 +618,105 @@ assert.equal(
     entry.path.endsWith("/diy-part1.sh")
   ).mode,
   "100755"
+);
+
+const deleteCallStart = profileCalls.length;
+const deletedProfilePr = await profileClient.deleteProfilePullRequest(
+  "ghu_profile",
+  "acme",
+  "router",
+  "deletable",
+  { baseRefSha: profileBaseSha }
+);
+assert.equal(deletedProfilePr.action, "delete");
+assert.equal(deletedProfilePr.changedFiles.length, 7);
+assert.equal(deletedProfilePr.pullRequest.number, 17);
+assert.equal(deletedProfilePr.pullRequest.merged, true);
+const deleteCalls = profileCalls.slice(deleteCallStart);
+const deleteTreeCall = deleteCalls.find(
+  (call) => call.method === "POST" && call.path === "/git/trees"
+);
+assert.ok(deleteTreeCall);
+const deleteTreeBody = JSON.parse(deleteTreeCall.body);
+assert.equal(deleteTreeBody.tree.length, 7);
+assert.ok(deleteTreeBody.tree.every((entry) => entry.sha === null));
+assert.ok(
+  deleteTreeBody.tree.every((entry) =>
+    entry.path.startsWith("profiles/deletable/")
+  )
+);
+assert.equal(
+  deleteCalls.some((call) => call.method === "POST" && call.path === "/git/blobs"),
+  false
+);
+const deletePullCall = deleteCalls.find(
+  (call) => call.method === "POST" && call.path === "/pulls"
+);
+assert.match(JSON.parse(deletePullCall.body).body, /删除标准 Profile 文件/);
+
+await assert.rejects(
+  () =>
+    profileClient.deleteProfilePullRequest(
+      "ghu_profile",
+      "acme",
+      "router",
+      "default",
+      { baseRefSha: profileBaseSha }
+    ),
+  (error) => {
+    assert.equal(error.code, "protected_profile");
+    assert.equal(error.status, 409);
+    return true;
+  }
+);
+
+const busyDeleteClient = new GitHubAppClient(
+  {
+    clientId: "Iv1.profile-busy-delete",
+    clientSecret: "profile-busy-delete-secret",
+    redirectUri: "https://example.test/api/v1/auth/callback"
+  },
+  async (url, options = {}) => {
+    const parsed = new URL(String(url));
+    const path = parsed.pathname.replace(/^\/repos\/acme\/router/, "");
+    const method = String(options.method || "GET").toUpperCase();
+    if (
+      method === "GET" &&
+      path === "/actions/workflows/build-openwrt.yml/runs"
+    ) {
+      return Response.json({
+        workflow_runs: [{
+          id: 99,
+          run_number: 12,
+          display_title: "Build · deletable · cp:test",
+          status: "in_progress",
+          conclusion: null,
+          event: "workflow_dispatch",
+          head_branch: "main",
+          head_sha: profileBaseSha,
+          created_at: "2026-10-04T09:36:21Z",
+          updated_at: "2026-10-04T09:36:34Z",
+          html_url: "https://github.com/acme/router/actions/runs/99"
+        }]
+      });
+    }
+    return profileFetch(url, options);
+  }
+);
+await assert.rejects(
+  () =>
+    busyDeleteClient.deleteProfilePullRequest(
+      "ghu_profile",
+      "acme",
+      "router",
+      "deletable",
+      { baseRefSha: profileBaseSha }
+    ),
+  (error) => {
+    assert.equal(error.code, "profile_build_active");
+    assert.equal(error.status, 409);
+    return true;
+  }
 );
 
 await assert.rejects(
