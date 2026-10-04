@@ -106,7 +106,9 @@ jobs:
         grep -q 'OPENWRT_NG_DEBUG_STREAM_LOG' scripts/compile.sh
         ! grep -q 'STREAM_BUILD_LOG.*tee' scripts/compile.sh
         grep -q 'build-error-context.log' .github/workflows/build-openwrt.yml
-        ! grep -q '^[[:space:]]*build[.]log        grep -q 'write_ccache_stats' scripts/compile.sh
+        ! grep -q '^[[:space:]]*build[.]log$' .github/workflows/build-openwrt.yml
+        grep -q 'ccache 本轮 Hits' scripts/write-summary.sh
+        grep -q 'write_ccache_stats' scripts/compile.sh
         grep -q '^unset FILES_DIR$' scripts/compile.sh
         grep -q 'PROFILE_FILES_DIR' scripts/profile.sh
         ! grep -q 'emit_env FILES_DIR' scripts/profile.sh
