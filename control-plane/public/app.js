@@ -2386,6 +2386,263 @@ function configStudioPackageOptionRow(pkg, option) {
   return row;
 }
 
+function configStudioPackageRelativeTrail(pkg, option) {
+  const explicit = Array.isArray(option.relativeMenuTrail)
+    ? option.relativeMenuTrail
+        .map((node) => ({
+          prompt: String(node?.prompt || "").trim(),
+          kind: String(node?.kind || "menu").trim() || "menu"
+        }))
+        .filter((node) => node.prompt)
+    : [];
+  if (explicit.length) return explicit;
+
+  const packagePath = Array.isArray(pkg.menuPath) ? pkg.menuPath : [];
+  const optionPath = Array.isArray(option.menuPath) ? option.menuPath : [];
+  let prefix = 0;
+  while (
+    prefix < packagePath.length &&
+    prefix < optionPath.length &&
+    packagePath[prefix] === optionPath[prefix]
+  ) {
+    prefix += 1;
+  }
+
+  return optionPath.slice(prefix).map((prompt, index, values) => ({
+    prompt: String(prompt || "").trim(),
+    kind:
+      option.choicePrompt &&
+      String(prompt || "") === String(option.choicePrompt) &&
+      index === values.length - 1
+        ? "choice"
+        : "menu"
+  })).filter((node) => node.prompt);
+}
+
+function configStudioPackageMenuTree(pkg) {
+  const root = {
+    prompt: "",
+    kind: "root",
+    options: [],
+    children: new Map()
+  };
+
+  for (const option of pkg.configOptions || []) {
+    let node = root;
+    for (const entry of configStudioPackageRelativeTrail(pkg, option)) {
+      const key = entry.kind + "\u0000" + entry.prompt;
+      if (!node.children.has(key)) {
+        node.children.set(key, {
+          prompt: entry.prompt,
+          kind: entry.kind,
+          options: [],
+          children: new Map()
+        });
+      }
+      node = node.children.get(key);
+    }
+    node.options.push(option);
+  }
+  return root;
+}
+
+function configStudioPackageMenuOptions(node) {
+  const items = [...node.options];
+  for (const child of node.children.values()) {
+    items.push(...configStudioPackageMenuOptions(child));
+  }
+  return items;
+}
+
+function configStudioPackageMenuMatches(node, search) {
+  if (!search) return false;
+  const normalized = search.toLowerCase();
+  if (String(node.prompt || "").toLowerCase().includes(normalized)) {
+    return true;
+  }
+  return configStudioPackageMenuOptions(node).some((option) =>
+    [
+      option.name,
+      option.prompt,
+      option.choicePrompt,
+      option.help,
+      ...(option.menuPath || [])
+    ].some((value) => String(value || "").toLowerCase().includes(normalized))
+  );
+}
+
+function configStudioPackageMenuModified(node) {
+  return configStudioPackageMenuOptions(node).some((option) =>
+    configStudioState.modifiedValues.has(option.symbol)
+  );
+}
+
+function setConfigStudioChoice(options, selectedSymbol) {
+  for (const option of options) {
+    configStudioState.modifiedValues.set(
+      option.symbol,
+      option.symbol === selectedSymbol ? "y" : "n"
+    );
+  }
+  updateConfigStudioChangeCount();
+  persistNewConfigStudioUi();
+
+  const root = $("config-studio-packages");
+  const scrollTop = root.scrollTop;
+  renderConfigStudioPackages();
+  root.scrollTop = scrollTop;
+}
+
+function resetConfigStudioChoice(options) {
+  for (const option of options) {
+    configStudioState.modifiedValues.delete(option.symbol);
+  }
+  updateConfigStudioChangeCount();
+  persistNewConfigStudioUi();
+
+  const root = $("config-studio-packages");
+  const scrollTop = root.scrollTop;
+  renderConfigStudioPackages();
+  root.scrollTop = scrollTop;
+}
+
+function configStudioPackageChoiceMenu(pkg, node) {
+  const wrap = document.createElement("div");
+  wrap.className = "config-studio-choice-options";
+
+  for (const option of node.options) {
+    const assignable = configStudioPackageOptionAssignable(pkg, option);
+    const current = configStudioOptionValue(option.symbol, option.value);
+    const selected = current === "y";
+    const canSelect =
+      configStudioPackageEnabled(pkg) &&
+      (assignable.includes("y") || selected);
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className =
+      "config-studio-choice-option" + (selected ? " selected" : "");
+    button.disabled = !canSelect;
+    button.setAttribute("role", "radio");
+    button.setAttribute("aria-checked", String(selected));
+
+    const radio = document.createElement("span");
+    radio.className = "config-studio-choice-radio";
+    radio.setAttribute("aria-hidden", "true");
+
+    const copy = document.createElement("span");
+    copy.className = "config-studio-choice-copy";
+    const strong = document.createElement("strong");
+    strong.textContent = option.prompt || option.name;
+    const small = document.createElement("small");
+    small.textContent = option.name;
+    copy.append(strong, small);
+
+    const state = document.createElement("span");
+    state.className = "config-studio-choice-state";
+    state.textContent = selected ? "当前" : "选择";
+
+    button.append(radio, copy, state);
+    button.addEventListener("click", () => {
+      setConfigStudioChoice(node.options, option.symbol);
+    });
+    wrap.appendChild(button);
+  }
+
+  if (
+    node.options.some((option) =>
+      configStudioState.modifiedValues.has(option.symbol)
+    )
+  ) {
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "config-studio-choice-reset";
+    reset.textContent = "恢复 OpenWrt 默认选择";
+    reset.addEventListener("click", () => resetConfigStudioChoice(node.options));
+    wrap.appendChild(reset);
+  }
+
+  return wrap;
+}
+
+function configStudioPackageSubmenu(pkg, node, search, depth = 1) {
+  const details = document.createElement("details");
+  details.className = "config-studio-package-submenu";
+  details.dataset.kind = node.kind;
+  details.dataset.depth = String(depth);
+  details.open =
+    configStudioPackageMenuMatches(node, search) ||
+    configStudioPackageMenuModified(node);
+
+  const allOptions = configStudioPackageMenuOptions(node);
+  const summary = document.createElement("summary");
+  const heading = document.createElement("span");
+  heading.className = "config-studio-package-submenu-heading";
+
+  const icon = document.createElement("span");
+  icon.className = "config-studio-package-submenu-icon";
+  icon.textContent = node.kind === "choice" ? "○" : "›";
+  icon.setAttribute("aria-hidden", "true");
+
+  const copy = document.createElement("span");
+  copy.className = "config-studio-package-submenu-copy";
+  const strong = document.createElement("strong");
+  strong.textContent = node.prompt || "子菜单";
+
+  const currentChoice =
+    node.kind === "choice"
+      ? node.options.find(
+          (option) =>
+            configStudioOptionValue(option.symbol, option.value) === "y"
+        )
+      : null;
+  const small = document.createElement("small");
+  small.textContent =
+    node.kind === "choice"
+      ? [
+          "单选菜单",
+          currentChoice
+            ? "当前：" + (currentChoice.prompt || currentChoice.name)
+            : "",
+          node.options.length + " 项"
+        ].filter(Boolean).join(" · ")
+      : [
+          depth === 1 ? "二级菜单" : "子菜单",
+          allOptions.length + " 项"
+        ].join(" · ");
+
+  copy.append(strong, small);
+  heading.append(icon, copy);
+
+  const chevron = document.createElement("span");
+  chevron.className = "config-studio-package-submenu-chevron";
+  chevron.textContent = "⌄";
+  chevron.setAttribute("aria-hidden", "true");
+  summary.append(heading, chevron);
+  details.appendChild(summary);
+
+  const body = document.createElement("div");
+  body.className = "config-studio-package-submenu-body";
+
+  if (node.kind === "choice" && node.children.size === 0) {
+    body.appendChild(configStudioPackageChoiceMenu(pkg, node));
+  } else {
+    if (node.options.length) {
+      for (const option of node.options) {
+        body.appendChild(configStudioPackageOptionRow(pkg, option));
+      }
+    }
+    for (const child of node.children.values()) {
+      body.appendChild(
+        configStudioPackageSubmenu(pkg, child, search, depth + 1)
+      );
+    }
+  }
+
+  details.appendChild(body);
+  return details;
+}
+
 function configStudioPackageChoice(pkg, prompt, options) {
   const row = document.createElement("div");
   row.className = "config-studio-package-choice";
@@ -2483,9 +2740,12 @@ function configStudioPackageChildren(pkg, search) {
     hasModifiedChild;
 
   const summary = document.createElement("summary");
+  const treePreview = configStudioPackageMenuTree(pkg);
+  const secondLevelCount = treePreview.children.size;
   summary.textContent =
-    "子选项 " +
+    "配置项 " +
     options.length +
+    (secondLevelCount ? " · 二级菜单 " + secondLevelCount : "") +
     (configStudioPackageEnabled(pkg)
       ? " · 点击展开"
       : " · 选择主软件包后可配置");
@@ -2503,24 +2763,27 @@ function configStudioPackageChildren(pkg, search) {
     return details;
   }
 
-  const choices = new Map();
-  const regular = [];
-  for (const option of options) {
-    if (option.choiceValue && option.choicePrompt) {
-      if (!choices.has(option.choicePrompt)) {
-        choices.set(option.choicePrompt, []);
-      }
-      choices.get(option.choicePrompt).push(option);
-    } else {
-      regular.push(option);
-    }
+  const tree = configStudioPackageMenuTree(pkg);
+  const submenuCount = tree.children.size;
+
+  if (tree.options.length && submenuCount) {
+    const directHeading = document.createElement("div");
+    directHeading.className = "config-studio-package-direct-heading";
+    directHeading.textContent = "直接选项";
+    body.appendChild(directHeading);
+  }
+  for (const option of tree.options) {
+    body.appendChild(configStudioPackageOptionRow(pkg, option));
   }
 
-  for (const [prompt, members] of choices) {
-    body.appendChild(configStudioPackageChoice(pkg, prompt, members));
+  if (submenuCount) {
+    const menuHeading = document.createElement("div");
+    menuHeading.className = "config-studio-package-direct-heading";
+    menuHeading.textContent = "二级菜单";
+    body.appendChild(menuHeading);
   }
-  for (const option of regular) {
-    body.appendChild(configStudioPackageOptionRow(pkg, option));
+  for (const child of tree.children.values()) {
+    body.appendChild(configStudioPackageSubmenu(pkg, child, search, 1));
   }
 
   if (!["y", "m"].includes(String(pkg.value || "n"))) {
