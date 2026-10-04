@@ -381,6 +381,7 @@ function validateProfileFilesPayload(submitted) {
 function profileActionLabel(action) {
   if (action === "create") return "create";
   if (action === "delete") return "delete";
+  if (action === "baseline") return "set-baseline";
   return "update";
 }
 
@@ -582,13 +583,76 @@ export class GitHubAppClient {
     );
   }
 
+  async resolveBaselineProfileId(
+    token,
+    owner,
+    repo,
+    profiles = null,
+    state = null
+  ) {
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const currentState = state || await this.repositoryState(token, owner, repo);
+    let items = profiles;
+
+    if (!Array.isArray(items)) {
+      let body;
+      try {
+        body = await this.api(
+          `/repos/${safeOwner}/${safeRepo}/contents/profiles?ref=${encodeSegment(currentState.defaultBranch)}`,
+          token
+        );
+      } catch (error) {
+        if (error?.httpStatus === 404) return "";
+        throw error;
+      }
+      items = Array.isArray(body)
+        ? body
+            .filter(
+              (item) =>
+                item?.type === "dir" &&
+                PROFILE_ID_RE.test(item.name || "")
+            )
+            .map((item) => ({ id: item.name }))
+        : [];
+    }
+
+    const ids = items
+      .map((item) => String(item?.id || ""))
+      .filter((id) => PROFILE_ID_RE.test(id))
+      .sort((a, b) => a.localeCompare(b));
+    if (!ids.length) return "";
+
+    try {
+      const marker = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/contents/profiles/.baseline?ref=${encodeSegment(currentState.defaultBranch)}`,
+        token
+      );
+      if (marker?.encoding !== "base64" || typeof marker.content !== "string") {
+        throw new ProfileWriteError("invalid_baseline_profile", 409);
+      }
+      const baseline = decodeBase64Utf8(marker.content).trim();
+      if (!PROFILE_ID_RE.test(baseline) || !ids.includes(baseline)) {
+        throw new ProfileWriteError("invalid_baseline_profile", 409);
+      }
+      return baseline;
+    } catch (error) {
+      if (error instanceof ProfileWriteError) throw error;
+      if (error?.httpStatus !== 404) throw error;
+    }
+
+    if (ids.includes("default")) return "default";
+    return ids[0];
+  }
+
   async listProfiles(token, owner, repo) {
     const safeOwner = encodeSegment(owner);
     const safeRepo = encodeSegment(repo);
+    const state = await this.repositoryState(token, owner, repo);
     let body;
     try {
       body = await this.api(
-        `/repos/${safeOwner}/${safeRepo}/contents/profiles`,
+        `/repos/${safeOwner}/${safeRepo}/contents/profiles?ref=${encodeSegment(state.defaultBranch)}`,
         token
       );
     } catch (error) {
@@ -597,7 +661,7 @@ export class GitHubAppClient {
     }
 
     if (!Array.isArray(body)) return [];
-    return body
+    const profiles = body
       .filter(
         (item) =>
           item?.type === "dir" &&
@@ -609,6 +673,18 @@ export class GitHubAppClient {
         sha: item.sha || ""
       }))
       .sort((a, b) => a.id.localeCompare(b.id));
+
+    const baselineProfileId = await this.resolveBaselineProfileId(
+      token,
+      owner,
+      repo,
+      profiles,
+      state
+    );
+    return profiles.map((profile) => ({
+      ...profile,
+      baseline: profile.id === baselineProfileId
+    }));
   }
 
   async repositoryState(token, owner, repo) {
@@ -692,14 +768,24 @@ export class GitHubAppClient {
       };
     }
 
+    const baselineProfileId = await this.resolveBaselineProfileId(
+      token,
+      owner,
+      repo,
+      null,
+      state
+    );
+
     return {
       owner,
       repo,
       defaultBranch: state.defaultBranch,
       baseRefSha: state.baseRefSha,
+      baselineProfileId,
       profile: {
         id: profileId,
         path: `profiles/${profileId}`,
+        baseline: profileId === baselineProfileId,
         files
       }
     };
