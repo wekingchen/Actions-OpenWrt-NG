@@ -550,7 +550,7 @@ jobs:
       with:
         name: OpenWrt_failure_${{ env.PROFILE_ID }}_${{ github.run_id }}
         path: |
-          build.log
+          build-error-context.log
           build-failure.log
           openwrt/diy-part2.log
           openwrt/logs
