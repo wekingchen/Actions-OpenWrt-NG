@@ -1,0 +1,40 @@
+name: Temporary Branch Cleanup
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/temp-branch-cleanup.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: 清理本轮临时分支
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v7
+
+      - name: 删除临时分支
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          branches=(
+            "audit/post-014-hardening"
+            "fix/manual-profile-merge-cleanup"
+            "fix/profile-post-merge-cleanup"
+            "sync/control-plane-0217"
+            "sync/profile-post-merge-cleanup"
+          )
+          for branch in "${branches[@]}"; do
+            if git ls-remote --exit-code --heads origin "refs/heads/$branch" >/dev/null 2>&1; then
+              echo "删除临时分支：$branch"
+              git push origin --delete "$branch"
+            else
+              echo "跳过不存在分支：$branch"
+            fi
+          done
