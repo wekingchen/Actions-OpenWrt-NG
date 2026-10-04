@@ -148,6 +148,8 @@ jobs:
         grep -q 'profileSnapshot: Boolean(profileSnapshot)' control-plane/lib/github.mjs
         grep -q 'profileFiles: Object.fromEntries' control-plane/public/app.js
         grep -q 'apply-extra-feeds.sh' .github/workflows/build-openwrt.yml
+        test "$(grep -c 'runs-on: ubuntu-24.04' .github/workflows/build-openwrt.yml)" -eq 4
+        ! grep -q 'runs-on: ubuntu-22.04' .github/workflows/build-openwrt.yml
         grep -q 'merge-feeds.py' scripts/apply-extra-feeds.sh
         grep -q '同步主仓运行时脚本' .github/workflows/config-studio.yml
         grep -q '同步主仓运行时脚本' .github/workflows/build-openwrt.yml
