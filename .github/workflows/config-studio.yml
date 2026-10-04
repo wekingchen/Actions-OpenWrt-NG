@@ -48,7 +48,7 @@ jobs:
 
     - name: 校验 Runtime API 契约
       env:
-        OPENWRT_NG_EXPECTED_RUNTIME_API: "1"
+        OPENWRT_NG_EXPECTED_RUNTIME_API: "2"
       run: |
         set -Eeuo pipefail
         python3 scripts/verify-runtime-api.py
