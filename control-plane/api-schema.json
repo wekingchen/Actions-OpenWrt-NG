@@ -1285,7 +1285,8 @@
         "status",
         "run",
         "catalog",
-        "result"
+        "result",
+        "progress"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1361,6 +1362,9 @@
             "null"
           ],
           "additionalProperties": true
+        },
+        "progress": {
+          "$ref": "#/$defs/actionProgress"
         }
       }
     },
