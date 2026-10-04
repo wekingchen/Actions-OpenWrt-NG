@@ -1,13 +1,13 @@
 name: OpenWrt NG Builder
-run-name: Build · ${{ github.event.inputs.profile || github.event.client_payload.profile || 'default' }}${{ github.event.inputs.control_plane_request_id && format(' · cp:{0}', github.event.inputs.control_plane_request_id) || '' }}
+run-name: Build · ${{ github.event.inputs.profile || github.event.client_payload.profile || 'baseline' }}${{ github.event.inputs.control_plane_request_id && format(' · cp:{0}', github.event.inputs.control_plane_request_id) || '' }}
 
 on:
   workflow_dispatch:
     inputs:
       profile:
-        description: "Profile 目录名（profiles/<name>）"
-        required: true
-        default: "default"
+        description: "Profile 目录名（留空使用当前基准 Profile）"
+        required: false
+        default: ""
         type: string
       publish_release:
         description: "是否允许发布 Release（仍受 Profile UPLOAD_RELEASE 控制）"
@@ -26,7 +26,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: openwrt-ng-${{ github.event.inputs.profile || github.event.client_payload.profile || 'default' }}
+  group: openwrt-ng-${{ github.event.inputs.profile || github.event.client_payload.profile || 'baseline' }}
   cancel-in-progress: false
 
 env:
@@ -72,24 +72,25 @@ jobs:
     - name: 解析并校验 Profile
       id: profile
       env:
-        REQUESTED_PROFILE: ${{ github.event.inputs.profile || github.event.client_payload.profile || 'default' }}
+        REQUESTED_PROFILE: ${{ github.event.inputs.profile || github.event.client_payload.profile || '' }}
       run: |
         set -Eeuo pipefail
         chmod +x scripts/*.sh adapters/*.sh
-        scripts/profile.sh validate "$REQUESTED_PROFILE"
-        scripts/profile.sh export "$REQUESTED_PROFILE"
+        resolved_profile="$(scripts/profile.sh resolve "$REQUESTED_PROFILE")"
+        scripts/profile.sh validate "$resolved_profile"
+        scripts/profile.sh export "$resolved_profile"
 
         # 当前 step 需要直接读取此布尔值作为 job output；
         # GITHUB_ENV 写入项只会在后续 step 生效。
         # shellcheck disable=SC1090
-        source "profiles/$REQUESTED_PROFILE/profile.env"
+        source "profiles/$resolved_profile/profile.env"
         maximize_space="${MAXIMIZE_BUILD_SPACE:-false}"
         [[ "$maximize_space" = true || "$maximize_space" = false ]] || {
           echo "ERROR: MAXIMIZE_BUILD_SPACE must be true/false" >&2
           exit 1
         }
 
-        printf 'profile=%s\n' "$REQUESTED_PROFILE" >> "$GITHUB_OUTPUT"
+        printf 'profile=%s\n' "$resolved_profile" >> "$GITHUB_OUTPUT"
         printf 'maximize_space=%s\n' "$maximize_space" >> "$GITHUB_OUTPUT"
 
     - name: 静态预检
