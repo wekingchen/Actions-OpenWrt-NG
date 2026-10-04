@@ -59,7 +59,7 @@ function createClient({ missing = new Set(["feeds.conf"]) } = {}) {
 
   let captured = null;
   client.createProfileFilesPullRequest = async (...args) => {
-    captured = args[4];
+    captured = args[3];
     return { action: "restore", captured };
   };
   return { client, getCaptured: () => captured };
