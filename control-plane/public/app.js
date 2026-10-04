@@ -1917,6 +1917,36 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
       actions.className = "profile-row-actions";
       actions.appendChild(buildButton);
 
+      const copyButton = document.createElement("button");
+      copyButton.type = "button";
+      copyButton.className = "profile-copy-action";
+      copyButton.innerHTML = iconSvg("copy");
+      copyButton.setAttribute("aria-label", `复制 ${profile.id}`);
+      copyButton.disabled = !canWriteRepo(repo);
+      copyButton.title = canWriteRepo(repo)
+        ? `复制 ${profile.id}`
+        : "需要 Contents 与 Pull requests 写权限";
+      copyButton.addEventListener("click", () => {
+        openProfileLifecycleDialog(repo, profile.id, "copy")
+          .catch((error) => showError(error));
+      });
+      actions.appendChild(copyButton);
+
+      const renameButton = document.createElement("button");
+      renameButton.type = "button";
+      renameButton.className = "profile-rename-action";
+      renameButton.innerHTML = iconSvg("rename");
+      renameButton.setAttribute("aria-label", `重命名 ${profile.id}`);
+      renameButton.disabled = !canWriteRepo(repo);
+      renameButton.title = canWriteRepo(repo)
+        ? `重命名 ${profile.id}`
+        : "需要 Contents 与 Pull requests 写权限";
+      renameButton.addEventListener("click", () => {
+        openProfileLifecycleDialog(repo, profile.id, "rename")
+          .catch((error) => showError(error));
+      });
+      actions.appendChild(renameButton);
+
       const baselineButton = document.createElement("button");
       baselineButton.type = "button";
       baselineButton.className = "profile-baseline-action";
