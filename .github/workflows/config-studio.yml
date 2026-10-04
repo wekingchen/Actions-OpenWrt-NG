@@ -46,6 +46,13 @@ jobs:
         ref: ${{ inputs.session_branch }}
         persist-credentials: false
 
+    - name: 校验 Runtime API 契约
+      env:
+        OPENWRT_NG_EXPECTED_RUNTIME_API: "1"
+      run: |
+        set -Eeuo pipefail
+        python3 scripts/verify-runtime-api.py
+
     - name: 共享代码同步门禁
       env:
         OPENWRT_NG_UPSTREAM_REPOSITORY: ${{ vars.OPENWRT_NG_SYNC_GATE_UPSTREAM }}
