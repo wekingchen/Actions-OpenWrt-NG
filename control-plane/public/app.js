@@ -463,7 +463,7 @@ const ERROR_MESSAGES = {
   release_bundle_expired:
     "这个构建的 Release bundle 已过期，无法直接补发 Release。",
   build_not_successful:
-    "只有成功完成的 Builder 才能补发 Release。",
+    "来源 Run 必须已经结束，且“编译 OpenWrt 固件”job 必须成功，才能补发 Release。",
   github_update_checker_failed:
     "GitHub 未能启动 Update Checker。",
   update_check_already_active:
