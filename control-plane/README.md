@@ -38,7 +38,7 @@ GitHub App / GitHub API
 - GitHub user token 临近到期时由 Worker 自动 refresh。
 - 权限按能力最小化设计：V2.0A 只读需要 Metadata read + Contents read；V2.0B 编辑再增加 Contents write + Pull requests write；V2.0C Builder 再增加 Actions write。
 - 对当前完整 V2 功能的新部署，推荐一次配置最终权限：Metadata read、Contents write、Pull requests write、Actions write；不需要 Administration / Workflows。
-- V2.0B 写入严格限定在 `profiles/<id>/` 的标准文件，默认分支永不由控制面直接修改。
+- V2.0B 创建、修改与删除都严格限定在 `profiles/<id>/` 的标准文件，默认分支永不由控制面直接修改。`default` 作为基准 Profile 受保护，不允许通过 Control Plane 删除。
 - V2.0B 使用 Git Database API 原子创建 commit，再创建独立分支与 Pull Request；Control Plane 默认立即 squash 合并，成功后删除临时分支。
 - 所有状态变更请求同时校验精确 Origin 与 `X-OpenWrt-NG-CSRF` 请求头。
 - 保存前携带默认分支基线 SHA；若仓库已变化，返回 `409 repository_changed`，要求重新加载后再编辑。
@@ -344,6 +344,8 @@ profiles/<id>/feeds.conf
 浏览器不能通过该接口提交任意仓库路径；如果目标 Profile 已经存在，返回 `409 profile_already_exists`，不会覆盖。创建前还会再次确认默认分支 head 与检查时的基线 SHA 一致；如果期间仓库发生变化，返回 `409 repository_changed`，不会基于旧 head 静默创建。预览时 `.config` 会发送到用户自己的 Control Plane 做服务端校验，但不会写入 GitHub。
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
+
+0.21.2 补齐 Profile 生命周期管理：配置列表新增删除入口，删除前读取默认分支最新基线并二次确认；服务端只允许删除目标 Profile 的 7 个标准文件，通过独立分支 → Pull Request → 自动 squash 合并 → 临时分支清理完成，不直接写默认分支。`default` 基准 Profile 不可删除；目标 Profile 存在 queued / running Builder 时返回 `409 profile_build_active`，避免运行中的构建失去配置；若默认分支已变化则沿用 `409 repository_changed` 并要求重新加载。删除 PR 自动合并成功后前端会无缓存刷新 Profile 列表，Git 历史和 PR 审计记录仍保留。
 
 0.21.1 统一 Builder 日志策略：正常 `make -jN` 默认静默写入 Runner 临时文件，GitHub step 只显示定期心跳；仅在失败后提取有限错误上下文并执行有限时单目标 `-j1 V=s` 诊断，详细诊断同样先写文件，再只显示错误附近内容。失败 Artifact 改为 `build-error-context.log`、`build-failure.log` 和 OpenWrt 自身 logs，不再上传整份并行 `build.log`。旧 Profile 中的 `STREAM_BUILD_LOG=true` 保留兼容解析但不再开启全量页面输出；新建 Profile UI 同时移除“流式日志”选项并固定写入 `STREAM_BUILD_LOG=false`。只有 Core 调试时可通过内部 `OPENWRT_NG_DEBUG_STREAM_LOG=true` 临时恢复全量流式输出。
 
