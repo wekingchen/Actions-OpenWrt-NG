@@ -66,7 +66,7 @@ assert.match(controlPlaneAppJs, /configStudioDependencyConditionMatches/);
 assert.match(controlPlaneAppJs, /configStudioEffectiveModifiedEntries/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-dependency-summary"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-show-dependencies"/);
-assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.0<\/span>/);
+assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.1<\/span>/);
 assert.match(controlPlaneIndexHtml, /id="new-adapter-field" hidden/);
 assert.match(controlPlaneIndexHtml, /id="profile-list-result"/);
 assert.match(controlPlaneAppJs, /showProfileListResult/);
@@ -75,6 +75,8 @@ assert.match(controlPlaneAppJs, /cache: "no-store"/);
 assert.match(controlPlaneAppJs, /profile-item-refreshed/);
 assert.match(controlPlaneAppJs, /renderNewAdapterVisibility/);
 assert.match(controlPlaneIndexHtml, />标准 OpenWrt 源码<\/option>/);
+assert.doesNotMatch(controlPlaneIndexHtml, /id="new-stream-log"/);
+assert.match(controlPlaneAppJs, /streamLog: false/);
 assert.match(controlPlaneAppJs, /baseRefSha: editorState\.baseRefSha/);
 assert.match(controlPlaneAppJs, /profileFiles: Object\.fromEntries/);
 assert.match(controlPlaneAppJs, /saveCurrentEditorFile\(\);[\s\S]*profileFiles:/);
@@ -228,6 +230,10 @@ const templateInput = {
 const controlPlaneTemplateFiles = buildProfileTemplateFiles(templateInput);
 const wizardTemplateFiles = buildWizardProfileFiles(templateInput);
 assert.deepEqual(controlPlaneTemplateFiles, wizardTemplateFiles);
+const templateProfileEnv = controlPlaneTemplateFiles.find(
+  (file) => file.path.endsWith("/profile.env")
+)?.text || "";
+assert.match(templateProfileEnv, /STREAM_BUILD_LOG='false'/);
 assert.equal(controlPlaneTemplateFiles.length, 7);
 const templateFeeds = controlPlaneTemplateFiles.find(
   (file) => file.path.endsWith("/feeds.conf")
