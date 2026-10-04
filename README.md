@@ -335,7 +335,7 @@ V2 Control Plane 0.21.3 进一步补齐 Profile 生命周期：仓库用 `profil
 
 Control Plane 0.21.4 继续补齐操作闭环：Profile 支持安全复制和原子重命名；重命名基准 Profile 时 `.baseline` 同步迁移。Profile 删除/重命名完成后会自动清理关联 Config Studio 会话与活动 Action。Builder 历史支持直接取消运行中构建，以及对已结束构建执行完整重跑；所有操作均校验目标 workflow 身份并保留 GitHub Actions 审计记录。
 
-Control Plane 0.21.5 补齐剩余恢复与运维入口：成功 Builder 只要仍保留未过期的 `OpenWrt_NG_release_bundle_<run_id>` 且尚无 Release，就能从构建详情直接执行 **Release Existing Build**，全程不重新编译并显示真实 Actions 步骤；Profile 列表可手动触发 **Update Checker**，既支持全部 `AUTO_UPDATE=true` Profile，也支持指定单个 Profile 与 `force`；通过 Control Plane 删除且当前仍不存在的 Profile 会出现在“最近删除”，可从删除 commit 的父提交恢复完整 7 个标准文件，恢复仍走独立分支 → Pull Request → 自动合并，而不是 reset/revert。
+Control Plane 0.21.5 补齐剩余恢复与运维入口：已结束的 Builder 只要“编译 OpenWrt 固件”job 成功、仍保留未过期的 `OpenWrt_NG_release_bundle_<run_id>` 且尚无 Release，就能从构建详情直接执行 **Release Existing Build**，全程不重新编译并显示真实 Actions 步骤；Profile 列表可手动触发 **Update Checker**，既支持全部 `AUTO_UPDATE=true` Profile，也支持指定单个 Profile 与 `force`；通过 Control Plane 删除且当前仍不存在的 Profile 会出现在“最近删除”，可从删除 commit 的父提交恢复完整 7 个标准文件，恢复仍走独立分支 → Pull Request → 自动合并，而不是 reset/revert。
 
 项目提供 **Deploy V2 Control Plane** 手动 Workflow：第一次可以无 GitHub App Secret bootstrap 部署，拿到 workers.dev URL 后再创建 GitHub App 并同步 Secret。当前完整 V2 推荐 GitHub App 一次配置 Metadata read、Contents write、Pull requests write、Actions write；不需要 Administration / Workflows。Node.js + SQLite + Docker 仅保留为可选自托管方式。
 
@@ -472,7 +472,7 @@ luci|https://github.com/openwrt/luci|master
 
 恢复工作流会：
 
-1. 确认来源 Run 确实属于 `build-openwrt.yml`、整个 Run 已成功完成，并再次确认 build job 为 success。
+1. 确认来源 Run 确实属于 `build-openwrt.yml` 且已经结束，并确认“编译 OpenWrt 固件”job 为 success；允许后续 Release job 失败，因为这正是恢复发布的主要场景。
 2. 下载来源 Run 的 `OpenWrt_NG_release_bundle_<run_id>`。
 3. 校验 Release 附件。
 4. 对“配置完全无变化”导致的空差异文件进行受控修复。
