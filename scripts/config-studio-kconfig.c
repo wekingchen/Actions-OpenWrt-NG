@@ -106,6 +106,47 @@ static void print_menu_path(struct menu *menu)
 	putchar(']');
 }
 
+static const char *menu_node_kind(struct menu *menu)
+{
+	if (menu && menu->sym && sym_is_choice(menu->sym))
+		return "choice";
+	if (menu && menu->sym)
+		return "symbol";
+	return "menu";
+}
+
+static void print_menu_trail(struct menu *menu)
+{
+	struct menu *parents[32];
+	struct menu *parent;
+	int count = 0;
+	int i;
+	bool first = true;
+
+	for (parent = menu->parent;
+	     parent && parent != &rootmenu && count < 32;
+	     parent = parent->parent) {
+		const char *prompt = menu_get_prompt(parent);
+		if (!prompt || !*prompt)
+			continue;
+		parents[count++] = parent;
+	}
+
+	putchar('[');
+	for (i = count - 1; i >= 0; i--) {
+		const char *prompt = menu_get_prompt(parents[i]);
+		if (!first)
+			putchar(',');
+		fputs("{\"prompt\":", stdout);
+		json_string(prompt);
+		fputs(",\"kind\":", stdout);
+		json_string(menu_node_kind(parents[i]));
+		putchar('}');
+		first = false;
+	}
+	putchar(']');
+}
+
 static void print_assignable(struct symbol *sym)
 {
 	bool first = true;
@@ -218,6 +259,8 @@ static void emit_menu(struct menu *menu)
 			json_string(choice_prompt(child));
 			fputs(",\"menuPath\":", stdout);
 			print_menu_path(child);
+			fputs(",\"menuTrail\":", stdout);
+			print_menu_trail(child);
 			fputs(",\"help\":", stdout);
 			json_string(menu_get_help(child));
 			fputs(",\"source\":", stdout);
