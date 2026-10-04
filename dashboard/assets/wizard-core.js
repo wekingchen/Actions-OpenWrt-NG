@@ -132,7 +132,7 @@ export function buildProfileFiles(input) {
     "",
     `AUTO_UPDATE=${shellQuote(input.autoUpdate ? "true" : "false")}`,
     `MAXIMIZE_BUILD_SPACE=${shellQuote(input.maximizeSpace ? "true" : "false")}`,
-    `STREAM_BUILD_LOG=${shellQuote(input.streamLog ? "true" : "false")}`,
+    "STREAM_BUILD_LOG='false'",
     "",
     `UPLOAD_BIN_DIR='false'`,
     `UPLOAD_FIRMWARE=${shellQuote(input.uploadFirmware ? "true" : "false")}`,
