@@ -56,6 +56,15 @@ const deleteProfileState = {
   restoreFocus: null
 };
 
+const profileLifecycleState = {
+  repo: null,
+  profileId: "",
+  mode: "copy",
+  baseRefSha: "",
+  requestVersion: 0,
+  restoreFocus: null
+};
+
 const baselineProfileState = {
   repo: null,
   profileId: "",
@@ -178,6 +187,8 @@ function iconSvg(name) {
     profile: '<path d="M7 4h10l3 3v13H4V7z"/><path d="M8 11h8M8 15h8"/>',
     arrow: '<path d="M5 12h14M14 7l5 5-5 5"/>',
     chevron: '<path d="m7 9 5 5 5-5"/>',
+    copy: '<path d="M9 9h10v10H9z"/><path d="M5 15H4V5h10v1"/>',
+    rename: '<path d="M4 17.5V20h2.5L17.8 8.7l-2.5-2.5z"/><path d="m14.9 6.6 2.5 2.5"/>',
     star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9z"/>',
     trash: '<path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/>'
   };
@@ -381,6 +392,10 @@ const ERROR_MESSAGES = {
     "请求内容格式无效，请刷新页面后重试。",
   invalid_profile_id:
     "Profile ID 不符合规则，请检查目录名称。",
+  invalid_target_profile_id:
+    "新的 Profile ID 不符合规则，只能使用字母、数字、点、下划线和连字符。",
+  profile_target_same_as_source:
+    "新的 Profile ID 不能与当前 Profile 相同。",
   profile_not_found:
     "该 Profile 不存在、已移动，或当前默认分支中不可用。",
   profile_already_exists:
@@ -413,6 +428,12 @@ const ERROR_MESSAGES = {
     "暂时无法从 GitHub 读取 Builder 状态。",
   github_builder_dispatch_failed:
     "GitHub 未能启动 Builder，请检查 Actions 权限与 workflow 是否存在。",
+  github_builder_control_failed:
+    "GitHub 未能完成 Builder 取消 / 重跑操作。",
+  build_not_active:
+    "这个构建已经不在运行，不能再取消。",
+  build_not_completed:
+    "这个构建尚未结束，不能重跑。",
   github_config_studio_failed:
     "GitHub 未能启动图形配置会话，请检查 Actions / Contents 权限与 Config Studio workflow。",
   github_config_studio_apply_failed:
@@ -967,6 +988,7 @@ async function openBuildDialog(repo, profileId) {
   showError();
   if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
   if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
+  if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
   const requestVersion = buildDialogState.requestVersion + 1;
   buildDialogState.requestVersion = requestVersion;
   buildDialogState.repo = repo;
@@ -1028,6 +1050,97 @@ async function openBuildDialog(repo, profileId) {
   }
 }
 
+function setProfileLifecycleStatus(message = "", isError = false) {
+  const node = $("profile-lifecycle-status");
+  node.hidden = !message;
+  node.textContent = message;
+  node.classList.toggle("error-text", Boolean(isError));
+}
+
+function closeProfileLifecycleDialog() {
+  profileLifecycleState.requestVersion += 1;
+  const restoreFocus = profileLifecycleState.restoreFocus;
+  $("profile-lifecycle-dialog").hidden = true;
+  document.body.classList.remove("dialog-open");
+  profileLifecycleState.repo = null;
+  profileLifecycleState.profileId = "";
+  profileLifecycleState.mode = "copy";
+  profileLifecycleState.baseRefSha = "";
+  profileLifecycleState.restoreFocus = null;
+  $("profile-lifecycle-target").value = "";
+  setProfileLifecycleStatus();
+  if (restoreFocus?.isConnected && typeof restoreFocus.focus === "function") {
+    restoreFocus.focus();
+  }
+}
+
+async function openProfileLifecycleDialog(repo, profileId, mode) {
+  showError();
+  if (!canWriteRepo(repo)) {
+    showError("需要 Contents 与 Pull requests 写权限才能管理 Profile。");
+    return;
+  }
+  if (!["copy", "rename"].includes(mode)) return;
+  if (!$("build-dialog").hidden) closeBuildDialog();
+  if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
+  if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
+
+  const requestVersion = profileLifecycleState.requestVersion + 1;
+  profileLifecycleState.requestVersion = requestVersion;
+  profileLifecycleState.repo = repo;
+  profileLifecycleState.profileId = profileId;
+  profileLifecycleState.mode = mode;
+  profileLifecycleState.baseRefSha = "";
+  profileLifecycleState.restoreFocus =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+  const copying = mode === "copy";
+  $("profile-lifecycle-eyebrow").textContent = copying ? "复制配置" : "重命名配置";
+  $("profile-lifecycle-title").textContent =
+    copying ? `复制 ${profileId}` : `重命名 ${profileId}`;
+  $("profile-lifecycle-repo").textContent = repo.fullName;
+  $("profile-lifecycle-source").textContent = profileId;
+  $("profile-lifecycle-target-label").textContent =
+    copying ? "新 Profile ID" : "新的 Profile ID";
+  $("profile-lifecycle-target").value = copying ? `${profileId}-copy` : profileId;
+  $("confirm-profile-lifecycle").disabled = true;
+  $("confirm-profile-lifecycle").textContent = "正在校验…";
+  setProfileLifecycleStatus("正在读取默认分支最新状态…");
+  $("profile-lifecycle-dialog").hidden = false;
+  document.body.classList.add("dialog-open");
+
+  try {
+    const data = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}`,
+      { cache: "no-store" }
+    );
+    if (
+      requestVersion !== profileLifecycleState.requestVersion ||
+      $("profile-lifecycle-dialog").hidden
+    ) return;
+
+    profileLifecycleState.baseRefSha = data.baseRefSha || "";
+    setProfileLifecycleStatus(
+      copying
+        ? "复制会保留 7 个标准文件内容，并把内部 profiles/<旧ID>/ 路径改为新 ID。"
+        : data.profile?.baseline
+          ? "这是当前基准 Profile；重命名会在同一个 commit 中同步更新 profiles/.baseline。"
+          : "重命名会在同一个 commit 中写入新目录并删除旧目录。"
+    );
+    $("confirm-profile-lifecycle").disabled = false;
+    $("confirm-profile-lifecycle").textContent = copying ? "创建副本" : "重命名";
+    $("profile-lifecycle-target").focus();
+    $("profile-lifecycle-target").select();
+  } catch (error) {
+    if (
+      requestVersion !== profileLifecycleState.requestVersion ||
+      $("profile-lifecycle-dialog").hidden
+    ) return;
+    $("confirm-profile-lifecycle").disabled = true;
+    setProfileLifecycleStatus(friendlyError(error), true);
+  }
+}
+
 function setBaselineProfileStatus(message = "", isError = false) {
   const node = $("baseline-profile-status");
   node.hidden = !message;
@@ -1058,6 +1171,7 @@ async function openBaselineProfileDialog(repo, profileId) {
   }
   if (!$("build-dialog").hidden) closeBuildDialog();
   if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
+  if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
 
   const requestVersion = baselineProfileState.requestVersion + 1;
   baselineProfileState.requestVersion = requestVersion;
@@ -1148,6 +1262,7 @@ async function openDeleteProfileDialog(repo, profileId) {
   }
   if (!$("build-dialog").hidden) closeBuildDialog();
   if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
+  if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
 
   const requestVersion = deleteProfileState.requestVersion + 1;
   deleteProfileState.requestVersion = requestVersion;
@@ -1218,6 +1333,48 @@ function buildStatusIcon(run) {
   return icon;
 }
 
+async function controlBuilderRun(run, action, button) {
+  const repo = buildState.repo || currentRepository();
+  if (!repo || !canRunRepo(repo)) {
+    showError("当前 GitHub App 没有 Actions 写权限，不能控制构建。");
+    return;
+  }
+  if (!["cancel", "rerun"].includes(action)) return;
+
+  const originalText = button?.textContent || "";
+  if (button) {
+    button.disabled = true;
+    button.textContent = action === "cancel" ? "取消中…" : "重跑中…";
+  }
+  showError();
+
+  try {
+    const result = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds/${run.id}/${action}`,
+      { method: "POST", body: "{}" }
+    );
+    buildState.activeRunId = Number(result.runId || run.id || 0);
+    buildState.requestId = "";
+    buildState.pollAttempts = 0;
+    buildState.hasActiveRuns = true;
+    showBuildResult(
+      action === "cancel"
+        ? `已请求取消构建 #${run.runNumber}，状态会自动刷新。`
+        : `已请求重跑构建 #${run.runNumber}，将进入第 ${result.nextAttempt || "下一"} 次尝试。`
+    );
+    scheduleBuildPoll(1200, buildState.generation);
+    window.setTimeout(() => {
+      loadBuildRuns({ generation: buildState.generation })
+        .catch((error) => showError(error));
+    }, 1400);
+  } catch (error) {
+    showError(error);
+    if (button) button.disabled = false;
+  } finally {
+    if (button) button.textContent = originalText;
+  }
+}
+
 function renderBuildRows(root, runs, options = {}) {
   root.replaceChildren();
   const compact = Boolean(options.compact);
@@ -1273,6 +1430,30 @@ function renderBuildRows(root, runs, options = {}) {
 
     const actions = document.createElement("span");
     actions.className = "build-record-actions";
+
+    if (ACTIVE_BUILD_STATUSES.has(run.status)) {
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "build-record-action danger-action";
+      cancel.textContent = "取消";
+      cancel.disabled = !canRunRepo(buildState.repo || currentRepository());
+      cancel.title = cancel.disabled ? "需要 Actions 写权限" : "取消这次构建";
+      cancel.addEventListener("click", () => {
+        controlBuilderRun(run, "cancel", cancel).catch((error) => showError(error));
+      });
+      actions.appendChild(cancel);
+    } else if (run.status === "completed") {
+      const rerun = document.createElement("button");
+      rerun.type = "button";
+      rerun.className = "build-record-action";
+      rerun.textContent = "重跑";
+      rerun.disabled = !canRunRepo(buildState.repo || currentRepository());
+      rerun.title = rerun.disabled ? "需要 Actions 写权限" : "完整重跑这次 Builder";
+      rerun.addEventListener("click", () => {
+        controlBuilderRun(run, "rerun", rerun).catch((error) => showError(error));
+      });
+      actions.appendChild(rerun);
+    }
 
     if (run.status === "completed" && run.conclusion === "success") {
       const outputs = document.createElement("button");
@@ -1682,6 +1863,7 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
   if (!$("build-dialog").hidden) closeBuildDialog();
   if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
   if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
+  if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
   $("repo-switcher").value = repo.fullName;
   $("workspace-empty").hidden = true;
   $("editor-card").hidden = true;
@@ -1800,6 +1982,36 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
       const actions = document.createElement("span");
       actions.className = "profile-row-actions";
       actions.appendChild(buildButton);
+
+      const copyButton = document.createElement("button");
+      copyButton.type = "button";
+      copyButton.className = "profile-copy-action";
+      copyButton.innerHTML = iconSvg("copy");
+      copyButton.setAttribute("aria-label", `复制 ${profile.id}`);
+      copyButton.disabled = !canWriteRepo(repo);
+      copyButton.title = canWriteRepo(repo)
+        ? `复制 ${profile.id}`
+        : "需要 Contents 与 Pull requests 写权限";
+      copyButton.addEventListener("click", () => {
+        openProfileLifecycleDialog(repo, profile.id, "copy")
+          .catch((error) => showError(error));
+      });
+      actions.appendChild(copyButton);
+
+      const renameButton = document.createElement("button");
+      renameButton.type = "button";
+      renameButton.className = "profile-rename-action";
+      renameButton.innerHTML = iconSvg("rename");
+      renameButton.setAttribute("aria-label", `重命名 ${profile.id}`);
+      renameButton.disabled = !canWriteRepo(repo);
+      renameButton.title = canWriteRepo(repo)
+        ? `重命名 ${profile.id}`
+        : "需要 Contents 与 Pull requests 写权限";
+      renameButton.addEventListener("click", () => {
+        openProfileLifecycleDialog(repo, profile.id, "rename")
+          .catch((error) => showError(error));
+      });
+      actions.appendChild(renameButton);
 
       const baselineButton = document.createElement("button");
       baselineButton.type = "button";
@@ -4079,6 +4291,7 @@ document.addEventListener("keydown", (event) => {
     if (!$("build-dialog").hidden) closeBuildDialog();
     if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
     if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
+    if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
     if (!$("config-studio-dialog").hidden) {
       closeConfigStudio({ cleanup: false }).catch((error) => showError(error));
     }
@@ -4503,6 +4716,74 @@ $("trigger-build").addEventListener("click", async () => {
   }
 });
 
+$("confirm-profile-lifecycle").addEventListener("click", async () => {
+  const repo = profileLifecycleState.repo;
+  const profileId = profileLifecycleState.profileId;
+  const mode = profileLifecycleState.mode;
+  const baseRefSha = profileLifecycleState.baseRefSha;
+  const targetProfileId = $("profile-lifecycle-target").value.trim();
+  const requestVersion = profileLifecycleState.requestVersion;
+  if (!repo || !profileId || !baseRefSha || !canWriteRepo(repo)) return;
+
+  const button = $("confirm-profile-lifecycle");
+  button.disabled = true;
+  button.textContent = mode === "copy" ? "正在复制…" : "正在重命名…";
+  showError();
+  setProfileLifecycleStatus(
+    mode === "copy"
+      ? "正在创建复制分支与 Pull Request…"
+      : "正在创建原子重命名分支与 Pull Request…"
+  );
+
+  try {
+    const result = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}/${mode}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ baseRefSha, targetProfileId })
+      }
+    );
+    let resultMessage = profileWriteResultMessage(
+      result,
+      mode === "copy"
+        ? `Profile ${profileId} → ${targetProfileId} 复制`
+        : `Profile ${profileId} → ${targetProfileId} 重命名`
+    );
+    const cleaned = Number(result.configStudioCleanup?.sessionsFound || 0);
+    if (cleaned > 0) {
+      resultMessage += `；已清理 ${cleaned} 个关联图形配置会话`;
+    }
+    const resultUrl = result.pullRequest?.url || "";
+    closeProfileLifecycleDialog();
+
+    if (repositoryState.selectedFullName === repo.fullName) {
+      await loadProfiles(repo, repositoryState.selectionVersion, {
+        forceRefresh: true,
+        focusProfileId: targetProfileId,
+        resultMessage,
+        resultUrl
+      });
+    } else {
+      showProfileListResult(resultMessage, resultUrl);
+    }
+  } catch (error) {
+    if (
+      requestVersion === profileLifecycleState.requestVersion &&
+      !$("profile-lifecycle-dialog").hidden
+    ) {
+      setProfileLifecycleStatus(friendlyError(error), true);
+      button.disabled = false;
+    }
+  } finally {
+    if (
+      requestVersion === profileLifecycleState.requestVersion &&
+      !$("profile-lifecycle-dialog").hidden
+    ) {
+      button.textContent = mode === "copy" ? "创建副本" : "重命名";
+    }
+  }
+});
+
 $("confirm-baseline-profile").addEventListener("click", async () => {
   const repo = baselineProfileState.repo;
   const profileId = baselineProfileState.profileId;
@@ -4580,10 +4861,16 @@ $("confirm-delete-profile").addEventListener("click", async () => {
         body: JSON.stringify({ baseRefSha })
       }
     );
-    const resultMessage = profileWriteResultMessage(
+    let resultMessage = profileWriteResultMessage(
       result,
       "Profile " + profileId + " 删除"
     );
+    const cleanedSessions = Number(
+      result.configStudioCleanup?.sessionsFound || 0
+    );
+    if (cleanedSessions > 0) {
+      resultMessage += `；已清理 ${cleanedSessions} 个关联图形配置会话`;
+    }
     const resultUrl = result.pullRequest?.url || "";
     closeDeleteProfileDialog();
 
@@ -4627,6 +4914,12 @@ $("build-dialog-close").addEventListener("click", closeBuildDialog);
 $("build-dialog-cancel").addEventListener("click", closeBuildDialog);
 $("build-dialog").addEventListener("click", (event) => {
   if (event.target === $("build-dialog")) closeBuildDialog();
+});
+
+$("profile-lifecycle-close").addEventListener("click", closeProfileLifecycleDialog);
+$("profile-lifecycle-cancel").addEventListener("click", closeProfileLifecycleDialog);
+$("profile-lifecycle-dialog").addEventListener("click", (event) => {
+  if (event.target === $("profile-lifecycle-dialog")) closeProfileLifecycleDialog();
 });
 
 $("baseline-profile-close").addEventListener("click", closeBaselineProfileDialog);

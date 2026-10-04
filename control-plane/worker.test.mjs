@@ -232,6 +232,33 @@ const github = {
       release: null
     };
   },
+  async cancelBuilderRun(token, owner, repo, runId) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(String(runId), "123");
+    return {
+      accepted: true,
+      action: "cancel",
+      runId: 123,
+      runNumber: 9,
+      url: "https://github.com/acme/router/actions/runs/123"
+    };
+  },
+  async rerunBuilderRun(token, owner, repo, runId) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(String(runId), "123");
+    return {
+      accepted: true,
+      action: "rerun",
+      runId: 123,
+      runNumber: 9,
+      nextAttempt: 2,
+      url: "https://github.com/acme/router/actions/runs/123"
+    };
+  },
   async getBuilderArtifactDownloadUrl(token, owner, repo, runId, artifactId) {
     assert.equal(token, "ghu_worker_access");
     assert.equal(owner, "acme");
@@ -381,6 +408,61 @@ const github = {
         branchDeleted: true,
         supersededPullRequests: []
       }
+    };
+  },
+  async copyProfilePullRequest(token, owner, repo, profileId, payload) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(profileId, "default");
+    assert.equal(payload.baseRefSha, "a".repeat(40));
+    assert.equal(payload.targetProfileId, "default-copy");
+    return {
+      branch: "openwrt-ng/profile-default-copy",
+      commitSha: "2".repeat(40),
+      changedFiles: [".config", "profile.env"],
+      action: "copy",
+      sourceProfileId: "default",
+      targetProfileId: "default-copy",
+      baselineProfileId: "default",
+      pullRequest: {
+        number: 12,
+        url: "https://github.com/acme/router/pull/12",
+        merged: true,
+        mergeCommitSha: "2".repeat(40),
+        mergeReason: ""
+      },
+      cleanup: { branchDeleted: true, supersededPullRequests: [] }
+    };
+  },
+  async renameProfilePullRequest(token, owner, repo, profileId, payload) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(profileId, "default");
+    assert.equal(payload.baseRefSha, "a".repeat(40));
+    assert.equal(payload.targetProfileId, "default-renamed");
+    return {
+      branch: "openwrt-ng/profile-default-rename",
+      commitSha: "3".repeat(40),
+      changedFiles: ["profiles/default/.config", "profiles/default-renamed/.config"],
+      action: "rename",
+      sourceProfileId: "default",
+      targetProfileId: "default-renamed",
+      baselineProfileId: "default-renamed",
+      configStudioCleanup: {
+        sessionsFound: 1,
+        branchesDeleted: 1,
+        canceledRuns: [456]
+      },
+      pullRequest: {
+        number: 13,
+        url: "https://github.com/acme/router/pull/13",
+        merged: true,
+        mergeCommitSha: "3".repeat(40),
+        mergeReason: ""
+      },
+      cleanup: { branchDeleted: true, supersededPullRequests: [] }
     };
   },
   async setBaselineProfilePullRequest(token, owner, repo, profileId, payload) {
@@ -821,6 +903,57 @@ const writeBody = await write.json();
 assert.equal(writeBody.pullRequest.number, 7);
 assert.equal(writeBody.pullRequest.merged, true);
 
+const copyProfile = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/default/copy",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        baseRefSha: "a".repeat(40),
+        targetProfileId: "default-copy"
+      })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(copyProfile.status, 201);
+const copyProfileBody = await copyProfile.json();
+assert.equal(copyProfileBody.action, "copy");
+assert.equal(copyProfileBody.targetProfileId, "default-copy");
+
+const renameProfile = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/default/rename",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        baseRefSha: "a".repeat(40),
+        targetProfileId: "default-renamed"
+      })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(renameProfile.status, 201);
+const renameProfileBody = await renameProfile.json();
+assert.equal(renameProfileBody.action, "rename");
+assert.equal(renameProfileBody.targetProfileId, "default-renamed");
+assert.equal(renameProfileBody.configStudioCleanup.sessionsFound, 1);
+
 const rejectedBaseline = await handleControlPlaneRequest(
   new Request(
     "https://worker.example/api/v1/repositories/acme/router/profiles/other-profile/baseline",
@@ -1035,6 +1168,46 @@ const buildDetail = await handleControlPlaneRequest(
 );
 assert.equal(buildDetail.status, 200);
 assert.equal((await buildDetail.json()).run.id, 123);
+
+const cancelBuild = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/builds/123/cancel",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1"
+      },
+      body: "{}"
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(cancelBuild.status, 202);
+assert.equal((await cancelBuild.json()).action, "cancel");
+
+const rerunBuild = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/builds/123/rerun",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1"
+      },
+      body: "{}"
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(rerunBuild.status, 202);
+const rerunBuildBody = await rerunBuild.json();
+assert.equal(rerunBuildBody.action, "rerun");
+assert.equal(rerunBuildBody.nextAttempt, 2);
 
 const artifactDownload = await handleControlPlaneRequest(
   new Request(

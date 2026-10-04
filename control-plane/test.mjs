@@ -66,7 +66,7 @@ assert.match(controlPlaneAppJs, /configStudioDependencyConditionMatches/);
 assert.match(controlPlaneAppJs, /configStudioEffectiveModifiedEntries/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-dependency-summary"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-show-dependencies"/);
-assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.3<\/span>/);
+assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.4<\/span>/);
 assert.match(controlPlaneIndexHtml, /id="new-adapter-field" hidden/);
 assert.match(controlPlaneIndexHtml, /id="profile-list-result"/);
 assert.match(controlPlaneAppJs, /showProfileListResult/);
@@ -85,6 +85,16 @@ assert.match(controlPlaneAppJs, /method: "DELETE"/);
 assert.match(controlPlaneAppJs, /protected_profile/);
 assert.match(githubClientSource, /deleteProfilePullRequest/);
 assert.match(githubClientSource, /action === "delete"/);
+assert.match(controlPlaneIndexHtml, /id="profile-lifecycle-dialog"/);
+assert.match(controlPlaneAppJs, /openProfileLifecycleDialog/);
+assert.match(controlPlaneAppJs, /profile-copy-action/);
+assert.match(controlPlaneAppJs, /profile-rename-action/);
+assert.match(controlPlaneAppJs, /controlBuilderRun/);
+assert.match(githubClientSource, /copyProfilePullRequest/);
+assert.match(githubClientSource, /renameProfilePullRequest/);
+assert.match(githubClientSource, /cleanupConfigStudioSessionsForProfile/);
+assert.match(githubClientSource, /cancelBuilderRun/);
+assert.match(githubClientSource, /rerunBuilderRun/);
 assert.match(controlPlaneAppJs, /renderNewAdapterVisibility/);
 assert.match(controlPlaneIndexHtml, />标准 OpenWrt 源码<\/option>/);
 assert.doesNotMatch(controlPlaneIndexHtml, /id="new-stream-log"/);
@@ -386,7 +396,7 @@ assert.equal(
 const profileBaseSha = "a".repeat(40);
 const profileFileContents = {
   ".config": "CONFIG_TEST=y\n",
-  "profile.env": "PROFILE_NAME=\"Test\"\n",
+  "profile.env": "PROFILE_NAME=\"Test\"\nCONFIG_FILE=\"profiles/default/.config\"\nDIY_PART1=\"profiles/default/diy-part1.sh\"\n",
   "diy-part1.sh": "#!/bin/bash\n",
   "diy-part2.sh": "#!/bin/bash\n",
   "required-packages.txt": "",
@@ -467,6 +477,13 @@ const profileFetch = async (url, options = {}) => {
   }
   if (
     method === "GET" &&
+    ["/contents/profiles/copy-profile", "/contents/profiles/default-renamed"].includes(path) &&
+    parsed.searchParams.get("ref") === profileBaseSha
+  ) {
+    return Response.json({ message: "Not Found" }, { status: 404 });
+  }
+  if (
+    method === "GET" &&
     path === "/contents/profiles/exists-profile" &&
     parsed.searchParams.get("ref") === profileBaseSha
   ) {
@@ -511,6 +528,12 @@ const profileFetch = async (url, options = {}) => {
     path === "/actions/workflows/build-openwrt.yml/runs"
   ) {
     return Response.json({ workflow_runs: [] });
+  }
+  if (
+    method === "GET" &&
+    path.startsWith("/git/matching-refs/heads/openwrt-ng/config-session-")
+  ) {
+    return Response.json([]);
   }
   if (method === "GET" && path === "/git/commits/" + profileBaseSha) {
     return Response.json({ sha: profileBaseSha, tree: { sha: "base-tree" } });
@@ -650,6 +673,157 @@ assert.equal(
     entry.path.endsWith("/diy-part1.sh")
   ).mode,
   "100755"
+);
+
+const copyCallStart = profileCalls.length;
+const copiedProfilePr = await profileClient.copyProfilePullRequest(
+  "ghu_profile",
+  "acme",
+  "router",
+  "default",
+  { baseRefSha: profileBaseSha, targetProfileId: "copy-profile" }
+);
+assert.equal(copiedProfilePr.action, "copy");
+assert.equal(copiedProfilePr.sourceProfileId, "default");
+assert.equal(copiedProfilePr.targetProfileId, "copy-profile");
+assert.equal(copiedProfilePr.pullRequest.merged, true);
+const copyCalls = profileCalls.slice(copyCallStart);
+const copyTreeCall = copyCalls.find(
+  (call) => call.method === "POST" && call.path === "/git/trees"
+);
+assert.ok(copyTreeCall);
+const copyTreeBody = JSON.parse(copyTreeCall.body);
+assert.equal(copyTreeBody.tree.length, 7);
+assert.ok(
+  copyTreeBody.tree.every((entry) =>
+    entry.path.startsWith("profiles/copy-profile/")
+  )
+);
+assert.ok(
+  copyCalls
+    .filter((call) => call.method === "POST" && call.path === "/git/blobs")
+    .map((call) => JSON.parse(call.body).content)
+    .some((content) => content.includes("profiles/copy-profile/.config"))
+);
+
+const renameCallStart = profileCalls.length;
+const renamedProfilePr = await profileClient.renameProfilePullRequest(
+  "ghu_profile",
+  "acme",
+  "router",
+  "default",
+  { baseRefSha: profileBaseSha, targetProfileId: "default-renamed" }
+);
+assert.equal(renamedProfilePr.action, "rename");
+assert.equal(renamedProfilePr.sourceProfileId, "default");
+assert.equal(renamedProfilePr.targetProfileId, "default-renamed");
+assert.equal(renamedProfilePr.baselineProfileId, "default-renamed");
+assert.equal(renamedProfilePr.pullRequest.merged, true);
+const renameCalls = profileCalls.slice(renameCallStart);
+const renameTreeCall = renameCalls.find(
+  (call) => call.method === "POST" && call.path === "/git/trees"
+);
+assert.ok(renameTreeCall);
+const renameTreeBody = JSON.parse(renameTreeCall.body);
+assert.equal(renameTreeBody.tree.length, 15);
+assert.ok(
+  renameTreeBody.tree.some((entry) =>
+    entry.path === "profiles/.baseline" && entry.sha !== null
+  )
+);
+assert.equal(
+  renameTreeBody.tree.filter((entry) =>
+    entry.path.startsWith("profiles/default/") && entry.sha === null
+  ).length,
+  7
+);
+assert.equal(
+  renameTreeBody.tree.filter((entry) =>
+    entry.path.startsWith("profiles/default-renamed/") && entry.sha !== null
+  ).length,
+  7
+);
+assert.equal(renamedProfilePr.configStudioCleanup.sessionsFound, 0);
+
+const sessionCleanupCalls = [];
+const sessionCleanupClient = new GitHubAppClient(
+  {
+    clientId: "Iv1.session-cleanup",
+    clientSecret: "session-cleanup-secret",
+    redirectUri: "https://example.test/api/v1/auth/callback"
+  },
+  async (url, options = {}) => {
+    const parsed = new URL(String(url));
+    const path = parsed.pathname.replace(/^\/repos\/acme\/router/, "");
+    const method = String(options.method || "GET").toUpperCase();
+    sessionCleanupCalls.push({ path, method, body: options.body || "" });
+
+    if (
+      method === "GET" &&
+      path.startsWith("/git/matching-refs/heads/openwrt-ng/config-session-")
+    ) {
+      return Response.json([{
+        ref: "refs/heads/openwrt-ng/config-session-aabbccddeeff0011",
+        object: { sha: "1".repeat(40) }
+      }]);
+    }
+    if (
+      method === "GET" &&
+      path === "/contents/.openwrt-ng/config-studio/aabbccddeeff0011/request.json"
+    ) {
+      return Response.json({
+        encoding: "base64",
+        content: Buffer.from(
+          JSON.stringify({ profileId: "deletable" }),
+          "utf8"
+        ).toString("base64")
+      });
+    }
+    if (
+      method === "GET" &&
+      path === "/actions/workflows/config-studio.yml/runs"
+    ) {
+      return Response.json({
+        workflow_runs: [{
+          id: 456,
+          run_number: 3,
+          display_title: "Config · resolve · cs:aabbccddeeff0011",
+          status: "in_progress"
+        }]
+      });
+    }
+    if (method === "POST" && path === "/actions/runs/456/cancel") {
+      return new Response(null, { status: 202 });
+    }
+    if (
+      method === "DELETE" &&
+      path === "/git/refs/heads/openwrt-ng/config-session-aabbccddeeff0011"
+    ) {
+      return new Response(null, { status: 204 });
+    }
+    return profileFetch(url, options);
+  }
+);
+const sessionCleanup =
+  await sessionCleanupClient.cleanupConfigStudioSessionsForProfile(
+    "ghu_profile",
+    "acme",
+    "router",
+    "deletable"
+  );
+assert.equal(sessionCleanup.sessionsFound, 1);
+assert.equal(sessionCleanup.branchesDeleted, 1);
+assert.deepEqual(sessionCleanup.canceledRuns, [456]);
+assert.ok(
+  sessionCleanupCalls.some((call) =>
+    call.method === "POST" && call.path === "/actions/runs/456/cancel"
+  )
+);
+assert.ok(
+  sessionCleanupCalls.some((call) =>
+    call.method === "DELETE" &&
+    call.path.endsWith("/config-session-aabbccddeeff0011")
+  )
 );
 
 const baselineCallStart = profileCalls.length;
@@ -1062,6 +1236,30 @@ const builderFetch = async (url, options = {}) => {
       html_url: "https://github.com/acme/router/actions/runs/123"
     });
   }
+  if (method === "POST" && path === "/actions/runs/123/rerun") {
+    return new Response(null, { status: 201 });
+  }
+  if (method === "GET" && path === "/actions/runs/124") {
+    return Response.json({
+      id: 124,
+      run_number: 10,
+      run_attempt: 1,
+      display_title: "Build · default · cp:0011223344556677",
+      status: "in_progress",
+      conclusion: null,
+      event: "workflow_dispatch",
+      path: ".github/workflows/build-openwrt.yml",
+      head_branch: "main",
+      head_sha: "e".repeat(40),
+      created_at: "2026-10-02T01:00:00Z",
+      updated_at: "2026-10-02T01:05:00Z",
+      run_started_at: "2026-10-02T01:00:10Z",
+      html_url: "https://github.com/acme/router/actions/runs/124"
+    });
+  }
+  if (method === "POST" && path === "/actions/runs/124/cancel") {
+    return new Response(null, { status: 202 });
+  }
   if (method === "GET" && path === "/actions/runs/123/jobs") {
     return Response.json({
       jobs: [{
@@ -1155,6 +1353,36 @@ const artifactDownloadUrl = await builderClient.getBuilderArtifactDownloadUrl(
 assert.equal(
   artifactDownloadUrl,
   "https://downloads.example.test/artifacts/77.zip"
+);
+
+const rerunResult = await builderClient.rerunBuilderRun(
+  "ghu_builder",
+  "acme",
+  "router",
+  123
+);
+assert.equal(rerunResult.accepted, true);
+assert.equal(rerunResult.action, "rerun");
+assert.equal(rerunResult.nextAttempt, 2);
+assert.ok(
+  builderCalls.some((call) =>
+    call.method === "POST" && call.path === "/actions/runs/123/rerun"
+  )
+);
+
+const cancelResult = await builderClient.cancelBuilderRun(
+  "ghu_builder",
+  "acme",
+  "router",
+  124
+);
+assert.equal(cancelResult.accepted, true);
+assert.equal(cancelResult.action, "cancel");
+assert.equal(cancelResult.runId, 124);
+assert.ok(
+  builderCalls.some((call) =>
+    call.method === "POST" && call.path === "/actions/runs/124/cancel"
+  )
 );
 
 const calls = [];

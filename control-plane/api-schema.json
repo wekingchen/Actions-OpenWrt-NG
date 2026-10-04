@@ -388,8 +388,25 @@
           "enum": [
             "update",
             "delete",
-            "baseline"
+            "baseline",
+            "copy",
+            "rename"
           ]
+        },
+        "sourceProfileId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "targetProfileId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "baselineProfileId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "configStudioCleanup": {
+          "$ref": "#/$defs/configStudioCleanup"
         }
       }
     },
@@ -1427,6 +1444,87 @@
         "baseRefSha": {
           "type": "string",
           "pattern": "^[0-9a-fA-F]{40}$"
+        }
+      }
+    },
+    "configStudioCleanup": {
+      "type": "object",
+      "required": [
+        "sessionsFound",
+        "branchesDeleted",
+        "canceledRuns"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "sessionsFound": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "branchesDeleted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "canceledRuns": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "profileLifecycleRequest": {
+      "type": "object",
+      "required": [
+        "baseRefSha",
+        "targetProfileId"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "baseRefSha": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{40}$"
+        },
+        "targetProfileId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        }
+      }
+    },
+    "buildControlResponse": {
+      "type": "object",
+      "required": [
+        "accepted",
+        "action",
+        "runId",
+        "runNumber",
+        "url"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "accepted": {
+          "const": true
+        },
+        "action": {
+          "enum": [
+            "cancel",
+            "rerun"
+          ]
+        },
+        "runId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "runNumber": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nextAttempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "url": {
+          "type": "string"
         }
       }
     }

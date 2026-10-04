@@ -592,6 +592,51 @@ export async function handleControlPlaneRequest(
     }
 
 
+    const profileLifecycleMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/([^/]+)\/(copy|rename)$/
+    );
+    if (request.method === "POST" && profileLifecycleMatch) {
+      if (!validMutationRequest(request, config.origin)) {
+        return json(403, { error: "csrf_validation_failed" });
+      }
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return json(400, { error: "invalid_json" });
+      }
+
+      const owner = decodeURIComponent(profileLifecycleMatch[1]);
+      const repo = decodeURIComponent(profileLifecycleMatch[2]);
+      const profileId = decodeURIComponent(profileLifecycleMatch[3]);
+      const action = profileLifecycleMatch[4];
+      try {
+        const result = action === "copy"
+          ? await deps.github.copyProfilePullRequest(
+              session.accessToken, owner, repo, profileId, payload
+            )
+          : await deps.github.renameProfilePullRequest(
+              session.accessToken, owner, repo, profileId, payload
+            );
+        return json(201, result);
+      } catch (error) {
+        if (error instanceof ProfileWriteError) {
+          return json(error.status, { error: error.code });
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_profile_write_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
+    }
+
+
     const profileBaselineMatch = url.pathname.match(
       /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/([^/]+)\/baseline$/
     );
@@ -909,6 +954,44 @@ export async function handleControlPlaneRequest(
         throw error;
       }
     }
+
+    const buildControlMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/builds\/(\d+)\/(cancel|rerun)$/
+    );
+    if (request.method === "POST" && buildControlMatch) {
+      if (!validMutationRequest(request, config.origin)) {
+        return json(403, { error: "csrf_validation_failed" });
+      }
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+
+      const owner = decodeURIComponent(buildControlMatch[1]);
+      const repo = decodeURIComponent(buildControlMatch[2]);
+      const runId = buildControlMatch[3];
+      const action = buildControlMatch[4];
+      try {
+        const result = action === "cancel"
+          ? await deps.github.cancelBuilderRun(
+              session.accessToken, owner, repo, runId
+            )
+          : await deps.github.rerunBuilderRun(
+              session.accessToken, owner, repo, runId
+            );
+        return json(202, result);
+      } catch (error) {
+        if (error instanceof BuildControlError) {
+          return json(error.status, { error: error.code });
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_builder_control_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
+    }
+
 
     const buildDetailMatch = url.pathname.match(
       /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/builds\/(\d+)$/

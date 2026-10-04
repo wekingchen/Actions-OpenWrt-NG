@@ -380,9 +380,22 @@ function validateProfileFilesPayload(submitted) {
 
 function profileActionLabel(action) {
   if (action === "create") return "create";
+  if (action === "copy") return "copy";
+  if (action === "rename") return "rename";
   if (action === "delete") return "delete";
   if (action === "baseline") return "set-baseline";
   return "update";
+}
+
+function rewriteProfileFiles(files, sourceProfileId, targetProfileId) {
+  const from = `profiles/${sourceProfileId}/`;
+  const to = `profiles/${targetProfileId}/`;
+  return Object.fromEntries(
+    PROFILE_FILES.map((name) => [
+      name,
+      String(files[name] || "").split(from).join(to)
+    ])
+  );
 }
 
 function branchSlug(profileId) {
@@ -1011,6 +1024,81 @@ export class GitHubAppClient {
             publishedAt: release.published_at || ""
           }
         : null
+    };
+  }
+
+  async cancelBuilderRun(token, owner, repo, runId) {
+    const numericRunId = Number(runId);
+    if (!Number.isSafeInteger(numericRunId) || numericRunId <= 0) {
+      throw new BuildControlError("invalid_run_id", 400);
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const run = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}`,
+      token
+    );
+    const workflowPath = String(run.path || "").split("@", 1)[0];
+    if (workflowPath !== ".github/workflows/" + BUILDER_WORKFLOW) {
+      throw new BuildControlError("not_builder_run", 404);
+    }
+    if (!ACTIVE_BUILD_STATUSES.has(String(run.status || ""))) {
+      throw new BuildControlError("build_not_active", 409);
+    }
+
+    try {
+      await this.api(
+        `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}/cancel`,
+        token,
+        { method: "POST" }
+      );
+    } catch (error) {
+      if (error?.httpStatus !== 409) throw error;
+    }
+
+    return {
+      accepted: true,
+      action: "cancel",
+      runId: numericRunId,
+      runNumber: Number(run.run_number || 0),
+      url: run.html_url || ""
+    };
+  }
+
+  async rerunBuilderRun(token, owner, repo, runId) {
+    const numericRunId = Number(runId);
+    if (!Number.isSafeInteger(numericRunId) || numericRunId <= 0) {
+      throw new BuildControlError("invalid_run_id", 400);
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const run = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}`,
+      token
+    );
+    const workflowPath = String(run.path || "").split("@", 1)[0];
+    if (workflowPath !== ".github/workflows/" + BUILDER_WORKFLOW) {
+      throw new BuildControlError("not_builder_run", 404);
+    }
+    if (String(run.status || "") !== "completed") {
+      throw new BuildControlError("build_not_completed", 409);
+    }
+
+    await this.api(
+      `/repos/${safeOwner}/${safeRepo}/actions/runs/${numericRunId}/rerun`,
+      token,
+      { method: "POST" }
+    );
+
+    return {
+      accepted: true,
+      action: "rerun",
+      runId: numericRunId,
+      runNumber: Number(run.run_number || 0),
+      nextAttempt: Number(run.run_attempt || 1) + 1,
+      url: run.html_url || ""
     };
   }
 
@@ -1742,6 +1830,131 @@ export class GitHubAppClient {
     return result;
   }
 
+  async listConfigStudioSessionsForProfile(
+    token,
+    owner,
+    repo,
+    profileId
+  ) {
+    if (!PROFILE_ID_RE.test(String(profileId || ""))) {
+      throw new ProfileWriteError("invalid_profile_id", 400);
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    let refs;
+    try {
+      refs = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/git/matching-refs/${refPath(CONFIG_STUDIO_BRANCH_PREFIX)}`,
+        token
+      );
+    } catch (error) {
+      if (error?.httpStatus === 404) return [];
+      throw error;
+    }
+
+    const sessions = [];
+    for (const ref of Array.isArray(refs) ? refs : []) {
+      const fullRef = String(ref?.ref || "");
+      const branchName = fullRef.replace(/^refs\/heads\//, "");
+      if (!branchName.startsWith(CONFIG_STUDIO_BRANCH_PREFIX)) continue;
+      const requestId = branchName.slice(CONFIG_STUDIO_BRANCH_PREFIX.length);
+      if (!CONFIG_STUDIO_ID_RE.test(requestId)) continue;
+
+      const root = `.openwrt-ng/config-studio/${requestId}`;
+      let requestText;
+      try {
+        requestText = await this.readBranchTextFile(
+          token, owner, repo, branchName, `${root}/request.json`, true
+        );
+      } catch (error) {
+        console.error("Failed to inspect Config Studio session", error);
+        continue;
+      }
+      if (!requestText) continue;
+      try {
+        const request = JSON.parse(requestText);
+        if (String(request?.profileId || "") === profileId) {
+          sessions.push({ requestId, branch: branchName });
+        }
+      } catch {
+        console.error("Invalid Config Studio request while cleaning profile");
+      }
+    }
+    return sessions;
+  }
+
+  async cleanupConfigStudioSessionsForProfile(
+    token,
+    owner,
+    repo,
+    profileId
+  ) {
+    const sessions = await this.listConfigStudioSessionsForProfile(
+      token, owner, repo, profileId
+    );
+    if (!sessions.length) {
+      return { sessionsFound: 0, branchesDeleted: 0, canceledRuns: [] };
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    let runs = [];
+    try {
+      const body = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/actions/workflows/${CONFIG_STUDIO_WORKFLOW}/runs?event=workflow_dispatch&per_page=100`,
+        token
+      );
+      runs = Array.isArray(body?.workflow_runs) ? body.workflow_runs : [];
+    } catch (error) {
+      console.error("Failed to list Config Studio runs for profile cleanup", error);
+    }
+
+    const canceledRuns = [];
+    let branchesDeleted = 0;
+    for (const session of sessions) {
+      for (const run of runs) {
+        const title = String(run?.display_title || run?.name || "");
+        if (
+          title.includes(`cs:${session.requestId}`) &&
+          ACTIVE_BUILD_STATUSES.has(String(run?.status || ""))
+        ) {
+          const runId = Number(run?.id || 0);
+          if (!Number.isSafeInteger(runId) || runId <= 0) continue;
+          try {
+            await this.api(
+              `/repos/${safeOwner}/${safeRepo}/actions/runs/${runId}/cancel`,
+              token,
+              { method: "POST" }
+            );
+            canceledRuns.push(runId);
+          } catch (error) {
+            if (error?.httpStatus !== 409) {
+              console.error("Failed to cancel Config Studio run", error);
+            }
+          }
+        }
+      }
+
+      try {
+        await this.api(
+          `/repos/${safeOwner}/${safeRepo}/git/refs/${refPath(session.branch)}`,
+          token,
+          { method: "DELETE" }
+        );
+        branchesDeleted += 1;
+      } catch (error) {
+        if (error?.httpStatus === 404) {
+          branchesDeleted += 1;
+        } else {
+          console.error("Failed to delete Config Studio session branch", error);
+        }
+      }
+    }
+
+    return { sessionsFound: sessions.length, branchesDeleted, canceledRuns };
+  }
+
   async deleteProfileBranch(token, owner, repo, branchName) {
     const safeOwner = encodeSegment(owner);
     const safeRepo = encodeSegment(repo);
@@ -2180,6 +2393,272 @@ export class GitHubAppClient {
     );
   }
 
+  async copyProfilePullRequest(
+    token, owner, repo, sourceProfileId, payload = {}
+  ) {
+    if (!PROFILE_ID_RE.test(String(sourceProfileId || ""))) {
+      throw new ProfileWriteError("invalid_profile_id", 400);
+    }
+    const targetProfileId = String(payload.targetProfileId || "").trim();
+    const baseRefSha = String(payload.baseRefSha || "").trim();
+    if (!PROFILE_ID_RE.test(targetProfileId)) {
+      throw new ProfileWriteError("invalid_target_profile_id", 400);
+    }
+    if (targetProfileId === sourceProfileId) {
+      throw new ProfileWriteError("profile_target_same_as_source", 400);
+    }
+    if (!/^[0-9a-f]{40}$/i.test(baseRefSha)) {
+      throw new ProfileWriteError("invalid_base_ref", 400);
+    }
+
+    const current = await this.getProfile(token, owner, repo, sourceProfileId);
+    if (current.baseRefSha !== baseRefSha) {
+      throw new ProfileWriteError("repository_changed", 409);
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    try {
+      await this.api(
+        `/repos/${safeOwner}/${safeRepo}/contents/profiles/${encodeSegment(targetProfileId)}?ref=${encodeSegment(baseRefSha)}`,
+        token
+      );
+      throw new ProfileWriteError("profile_already_exists", 409);
+    } catch (error) {
+      if (error instanceof ProfileWriteError) throw error;
+      if (error?.httpStatus !== 404) throw error;
+    }
+
+    const files = rewriteProfileFiles(
+      Object.fromEntries(
+        PROFILE_FILES.map((name) => [
+          name,
+          current.profile.files[name]?.content || ""
+        ])
+      ),
+      sourceProfileId,
+      targetProfileId
+    );
+    const result = await this.createProfileFilesPullRequest(
+      token, owner, repo,
+      {
+        profileId: targetProfileId,
+        state: {
+          defaultBranch: current.defaultBranch,
+          baseRefSha
+        },
+        files,
+        changedFiles: [...PROFILE_FILES],
+        action: "copy"
+      }
+    );
+    return {
+      ...result,
+      sourceProfileId,
+      targetProfileId,
+      baselineProfileId: current.baselineProfileId
+    };
+  }
+
+  async renameProfilePullRequest(
+    token, owner, repo, sourceProfileId, payload = {}
+  ) {
+    if (!PROFILE_ID_RE.test(String(sourceProfileId || ""))) {
+      throw new ProfileWriteError("invalid_profile_id", 400);
+    }
+    const targetProfileId = String(payload.targetProfileId || "").trim();
+    const baseRefSha = String(payload.baseRefSha || "").trim();
+    if (!PROFILE_ID_RE.test(targetProfileId)) {
+      throw new ProfileWriteError("invalid_target_profile_id", 400);
+    }
+    if (targetProfileId === sourceProfileId) {
+      throw new ProfileWriteError("profile_target_same_as_source", 400);
+    }
+    if (!/^[0-9a-f]{40}$/i.test(baseRefSha)) {
+      throw new ProfileWriteError("invalid_base_ref", 400);
+    }
+
+    const current = await this.getProfile(token, owner, repo, sourceProfileId);
+    if (current.baseRefSha !== baseRefSha) {
+      throw new ProfileWriteError("repository_changed", 409);
+    }
+
+    const recent = await this.listBuilderRuns(token, owner, repo, {
+      profileId: sourceProfileId,
+      limit: 20
+    });
+    if (recent.some((run) => ACTIVE_BUILD_STATUSES.has(run.status))) {
+      throw new ProfileWriteError("profile_build_active", 409);
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    try {
+      await this.api(
+        `/repos/${safeOwner}/${safeRepo}/contents/profiles/${encodeSegment(targetProfileId)}?ref=${encodeSegment(baseRefSha)}`,
+        token
+      );
+      throw new ProfileWriteError("profile_already_exists", 409);
+    } catch (error) {
+      if (error instanceof ProfileWriteError) throw error;
+      if (error?.httpStatus !== 404) throw error;
+    }
+
+    const files = rewriteProfileFiles(
+      Object.fromEntries(
+        PROFILE_FILES.map((name) => [
+          name,
+          current.profile.files[name]?.content || ""
+        ])
+      ),
+      sourceProfileId,
+      targetProfileId
+    );
+    const baseCommit = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/commits/${baseRefSha}`,
+      token
+    );
+    if (!baseCommit?.tree?.sha) {
+      throw new ProfileWriteError("repository_tree_unavailable", 502);
+    }
+
+    const treeEntries = [];
+    for (const name of PROFILE_FILES) {
+      const blob = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/git/blobs`,
+        token,
+        {
+          method: "POST",
+          body: { content: files[name], encoding: "utf-8" }
+        }
+      );
+      treeEntries.push({
+        path: `profiles/${targetProfileId}/${name}`,
+        mode: PROFILE_FILE_MODES[name],
+        type: "blob",
+        sha: blob.sha
+      });
+      if (current.profile.files[name]?.exists) {
+        treeEntries.push({
+          path: `profiles/${sourceProfileId}/${name}`,
+          mode: PROFILE_FILE_MODES[name],
+          type: "blob",
+          sha: null
+        });
+      }
+    }
+
+    if (current.profile.baseline) {
+      const baselineBlob = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/git/blobs`,
+        token,
+        {
+          method: "POST",
+          body: { content: targetProfileId + "\n", encoding: "utf-8" }
+        }
+      );
+      treeEntries.push({
+        path: "profiles/.baseline",
+        mode: "100644",
+        type: "blob",
+        sha: baselineBlob.sha
+      });
+    }
+
+    const tree = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/trees`,
+      token,
+      {
+        method: "POST",
+        body: { base_tree: baseCommit.tree.sha, tree: treeEntries }
+      }
+    );
+    const commit = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/commits`,
+      token,
+      {
+        method: "POST",
+        body: {
+          message: `profile(${sourceProfileId}): rename to ${targetProfileId} via Control Plane`,
+          tree: tree.sha,
+          parents: [baseRefSha]
+        }
+      }
+    );
+
+    const branchName =
+      `openwrt-ng/profile-${branchSlug(sourceProfileId)}-${Date.now()}-${shortNonce()}`;
+    await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/refs`,
+      token,
+      {
+        method: "POST",
+        body: { ref: `refs/heads/${branchName}`, sha: commit.sha }
+      }
+    );
+
+    try {
+      const pull = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/pulls`,
+        token,
+        {
+          method: "POST",
+          body: {
+            title: `profile(${sourceProfileId}): rename to ${targetProfileId} via Control Plane`,
+            head: branchName,
+            base: current.defaultBranch,
+            body:
+              "由 OpenWrt NG Control Plane 创建。\n\n" +
+              `将 Profile ${sourceProfileId} 原子重命名为 ${targetProfileId}。\n\n` +
+              "同一 commit 会写入新目录并删除旧目录；Profile 内部路径同步重写。" +
+              (current.profile.baseline
+                ? "\n\n当前 Profile 是基准，profiles/.baseline 会在同一 commit 中同步更新。"
+                : "")
+          }
+        }
+      );
+      const finalized = await this.finalizeProfilePullRequest(
+        token, owner, repo, sourceProfileId,
+        { defaultBranch: current.defaultBranch, baseRefSha },
+        branchName, commit.sha, "rename", pull
+      );
+
+      let configStudioCleanup = {
+        sessionsFound: 0, branchesDeleted: 0, canceledRuns: []
+      };
+      if (finalized.pullRequest?.merged) {
+        configStudioCleanup = await this.cleanupConfigStudioSessionsForProfile(
+          token, owner, repo, sourceProfileId
+        );
+      }
+
+      return {
+        branch: branchName,
+        commitSha: commit.sha,
+        changedFiles: treeEntries.map((entry) => entry.path),
+        action: "rename",
+        sourceProfileId,
+        targetProfileId,
+        baselineProfileId: current.profile.baseline
+          ? targetProfileId
+          : current.baselineProfileId,
+        configStudioCleanup,
+        ...finalized
+      };
+    } catch (error) {
+      try {
+        await this.api(
+          `/repos/${safeOwner}/${safeRepo}/git/refs/${refPath(branchName)}`,
+          token,
+          { method: "DELETE" }
+        );
+      } catch (cleanupError) {
+        console.error("Failed to clean branch after rename PR error", cleanupError);
+      }
+      throw error;
+    }
+  }
+
   async setBaselineProfilePullRequest(
     token,
     owner,
@@ -2365,7 +2844,7 @@ export class GitHubAppClient {
       throw new ProfileWriteError("profile_not_found", 404);
     }
 
-    return this.createProfileFilesPullRequest(
+    const result = await this.createProfileFilesPullRequest(
       token,
       owner,
       repo,
@@ -2380,6 +2859,26 @@ export class GitHubAppClient {
         action: "delete"
       }
     );
+
+    let configStudioCleanup = {
+      sessionsFound: 0,
+      branchesDeleted: 0,
+      canceledRuns: []
+    };
+    if (result.pullRequest?.merged) {
+      configStudioCleanup =
+        await this.cleanupConfigStudioSessionsForProfile(
+          token,
+          owner,
+          repo,
+          profileId
+        );
+    }
+
+    return {
+      ...result,
+      configStudioCleanup
+    };
   }
 
 }
