@@ -345,6 +345,8 @@ profiles/<id>/feeds.conf
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
 
+0.21.4 继续补齐生命周期操作：Profile 列表新增复制与重命名。复制会复用源 Profile 的 7 个标准文件并重写内部 `profiles/<旧ID>/` 路径；重命名用单个 Git tree / commit 同时写入新目录、删除旧目录，若源 Profile 是当前基准则在同一 commit 中同步更新 `profiles/.baseline`。重命名与删除自动清理关联 Config Studio session：先取消尚在 queued / running 的 Config Studio Action，再删除对应 `openwrt-ng/config-session-*` 临时分支。Builder 历史新增取消与完整重跑；服务端会校验 run 确实属于 `build-openwrt.yml`，取消只接受活动 run，重跑只接受 completed run。
+
 0.21.3 将“基准 Profile”从固定目录 `default` 提升为仓库级逻辑属性。`profiles/.baseline` 保存当前基准 Profile ID；Control Plane 配置列表可以把任意现有 Profile 设为基准，切换本身也走独立分支 → PR → 自动 squash 合并 → 分支清理。当前基准 Profile 受删除保护，但原基准在切换后立即恢复为普通 Profile，可正常删除。Builder 的手动 `profile` 输入改为可留空，留空时和 `scripts/profile.sh` 未指定 Profile 一样解析 `profiles/.baseline`。为兼容旧仓库，指针缺失时优先使用 `default`，否则使用现有 Profile 中按名称排序的第一项；指针存在但无效时直接报错，不静默回退。Dashboard 同步输出并校验唯一基准 Profile。
 
 0.21.2 补齐 Profile 生命周期管理：配置列表新增删除入口，删除前读取默认分支最新基线并二次确认；服务端只允许删除目标 Profile 的 7 个标准文件，通过独立分支 → Pull Request → 自动 squash 合并 → 临时分支清理完成，不直接写默认分支。初版曾固定保护 `default`，0.21.3 已改为保护 `profiles/.baseline` 指向的逻辑基准 Profile；目标 Profile 存在 queued / running Builder 时返回 `409 profile_build_active`，避免运行中的构建失去配置；若默认分支已变化则沿用 `409 repository_changed` 并要求重新加载。删除 PR 自动合并成功后前端会无缓存刷新 Profile 列表，Git 历史和 PR 审计记录仍保留。
