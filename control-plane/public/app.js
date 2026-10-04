@@ -504,6 +504,23 @@ function showNewProfileResult(message = "", url = "") {
   }
 }
 
+function showProfileListResult(message = "", url = "") {
+  const node = $("profile-list-result");
+  node.hidden = !message;
+  node.replaceChildren();
+  if (!message) return;
+  node.append(document.createTextNode(message));
+  if (url) {
+    node.append(document.createTextNode(" "));
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.textContent = "打开 Pull Request";
+    node.append(link);
+  }
+}
+
 function profileWriteResultMessage(result, subject = "Profile") {
   const pull = result?.pullRequest || {};
   const number = Number(pull.number || 0);
@@ -1449,7 +1466,7 @@ async function openProfile(repo, profileId, options = {}) {
   }
 }
 
-async function loadProfiles(repo, selectionVersion) {
+async function loadProfiles(repo, selectionVersion, options = {}) {
   showError();
   clearBuildPolling();
   editorState.loadVersion += 1;
@@ -1471,6 +1488,7 @@ async function loadProfiles(repo, selectionVersion) {
   $("profile-card").hidden = false;
   $("profile-title").textContent = "配置";
   const root = $("profiles");
+  showProfileListResult();
   root.replaceChildren(
     buildStateMessage("正在读取配置", "正在从当前仓库读取 Profile…")
   );
@@ -1478,7 +1496,8 @@ async function loadProfiles(repo, selectionVersion) {
   let data;
   try {
     data = await request(
-      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles`
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles`,
+      options.forceRefresh ? { cache: "no-store" } : {}
     );
   } catch (error) {
     if (
@@ -1503,6 +1522,8 @@ async function loadProfiles(repo, selectionVersion) {
 
   root.replaceChildren();
 
+  let focusedRow = null;
+
   if (!data.profiles.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
@@ -1517,6 +1538,10 @@ async function loadProfiles(repo, selectionVersion) {
       const row = document.createElement("div");
       row.className = "profile-item";
       row.dataset.profileId = profile.id;
+      if (profile.id === options.focusProfileId) {
+        row.classList.add("profile-item-refreshed");
+        focusedRow = row;
+      }
 
       const openButton = document.createElement("button");
       openButton.type = "button";
@@ -1558,7 +1583,21 @@ async function loadProfiles(repo, selectionVersion) {
     }
   }
 
+  if (options.resultMessage) {
+    showProfileListResult(options.resultMessage, options.resultUrl || "");
+  }
+  if (focusedRow) {
+    requestAnimationFrame(() => {
+      focusedRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+    window.setTimeout(
+      () => focusedRow.classList.remove("profile-item-refreshed"),
+      2600
+    );
+  }
+
   await setupBuildHistory(repo);
+  return data.profiles;
 }
 
 async function selectRepository(repo) {
@@ -3989,12 +4028,24 @@ $("new-profile-form").addEventListener("submit", async (event) => {
         body: JSON.stringify(readNewProfileInput())
       }
     );
-    showNewProfileResult(
-      profileWriteResultMessage(result, "Profile " + result.profileId),
-      result.pullRequest.url
+    const resultMessage = profileWriteResultMessage(
+      result,
+      "Profile " + result.profileId
     );
+    const resultUrl = result.pullRequest.url;
     createState.previewValid = false;
     $("new-profile-preview-card").hidden = true;
+
+    if (result.pullRequest?.merged) {
+      await loadProfiles(repo, repositoryState.selectionVersion, {
+        forceRefresh: true,
+        focusProfileId: result.profileId,
+        resultMessage,
+        resultUrl
+      });
+    } else {
+      showNewProfileResult(resultMessage, resultUrl);
+    }
   } catch (error) {
     showError(error);
     button.disabled = false;
