@@ -198,6 +198,9 @@
           "additionalProperties": {
             "$ref": "#/$defs/profileFile"
           }
+        },
+        "baseline": {
+          "type": "boolean"
         }
       }
     },
@@ -208,6 +211,7 @@
         "repo",
         "defaultBranch",
         "baseRefSha",
+        "baselineProfileId",
         "profile"
       ],
       "additionalProperties": false,
@@ -230,6 +234,10 @@
         },
         "profile": {
           "$ref": "#/$defs/profile"
+        },
+        "baselineProfileId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
         }
       }
     },
@@ -379,7 +387,8 @@
         "action": {
           "enum": [
             "update",
-            "delete"
+            "delete",
+            "baseline"
           ]
         }
       }
@@ -1396,6 +1405,19 @@
       }
     },
     "profileDeleteRequest": {
+      "type": "object",
+      "required": [
+        "baseRefSha"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "baseRefSha": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{40}$"
+        }
+      }
+    },
+    "profileBaselineRequest": {
       "type": "object",
       "required": [
         "baseRefSha"
