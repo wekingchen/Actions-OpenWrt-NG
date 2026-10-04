@@ -90,6 +90,10 @@ jobs:
         grep -q 'OPENWRT_NG_GIT_TIMEOUT' scripts/resolve-update-state.sh
         grep -q 'timeout --signal=TERM' scripts/resolve-update-state.sh
         grep -q 'timeout=30' scripts/dashboard/export-data.py
+        grep -q 'readJsonBody(request, limit = 5 \* 1024 \* 1024)' control-plane/worker.mjs
+        ! grep -q 'await request.json()' control-plane/worker.mjs
+        grep -q "if: github.event_name != 'pull_request'" .github/workflows/pages-dashboard.yml
+        grep -q "if: github.event_name == 'pull_request'" .github/workflows/pages-dashboard.yml
 
         mapfile -t all_shell_files < <(
           find scripts adapters profiles -type f -name '*.sh' -print | sort
