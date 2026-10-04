@@ -1787,6 +1787,26 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 .profile-list {
   gap: 8px;
 }
+
+.profile-list-result {
+  margin: 14px 0 0;
+}
+.profile-item-refreshed {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 34%, var(--panel-strong));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent);
+  animation: profile-refresh-pulse .72s ease-out 1;
+}
+@keyframes profile-refresh-pulse {
+  0% {
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  100% {
+    transform: translateY(0);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+}
 .profile-item {
   min-height: 68px;
   display: flex;
