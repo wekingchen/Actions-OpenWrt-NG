@@ -104,8 +104,7 @@ tail -n 200 "$log_file" || true
 echo "::endgroup::"
 
 failed_target="$(
-  sed -nE 's/.*ERROR: ((package|tools|toolchain)\/[^[:space:]]+) failed to build.*/\1\/compile/p' "$log_file" |
-  tail -n 1
+  python3 "$GITHUB_WORKSPACE/scripts/detect_failed_target.py" "$log_file"
 )"
 
 if [ -z "$failed_target" ]; then
