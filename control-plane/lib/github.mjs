@@ -2844,7 +2844,7 @@ export class GitHubAppClient {
       throw new ProfileWriteError("profile_not_found", 404);
     }
 
-    return this.createProfileFilesPullRequest(
+    const result = await this.createProfileFilesPullRequest(
       token,
       owner,
       repo,
@@ -2859,6 +2859,26 @@ export class GitHubAppClient {
         action: "delete"
       }
     );
+
+    let configStudioCleanup = {
+      sessionsFound: 0,
+      branchesDeleted: 0,
+      canceledRuns: []
+    };
+    if (result.pullRequest?.merged) {
+      configStudioCleanup =
+        await this.cleanupConfigStudioSessionsForProfile(
+          token,
+          owner,
+          repo,
+          profileId
+        );
+    }
+
+    return {
+      ...result,
+      configStudioCleanup
+    };
   }
 
 }
