@@ -13,15 +13,11 @@ on:
       - ".github/workflows/config-studio.yml"
       - ".github/workflows/release-existing.yml"
       - ".github/workflows/update-checker.yml"
-      - "scripts/compile.sh"
-      - "scripts/extract_failure_context.py"
-      - "scripts/test_extract_failure_context.py"
-      - "scripts/config-studio.py"
-      - "scripts/config-studio-kconfig.c"
-      - "scripts/cleanup-workflow-runs.sh"
-      - "scripts/write-summary.sh"
-      - "scripts/profile.sh"
-      - "profiles/.baseline"
+      - ".github/workflows/pages-dashboard.yml"
+      - "scripts/**"
+      - "adapters/**"
+      - "profiles/**"
+      - "dashboard/**"
   pull_request:
     paths:
       - "control-plane/**"
@@ -31,15 +27,11 @@ on:
       - ".github/workflows/config-studio.yml"
       - ".github/workflows/release-existing.yml"
       - ".github/workflows/update-checker.yml"
-      - "scripts/compile.sh"
-      - "scripts/extract_failure_context.py"
-      - "scripts/test_extract_failure_context.py"
-      - "scripts/config-studio.py"
-      - "scripts/config-studio-kconfig.c"
-      - "scripts/cleanup-workflow-runs.sh"
-      - "scripts/write-summary.sh"
-      - "scripts/profile.sh"
-      - "profiles/.baseline"
+      - ".github/workflows/pages-dashboard.yml"
+      - "scripts/**"
+      - "adapters/**"
+      - "profiles/**"
+      - "dashboard/**"
 
 permissions:
   contents: read
@@ -95,6 +87,31 @@ jobs:
         bash -n scripts/cleanup-workflow-runs.sh
         bash -n scripts/write-summary.sh
         bash -n scripts/profile.sh
+
+        mapfile -t all_shell_files < <(
+          find scripts adapters profiles -type f -name '*.sh' -print | sort
+        )
+        for file in "${all_shell_files[@]}"; do
+          bash -n "$file"
+        done
+
+        mapfile -t all_python_files < <(
+          find scripts -type f -name '*.py' -print | sort
+        )
+        if [ "${#all_python_files[@]}" -gt 0 ]; then
+          python3 -m py_compile "${all_python_files[@]}"
+        fi
+
+        mapfile -t dashboard_js_files < <(
+          find dashboard/assets -type f -name '*.js' -print | sort
+        )
+        for file in "${dashboard_js_files[@]}"; do
+          node --check "$file"
+        done
+
+        node scripts/dashboard/test-control-plane.mjs
+        bash scripts/dashboard/test-wizard.sh
+
         test "$(scripts/profile.sh resolve)" = "$(tr -d '\r\n[:space:]' < profiles/.baseline)"
         grep -q 'resolve_baseline_profile' scripts/profile.sh
         grep -q 'profiles/.baseline' control-plane/lib/github.mjs
