@@ -522,6 +522,37 @@ export async function handleControlPlaneRequest(
     }
 
 
+    const deletedProfilesMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/deleted$/
+    );
+    if (request.method === "GET" && deletedProfilesMatch) {
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+      const owner = decodeURIComponent(deletedProfilesMatch[1]);
+      const repo = decodeURIComponent(deletedProfilesMatch[2]);
+      try {
+        const profiles = await deps.github.listDeletedProfiles(
+          session.accessToken,
+          owner,
+          repo,
+          { limit: url.searchParams.get("limit") || 10 }
+        );
+        return json(200, { owner, repo, profiles });
+      } catch (error) {
+        if (error instanceof ProfileWriteError) {
+          return json(error.status, { error: error.code });
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_deleted_profiles_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
+    }
+
+
     const profileDetailMatch = url.pathname.match(
       /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/([^/]+)$/
     );
@@ -584,6 +615,48 @@ export async function handleControlPlaneRequest(
         if (error?.name === "GitHubRequestError") {
           return json(502, {
             error: "github_profile_delete_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
+    }
+
+
+    const profileRestoreMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/([^/]+)\/restore$/
+    );
+    if (request.method === "POST" && profileRestoreMatch) {
+      if (!validMutationRequest(request, config.origin)) {
+        return json(403, { error: "csrf_validation_failed" });
+      }
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return json(400, { error: "invalid_json" });
+      }
+      const owner = decodeURIComponent(profileRestoreMatch[1]);
+      const repo = decodeURIComponent(profileRestoreMatch[2]);
+      const profileId = decodeURIComponent(profileRestoreMatch[3]);
+      try {
+        const result = await deps.github.restoreDeletedProfilePullRequest(
+          session.accessToken,
+          owner,
+          repo,
+          profileId,
+          payload
+        );
+        return json(201, result);
+      } catch (error) {
+        if (error instanceof ProfileWriteError) {
+          return json(error.status, { error: error.code });
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_profile_restore_failed",
             reason: githubErrorReason(error)
           });
         }
@@ -987,6 +1060,120 @@ export async function handleControlPlaneRequest(
             error: "github_builder_control_failed",
             reason: githubErrorReason(error)
           });
+        }
+        throw error;
+      }
+    }
+
+
+    const releaseExistingTriggerMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/builds\/(\d+)\/release-existing$/
+    );
+    if (request.method === "POST" && releaseExistingTriggerMatch) {
+      if (!validMutationRequest(request, config.origin)) {
+        return json(403, { error: "csrf_validation_failed" });
+      }
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+      const owner = decodeURIComponent(releaseExistingTriggerMatch[1]);
+      const repo = decodeURIComponent(releaseExistingTriggerMatch[2]);
+      const sourceRunId = releaseExistingTriggerMatch[3];
+      try {
+        const result = await deps.github.triggerReleaseExisting(
+          session.accessToken, owner, repo, sourceRunId
+        );
+        return json(202, result);
+      } catch (error) {
+        if (error instanceof BuildControlError) {
+          const body = { error: error.code };
+          if (error.activeRun) body.activeRun = error.activeRun;
+          return json(error.status, body);
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_release_existing_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
+    }
+
+    const releaseExistingRunMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/release-existing\/runs\/(\d+)$/
+    );
+    if (request.method === "GET" && releaseExistingRunMatch) {
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+      const owner = decodeURIComponent(releaseExistingRunMatch[1]);
+      const repo = decodeURIComponent(releaseExistingRunMatch[2]);
+      try {
+        const run = await deps.github.getReleaseExistingRun(
+          session.accessToken, owner, repo, releaseExistingRunMatch[3]
+        );
+        return json(200, { owner, repo, run });
+      } catch (error) {
+        if (error instanceof BuildControlError) {
+          return json(error.status, { error: error.code });
+        }
+        throw error;
+      }
+    }
+
+    const updateCheckerMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/update-checker$/
+    );
+    if (request.method === "POST" && updateCheckerMatch) {
+      if (!validMutationRequest(request, config.origin)) {
+        return json(403, { error: "csrf_validation_failed" });
+      }
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return json(400, { error: "invalid_json" });
+      }
+      const owner = decodeURIComponent(updateCheckerMatch[1]);
+      const repo = decodeURIComponent(updateCheckerMatch[2]);
+      try {
+        const result = await deps.github.triggerUpdateChecker(
+          session.accessToken, owner, repo, payload
+        );
+        return json(202, result);
+      } catch (error) {
+        if (error instanceof BuildControlError) {
+          const body = { error: error.code };
+          if (error.activeRun) body.activeRun = error.activeRun;
+          return json(error.status, body);
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_update_checker_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
+    }
+
+    const updateCheckerRunMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/update-checker\/runs\/(\d+)$/
+    );
+    if (request.method === "GET" && updateCheckerRunMatch) {
+      const session = await authenticatedSession();
+      if (!session) return json(401, { error: "authentication_required" });
+      const owner = decodeURIComponent(updateCheckerRunMatch[1]);
+      const repo = decodeURIComponent(updateCheckerRunMatch[2]);
+      try {
+        const run = await deps.github.getUpdateCheckerRun(
+          session.accessToken, owner, repo, updateCheckerRunMatch[3]
+        );
+        return json(200, { owner, repo, run });
+      } catch (error) {
+        if (error instanceof BuildControlError) {
+          return json(error.status, { error: error.code });
         }
         throw error;
       }
