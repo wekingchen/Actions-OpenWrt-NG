@@ -2820,6 +2820,166 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   line-height: 1.5;
 }
 
+.config-studio-package-direct-heading {
+  padding: 9px 2px 5px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 820;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.config-studio-package-submenu {
+  margin: 5px 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--panel-strong);
+}
+.config-studio-package-submenu > summary {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.config-studio-package-submenu > summary::-webkit-details-marker {
+  display: none;
+}
+.config-studio-package-submenu[open] > summary {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent-soft) 18%, var(--panel));
+}
+.config-studio-package-submenu-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.config-studio-package-submenu-icon {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 850;
+}
+.config-studio-package-submenu[data-kind="choice"] .config-studio-package-submenu-icon {
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 30%, var(--panel));
+}
+.config-studio-package-submenu-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+.config-studio-package-submenu-copy strong {
+  color: var(--text);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.config-studio-package-submenu-copy small {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+}
+.config-studio-package-submenu-chevron {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+  transition: transform .16s ease;
+}
+.config-studio-package-submenu[open] > summary .config-studio-package-submenu-chevron {
+  transform: rotate(180deg);
+}
+.config-studio-package-submenu-body {
+  display: grid;
+  padding: 4px 10px 8px;
+}
+.config-studio-package-submenu[data-depth="2"],
+.config-studio-package-submenu[data-depth="3"] {
+  margin-left: 12px;
+}
+.config-studio-choice-options {
+  display: grid;
+  gap: 6px;
+  padding: 5px 0 2px;
+}
+.config-studio-choice-option {
+  width: 100%;
+  min-height: 43px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.config-studio-choice-option:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: var(--panel-soft);
+}
+.config-studio-choice-option.selected {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 38%, var(--panel));
+}
+.config-studio-choice-option:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.config-studio-choice-radio {
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--panel-strong);
+  box-shadow: inset 0 0 0 3px var(--panel-strong);
+}
+.config-studio-choice-option.selected .config-studio-choice-radio {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.config-studio-choice-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+.config-studio-choice-copy strong {
+  font-size: 10px;
+}
+.config-studio-choice-copy small,
+.config-studio-choice-state {
+  color: var(--muted);
+  font-size: 8px;
+}
+.config-studio-choice-option.selected .config-studio-choice-state {
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+.config-studio-choice-reset {
+  justify-self: start;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  padding: 4px 2px;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
 .config-studio-option {
   min-width: 0;
   display: grid;
@@ -3094,7 +3254,26 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
     grid-template-columns: minmax(0, 1fr);
   }
   .config-studio-package-children-body {
-    padding-left: 16px;
+    padding-left: 12px;
+    padding-right: 6px;
+  }
+  .config-studio-package-submenu > summary {
+    min-height: 48px;
+    padding: 8px;
+  }
+  .config-studio-package-submenu-body {
+    padding: 4px 7px 8px;
+  }
+  .config-studio-package-submenu[data-depth="2"],
+  .config-studio-package-submenu[data-depth="3"] {
+    margin-left: 6px;
+  }
+  .config-studio-choice-option {
+    min-height: 46px;
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+  .config-studio-choice-state {
+    grid-column: 2;
   }
   .config-studio-list-head span:last-child {
     display: none;
