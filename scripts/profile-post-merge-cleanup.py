@@ -27,11 +27,11 @@ API_VERSION = "2022-11-28"
 CONTROL_PLANE_SIGNATURE = "由 OpenWrt NG Control Plane 创建。"
 PROFILE_ID = r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}"
 STANDARD_TITLE_RE = re.compile(
-    rf"^profile\\(({PROFILE_ID})\\): "
+    rf"^profile\(({PROFILE_ID})\): "
     r"(create|copy|restore|delete|update|set-baseline) via Control Plane$"
 )
 RENAME_TITLE_RE = re.compile(
-    rf"^profile\\(({PROFILE_ID})\\): rename to ({PROFILE_ID}) via Control Plane$"
+    rf"^profile\(({PROFILE_ID})\): rename to ({PROFILE_ID}) via Control Plane$"
 )
 SESSION_BRANCH_PREFIX = "openwrt-ng/config-session-"
 SESSION_ID_RE = re.compile(r"^[0-9a-f]{16}$")
