@@ -477,6 +477,13 @@ const profileFetch = async (url, options = {}) => {
   }
   if (
     method === "GET" &&
+    ["/contents/profiles/copy-profile", "/contents/profiles/default-renamed"].includes(path) &&
+    parsed.searchParams.get("ref") === profileBaseSha
+  ) {
+    return Response.json({ message: "Not Found" }, { status: 404 });
+  }
+  if (
+    method === "GET" &&
     path === "/contents/profiles/exists-profile" &&
     parsed.searchParams.get("ref") === profileBaseSha
   ) {
@@ -521,6 +528,12 @@ const profileFetch = async (url, options = {}) => {
     path === "/actions/workflows/build-openwrt.yml/runs"
   ) {
     return Response.json({ workflow_runs: [] });
+  }
+  if (
+    method === "GET" &&
+    path.startsWith("/git/matching-refs/heads/openwrt-ng/config-session-")
+  ) {
+    return Response.json([]);
   }
   if (method === "GET" && path === "/git/commits/" + profileBaseSha) {
     return Response.json({ sha: profileBaseSha, tree: { sha: "base-tree" } });
