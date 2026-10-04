@@ -290,7 +290,7 @@ jobs:
         ! grep -q '同步主仓运行时脚本' .github/workflows/config-studio.yml
         ! grep -q '同步主仓运行时脚本' .github/workflows/build-openwrt.yml
         ! grep -q 'rm -rf scripts adapters' .github/workflows/*.yml
-        if grep -rnE 'wekingchen/' .github scripts adapters control-plane/*.mjs control-plane/lib; then
+        if grep -rnE 'wekingchen[/]' .github scripts adapters control-plane/*.mjs control-plane/lib; then
           echo "ERROR: 通用主干不得硬编码维护者个人仓库名" >&2
           exit 1
         fi
