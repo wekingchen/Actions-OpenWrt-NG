@@ -14,7 +14,8 @@ const PROFILE_TEMPLATE_KEYS = new Set([
   "streamLog",
   "requiredPackages",
   "watchSources",
-  "extraFeeds"
+  "extraFeeds",
+  "feedPriorityMode"
 ]);
 const BOOLEAN_KEYS = [
   "autoUpdate",
@@ -90,6 +91,9 @@ export function validateProfileInput(input) {
   const requiredPackages = String(input.requiredPackages ?? "");
   const watchSources = String(input.watchSources ?? "");
   const extraFeeds = String(input.extraFeeds ?? "");
+  const feedPriorityMode = String(
+    input.feedPriorityMode ?? "per-package"
+  ).trim() || "per-package";
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(profileId)) {
     errors.push("Profile ID 必须以字母或数字开头，仅包含字母、数字、点、下划线和短横线，且最多 64 个字符。");
   }
@@ -129,6 +133,10 @@ export function validateProfileInput(input) {
       errors.push(`Manifest 包名格式不合法：${packageName}`);
       break;
     }
+  }
+
+  if (!["per-package", "feed-order"].includes(feedPriorityMode)) {
+    errors.push("Feed 冲突策略必须是 per-package 或 feed-order。");
   }
 
   if (extraFeeds.length > 256 * 1024) {
@@ -184,6 +192,9 @@ export function buildProfileFiles(input) {
   const requiredPackages = normalizeLines(input.requiredPackages);
   const watchSources = normalizeLines(input.watchSources);
   const extraFeeds = normalizeFeedLines(input.extraFeeds);
+  const feedPriorityMode = String(
+    input.feedPriorityMode ?? "per-package"
+  ).trim() || "per-package";
 
   const profileEnv = [
     `PROFILE_NAME=${shellQuote(input.profileName.trim())}`,

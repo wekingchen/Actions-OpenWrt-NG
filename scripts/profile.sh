@@ -110,6 +110,7 @@ MAKE_LD_LIBRARY_PATH_RELATIVE="${MAKE_LD_LIBRARY_PATH_RELATIVE:-}"
 PROFILE_NAME="${PROFILE_NAME:-$profile_id}"
 AUTO_UPDATE="${AUTO_UPDATE:-false}"
 MAXIMIZE_BUILD_SPACE="${MAXIMIZE_BUILD_SPACE:-false}"
+FEED_PRIORITY_MODE="${FEED_PRIORITY_MODE:-per-package}"
 STREAM_BUILD_LOG="${STREAM_BUILD_LOG:-false}"
 UPLOAD_BIN_DIR="${UPLOAD_BIN_DIR:-false}"
 UPLOAD_FIRMWARE="${UPLOAD_FIRMWARE:-true}"
@@ -152,6 +153,11 @@ if [ -n "$MAKE_LD_LIBRARY_PATH_RELATIVE" ]; then
   }
 fi
 
+[[ "$FEED_PRIORITY_MODE" = "per-package" || "$FEED_PRIORITY_MODE" = "feed-order" ]] || {
+  echo "ERROR: FEED_PRIORITY_MODE must be per-package/feed-order, got: $FEED_PRIORITY_MODE" >&2
+  exit 1
+}
+
 for flag in AUTO_UPDATE MAXIMIZE_BUILD_SPACE STREAM_BUILD_LOG UPLOAD_BIN_DIR UPLOAD_FIRMWARE UPLOAD_RELEASE; do
   value="${!flag}"
   [[ "$value" = true || "$value" = false ]] || {
@@ -181,6 +187,7 @@ case "$command_name" in
     echo "  源码：$SOURCE_REPO @ $SOURCE_BRANCH"
     echo "  Adapter：$ADAPTER"
     echo "  配置：$CONFIG_FILE"
+    echo "  Feed 冲突策略：$FEED_PRIORITY_MODE"
     ;;
 
   export)
@@ -203,6 +210,7 @@ case "$command_name" in
     emit_env AUTO_UPDATE "$AUTO_UPDATE"
     emit_env MAKE_LD_LIBRARY_PATH_RELATIVE "$MAKE_LD_LIBRARY_PATH_RELATIVE"
     emit_env MAXIMIZE_BUILD_SPACE "$MAXIMIZE_BUILD_SPACE"
+    emit_env FEED_PRIORITY_MODE "$FEED_PRIORITY_MODE"
     emit_env STREAM_BUILD_LOG "$STREAM_BUILD_LOG"
     emit_env UPLOAD_BIN_DIR "$UPLOAD_BIN_DIR"
     emit_env UPLOAD_FIRMWARE "$UPLOAD_FIRMWARE"

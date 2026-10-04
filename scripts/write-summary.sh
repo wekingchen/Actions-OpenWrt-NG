@@ -76,6 +76,7 @@ case "$mode" in
       printf '| 自动追新 | %s %s |\n'         "$(bool_icon "${AUTO_UPDATE:-false}")"         "$(md_escape "${AUTO_UPDATE:-false}")"
       printf '| 扩展构建空间 | %s %s |\n'         "$(bool_icon "${MAXIMIZE_BUILD_SPACE:-false}")"         "$(md_escape "${MAXIMIZE_BUILD_SPACE:-false}")"
       printf '| 编译日志策略 | %s |\n' "静默编译；失败时输出有限上下文"
+      printf '| Feed 冲突策略 | %s |\n' "$(md_escape "${FEED_PRIORITY_MODE:-per-package}")"
       printf '| 发布 Release | %s %s |\n'         "$(bool_icon "${UPLOAD_RELEASE:-false}")"         "$(md_escape "${UPLOAD_RELEASE:-false}")"
       echo
       printf '[查看本次运行](%s)\n' "$(run_url)"

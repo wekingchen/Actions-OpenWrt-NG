@@ -898,7 +898,8 @@ const templateInput = {
   streamLog: true,
   requiredPackages: "",
   watchSources: "",
-  extraFeeds: "src-git --force helloworld https://github.com/fw876/helloworld.git"
+  extraFeeds: "src-git --force helloworld https://github.com/fw876/helloworld.git",
+  feedPriorityMode: "per-package"
 };
 
 const rejectedTemplatePreview = await handleControlPlaneRequest(

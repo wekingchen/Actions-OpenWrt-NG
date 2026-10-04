@@ -1892,6 +1892,9 @@ export class GitHubAppClient {
     let adapter = String(payload.adapter || "direct-openwrt").trim();
     let baseConfig = String(payload.baseConfig || "");
     let extraFeeds = String(payload.extraFeeds || "");
+    let feedPriorityMode = String(
+      payload.feedPriorityMode || "per-package"
+    ).trim() || "per-package";
     let profileSnapshot = null;
     const state = await this.repositoryState(token, owner, repo);
 
@@ -1937,6 +1940,12 @@ export class GitHubAppClient {
       adapter = profileEnvValue(env, "ADAPTER") || "direct-openwrt";
       baseConfig = files[".config"] || "";
       extraFeeds = files["feeds.conf"] || "";
+      feedPriorityMode =
+        profileEnvValue(env, "FEED_PRIORITY_MODE") || "per-package";
+    }
+
+    if (!["per-package", "feed-order"].includes(feedPriorityMode)) {
+      throw new ConfigStudioError("invalid_feed_priority_mode", 400);
     }
 
     if (!sourceRepo || /[\r\n]/.test(sourceRepo) || sourceRepo.length > 1000) {
@@ -1988,6 +1997,7 @@ export class GitHubAppClient {
       adapter,
       baseConfig,
       extraFeeds,
+      feedPriorityMode,
       baseRefSha: state.baseRefSha,
       selection: { values: {} },
       pendingMode: "catalog",
@@ -2033,6 +2043,7 @@ export class GitHubAppClient {
         sourceBranch,
         adapter,
         extraFeeds,
+        feedPriorityMode,
         profileSnapshot: Boolean(profileSnapshot),
         ref: state.defaultBranch,
         ...dispatched
@@ -2164,6 +2175,7 @@ export class GitHubAppClient {
       sourceBranch: request.sourceBranch || "",
       adapter: request.adapter || "direct-openwrt",
       extraFeeds: request.extraFeeds || "",
+      feedPriorityMode: request.feedPriorityMode || "per-package",
       status,
       run: run
         ? {

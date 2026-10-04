@@ -39,6 +39,22 @@ assert.equal(
   "Config Studio progress 必须复用 actionProgress Schema"
 );
 
+for (const field of ["extraFeeds", "feedPriorityMode"]) {
+  assert.ok(
+    sessionResponse.required?.includes(field),
+    `Config Studio 状态响应必须要求 ${field} 字段`
+  );
+  assert.ok(
+    sessionResponse.properties?.[field],
+    `Config Studio 状态响应缺少 ${field} Schema`
+  );
+}
+assert.deepEqual(
+  schema.$defs?.profileTemplateInput?.properties?.feedPriorityMode?.enum,
+  ["per-package", "feed-order"],
+  "Profile Template Feed 策略枚举必须保持稳定"
+);
+
 for (const name of [
   "profileLifecycleRequest",
   "profileRestoreRequest",

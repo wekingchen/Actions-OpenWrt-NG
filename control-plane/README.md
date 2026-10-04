@@ -351,6 +351,8 @@ profiles/<id>/feeds.conf
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
 
+0.21.10 在 Profile 创建流程中增加 Feed 冲突策略。默认 `per-package` 按二进制包版本择优，并对同一 source 的分裂赢家 fail-safe；`feed-order` 按第三方优先 feed 的声明顺序整源选择。旧 Profile 未声明时自动使用 `per-package`。每轮 Feed 决策、被替换项与跨 feed 依赖告警都会随构建进入 `config-record/feed-priority.json`。
+
 0.21.9 增加 Profile Merge Policy。部署变量 `PROFILE_MERGE_POLICY` 支持 `immediate`（默认，保持原行为）、`after-checks`（通过 GitHub Auto-merge 在必需检查/审核满足后 squash 合并）和 `manual`（只创建 PR）。`after-checks` 依赖仓库已启用 Auto-merge 且存在会阻止立即合并的规则；如果 GitHub 无法启用 Auto-merge，PR 会保留供人工处理，不会退回即时合并。合并后补偿清理扩展到所有 Control Plane Profile PR，删除/重命名继续额外处理 Config Studio 会话。
 
 0.21.6 为全项目代码审计修复版：自托管 Docker 镜像显式安装 production 依赖并在 CI 中真实启动验证；Worker 与 Node 的 JSON 请求体统一 5 MiB 上限；Config Studio 会话清理返回部分失败明细，前端不再把“发现会话”误报为“全部清理成功”；Pages Wizard 与服务端 Profile 模板校验建立精确生成结果一致性测试，并移除已失效的流式日志开关；Dashboard / Update Checker 的上游 Git 查询增加单次超时，Dashboard 同时区分 workflow 总体结论与“编译 OpenWrt 固件”job 是否成功，从而正确识别“编译成功、Release 失败”的构建；Dashboard PR 不再把 GITHUB_TOKEN 显式交给待审代码。中央 CI 的路径范围扩展到 scripts / adapters / profiles / dashboard，并实际启动自托管容器。\n\n0.21.5 补齐恢复和运维闭环。Builder 详情会根据真实 Artifact / Release 状态判断是否可以“发布现有构建”：仅当来源 run 确实属于 `build-openwrt.yml` 且已结束、“编译 OpenWrt 固件”job 成功、没有已关联 Release、并且 `OpenWrt_NG_release_bundle_<run_id>` 未过期时允许触发 `release-existing.yml`；来源 run 可以因为后续 Release job 失败而整体 conclusion=failure；恢复 workflow 自身也再次校验来源 workflow 身份与成功状态，前端持续显示真实 Action 步骤。Profile 列表新增手动 Update Checker 入口，支持全部自动追新 Profile、指定单 Profile 和 `force`，同样显示真实步骤并阻止重复活动任务。最近通过 Control Plane 删除、当前仍不存在的 Profile 会出现在“最近删除”；恢复时服务端验证删除 commit 的审计标题，固定读取该删除 commit 的第一个父提交作为删除前快照，要求 7 个标准文件完整存在，再通过新的独立分支和 PR 恢复，不对默认分支执行 reset / revert。
