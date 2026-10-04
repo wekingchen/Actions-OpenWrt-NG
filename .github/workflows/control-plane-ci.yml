@@ -82,6 +82,7 @@ jobs:
         node --check control-plane/test.mjs
         node --check control-plane/server-routes.test.mjs
         node --check control-plane/contract.test.mjs
+        node --check control-plane/github-profile-restore.test.mjs
         python3 -m py_compile scripts/verify-shared-sync.py
         python3 -m py_compile scripts/config-studio.py
         python3 scripts/test-config-studio.py

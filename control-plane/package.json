@@ -1,7 +1,7 @@
 {
   "name": "openwrt-ng-control-plane",
   "private": true,
-  "version": "0.21.7",
+  "version": "0.21.8",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node server.mjs",
     "dev": "wrangler dev",
-    "test": "node test.mjs && node worker.test.mjs && node server-routes.test.mjs && node contract.test.mjs",
+    "test": "node test.mjs && node worker.test.mjs && node server-routes.test.mjs && node contract.test.mjs && node github-profile-restore.test.mjs",
     "check:worker": "wrangler deploy --dry-run --outdir .wrangler/dry-run",
     "d1:local": "wrangler d1 migrations apply DB --local",
     "deploy": "wrangler deploy"
