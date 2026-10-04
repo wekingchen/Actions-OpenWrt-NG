@@ -308,7 +308,7 @@ V2.0D 在控制面中补齐 Profile Wizard 到仓库写入之间的缺口。用�
 - Profile ID / 显示名称。
 - 源码仓库、分支 / Tag、Adapter。
 - OpenWrt `.config`。
-- 自动追新、Release、Artifact、构建空间、流式日志开关。
+- 自动追新、Release、Artifact 与构建空间。编译日志策略由 Core 统一管理，不再由 Profile 开关控制。
 - Manifest 必选软件包与额外 Git 上游监控。
 
 安全边界：
@@ -344,6 +344,8 @@ profiles/<id>/feeds.conf
 浏览器不能通过该接口提交任意仓库路径；如果目标 Profile 已经存在，返回 `409 profile_already_exists`，不会覆盖。创建前还会再次确认默认分支 head 与检查时的基线 SHA 一致；如果期间仓库发生变化，返回 `409 repository_changed`，不会基于旧 head 静默创建。预览时 `.config` 会发送到用户自己的 Control Plane 做服务端校验，但不会写入 GitHub。
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
+
+0.21.1 统一 Builder 日志策略：正常 `make -jN` 默认静默写入 Runner 临时文件，GitHub step 只显示定期心跳；仅在失败后提取有限错误上下文并执行有限时单目标 `-j1 V=s` 诊断，详细诊断同样先写文件，再只显示错误附近内容。失败 Artifact 改为 `build-error-context.log`、`build-failure.log` 和 OpenWrt 自身 logs，不再上传整份并行 `build.log`。旧 Profile 中的 `STREAM_BUILD_LOG=true` 保留兼容解析但不再开启全量页面输出；新建 Profile UI 同时移除“流式日志”选项并固定写入 `STREAM_BUILD_LOG=false`。只有 Core 调试时可通过内部 `OPENWRT_NG_DEBUG_STREAM_LOG=true` 临时恢复全量流式输出。
 
 0.21.0 将“编辑已有 Profile → 图形配置”升级为完整编辑器快照模式。点击图形配置前，浏览器先把当前正在编辑的文件写回内存，然后把 7 个标准 Profile 文件连同基线 SHA 发送给 Control Plane；服务端校验后把这份快照写入专用 `openwrt-ng/config-session-*` 临时分支，并保留 DIY 脚本的可执行权限。Config Studio workflow 改为 checkout 该 session 分支，因此 `profile.env`、`diy-part1.sh`、`diy-part2.sh`、`feeds.conf` 和当前未保存的 `.config` 都按编辑器中的版本生效，而不是重新读取默认分支旧内容。准备顺序同时与 Builder 进一步对齐：加载 Profile → Profile Preflight → Adapter/源码 → DIY Part 1 → feeds → feeds install → PROFILE_FILES_DIR → DIY Part 2 → `make defconfig` → 图形菜单。图形配置完成后仅以 Kconfig 结果替换 session 快照中的 `.config`，其余 6 个文件按进入图形配置时的编辑器快照一起创建 PR；若默认分支在会话期间发生变化，仍返回 `409 repository_changed`，不会覆盖并发修改。
 

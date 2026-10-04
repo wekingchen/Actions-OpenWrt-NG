@@ -12,6 +12,8 @@ on:
       - ".github/workflows/build-openwrt.yml"
       - ".github/workflows/config-studio.yml"
       - "scripts/compile.sh"
+      - "scripts/extract_failure_context.py"
+      - "scripts/test_extract_failure_context.py"
       - "scripts/config-studio.py"
       - "scripts/config-studio-kconfig.c"
       - "scripts/cleanup-workflow-runs.sh"
@@ -24,6 +26,8 @@ on:
       - ".github/workflows/build-openwrt.yml"
       - ".github/workflows/config-studio.yml"
       - "scripts/compile.sh"
+      - "scripts/extract_failure_context.py"
+      - "scripts/test_extract_failure_context.py"
       - "scripts/config-studio.py"
       - "scripts/config-studio-kconfig.c"
       - "scripts/cleanup-workflow-runs.sh"
@@ -71,6 +75,8 @@ jobs:
         python3 -m py_compile scripts/config-studio.py
         python3 scripts/test-config-studio.py
         python3 scripts/test_detect_failed_target.py
+        python3 -m py_compile scripts/extract_failure_context.py
+        python3 scripts/test_extract_failure_context.py
         bash -n scripts/compile.sh
         bash -n scripts/apply-extra-feeds.sh
         python3 -m py_compile scripts/merge-feeds.py
@@ -96,8 +102,15 @@ jobs:
         test "$(grep -c 'runs-on: ubuntu-24.04' .github/workflows/build-openwrt.yml)" -eq 4
         ! grep -q 'runs-on: ubuntu-22.04' .github/workflows/build-openwrt.yml
         grep -q 'detect_failed_target.py' scripts/compile.sh
+        grep -q 'extract_failure_context.py' scripts/compile.sh
+        grep -q 'OPENWRT_NG_DEBUG_STREAM_LOG' scripts/compile.sh
+        ! grep -q 'STREAM_BUILD_LOG.*tee' scripts/compile.sh
+        grep -q 'build-error-context.log' .github/workflows/build-openwrt.yml
+        ! grep -q '^[[:space:]]*build[.]log$' .github/workflows/build-openwrt.yml
         test -f scripts/detect_failed_target.py
         test -f scripts/test_detect_failed_target.py
+        test -f scripts/extract_failure_context.py
+        test -f scripts/test_extract_failure_context.py
         grep -q 'CCACHE_DIR="$PWD/.ccache"' scripts/compile.sh
         grep -q 'ccache 本轮 Hits' scripts/write-summary.sh
         grep -q 'write_ccache_stats' scripts/compile.sh
