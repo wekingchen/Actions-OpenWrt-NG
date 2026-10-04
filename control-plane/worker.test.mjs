@@ -104,7 +104,8 @@ const github = {
     return [{
       id: "default",
       path: "profiles/default",
-      sha: "abc"
+      sha: "abc",
+      baseline: true
     }];
   },
   async getProfile(token, owner, repo, profileId) {
@@ -117,9 +118,11 @@ const github = {
       repo,
       defaultBranch: "main",
       baseRefSha: "a".repeat(40),
+      baselineProfileId: "default",
       profile: {
         id: profileId,
         path: "profiles/default",
+        baseline: true,
         files: {
           ".config": {
             path: "profiles/default/.config",
@@ -380,6 +383,31 @@ const github = {
       }
     };
   },
+  async setBaselineProfilePullRequest(token, owner, repo, profileId, payload) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(profileId, "other-profile");
+    assert.equal(payload.baseRefSha, "a".repeat(40));
+    return {
+      branch: "openwrt-ng/profile-other-profile-baseline",
+      commitSha: "f".repeat(40),
+      changedFiles: ["profiles/.baseline"],
+      action: "baseline",
+      baselineProfileId: "other-profile",
+      pullRequest: {
+        number: 10,
+        url: "https://github.com/acme/router/pull/10",
+        merged: true,
+        mergeCommitSha: "1".repeat(40),
+        mergeReason: ""
+      },
+      cleanup: {
+        branchDeleted: true,
+        supersededPullRequests: []
+      }
+    };
+  },
   async deleteProfilePullRequest(token, owner, repo, profileId, payload) {
     assert.equal(token, "ghu_worker_access");
     assert.equal(owner, "acme");
@@ -624,10 +652,13 @@ const profiles = await handleControlPlaneRequest(
   configuredEnv,
   deps
 );
-assert.deepEqual((await profiles.json()).profiles, [{
+const profilesBody = await profiles.json();
+assert.equal(profilesBody.baselineProfileId, "default");
+assert.deepEqual(profilesBody.profiles, [{
   id: "default",
   path: "profiles/default",
-  sha: "abc"
+  sha: "abc",
+  baseline: true
 }]);
 
 
@@ -727,6 +758,8 @@ const detail = await handleControlPlaneRequest(
 const detailBody = await detail.json();
 assert.equal(detail.status, 200);
 assert.equal(detailBody.baseRefSha, "a".repeat(40));
+assert.equal(detailBody.baselineProfileId, "default");
+assert.equal(detailBody.profile.baseline, true);
 assert.equal(detailBody.profile.files[".config"].content, "CONFIG_TEST=y\n");
 
 const rejectedWrite = await handleControlPlaneRequest(
@@ -787,6 +820,46 @@ assert.equal(write.status, 201);
 const writeBody = await write.json();
 assert.equal(writeBody.pullRequest.number, 7);
 assert.equal(writeBody.pullRequest.merged, true);
+
+const rejectedBaseline = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/other-profile/baseline",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ baseRefSha: "a".repeat(40) })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(rejectedBaseline.status, 403);
+
+const baselineProfile = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/other-profile/baseline",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ baseRefSha: "a".repeat(40) })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(baselineProfile.status, 201);
+const baselineProfileBody = await baselineProfile.json();
+assert.equal(baselineProfileBody.action, "baseline");
+assert.equal(baselineProfileBody.baselineProfileId, "other-profile");
+assert.equal(baselineProfileBody.pullRequest.number, 10);
 
 const rejectedDelete = await handleControlPlaneRequest(
   new Request(
