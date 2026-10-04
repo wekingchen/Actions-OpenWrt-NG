@@ -917,6 +917,29 @@ const rejectedTemplatePreview = await handleControlPlaneRequest(
 );
 assert.equal(rejectedTemplatePreview.status, 403);
 
+const oversizedTemplatePreview = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/profile-templates/preview",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json",
+        "Content-Length": String(6 * 1024 * 1024)
+      },
+      body: "{}"
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(oversizedTemplatePreview.status, 413);
+assert.deepEqual(await oversizedTemplatePreview.json(), {
+  error: "request_body_too_large"
+});
+
 const templatePreview = await handleControlPlaneRequest(
   new Request(
     "https://worker.example/api/v1/profile-templates/preview",
