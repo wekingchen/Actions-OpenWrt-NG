@@ -13,6 +13,11 @@ export const PROFILE_FILES = Object.freeze([
   "feeds.conf"
 ]);
 
+export const REQUIRED_PROFILE_FILES = Object.freeze([
+  ".config",
+  "profile.env"
+]);
+
 const PROFILE_FILE_MODES = Object.freeze({
   ".config": "100644",
   "profile.env": "100644",
@@ -962,7 +967,10 @@ export class GitHubAppClient {
       throw new ProfileWriteError("deleted_profile_snapshot_unavailable", 410);
     }
 
-    const files = {};
+    const files = Object.fromEntries(
+      PROFILE_FILES.map((name) => [name, ""])
+    );
+    const restoredFiles = [];
     for (const name of PROFILE_FILES) {
       let body;
       try {
@@ -972,10 +980,13 @@ export class GitHubAppClient {
         );
       } catch (error) {
         if (error?.httpStatus === 404) {
-          throw new ProfileWriteError(
-            "deleted_profile_snapshot_incomplete",
-            410
-          );
+          if (REQUIRED_PROFILE_FILES.includes(name)) {
+            throw new ProfileWriteError(
+              "deleted_profile_snapshot_incomplete",
+              410
+            );
+          }
+          continue;
         }
         throw error;
       }
@@ -983,6 +994,7 @@ export class GitHubAppClient {
         throw new ProfileWriteError("unsupported_profile_file", 502);
       }
       files[name] = decodeBase64Utf8(body.content);
+      restoredFiles.push(name);
     }
     validateProfileFilesPayload(files);
 
@@ -999,7 +1011,7 @@ export class GitHubAppClient {
         profileId,
         state: latest,
         files,
-        changedFiles: [...PROFILE_FILES],
+        changedFiles: restoredFiles,
         action: "restore"
       }
     );

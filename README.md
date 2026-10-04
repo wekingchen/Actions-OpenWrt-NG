@@ -517,8 +517,11 @@ profiles/my-router/
 ├── diy-part1.sh
 ├── diy-part2.sh
 ├── required-packages.txt
-└── watch-sources.txt
+├── watch-sources.txt
+└── feeds.conf
 ```
+
+其中 `.config` 与 `profile.env` 是恢复与构建所需的必需文件；其余 Hook、校验清单与 `feeds.conf` 都是可选文件。Control Plane 新建 Profile 时仍会生成完整标准结构；恢复历史 Profile 时会按删除前实际存在的可选文件原样恢复。
 
 然后在 **Run workflow** 时把 `profile` 填成：
 
