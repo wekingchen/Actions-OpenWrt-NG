@@ -3491,7 +3491,11 @@ async function startConfigStudio(repo, options) {
 
   const existing = Boolean(options.profileId);
   const payload = existing
-    ? { profileId: options.profileId }
+    ? {
+        profileId: options.profileId,
+        baseRefSha: options.baseRefSha || "",
+        profileFiles: options.profileFiles || null
+      }
     : {
         sourceRepo: options.sourceRepo,
         sourceBranch: options.sourceBranch,
@@ -3518,7 +3522,7 @@ async function startConfigStudio(repo, options) {
     ? "图形配置 · " + options.profileId
     : "新 Profile · 图形 Menuconfig";
   $("config-studio-context").textContent = existing
-    ? repo.fullName + " · 从当前 Profile 配置开始"
+    ? repo.fullName + " · 从当前编辑器 Profile 快照开始"
     : repo.fullName + " · " + options.sourceRepo + " @ " + options.sourceBranch;
   $("config-studio-loading").hidden = false;
   $("config-studio-workbench").hidden = true;
@@ -4064,8 +4068,13 @@ $("editor-content").addEventListener("input", setPreviewStale);
 
 $("editor-config-studio").addEventListener("click", () => {
   if (!editorState.repo || !editorState.profileId) return;
+  saveCurrentEditorFile();
   startConfigStudio(editorState.repo, {
-    profileId: editorState.profileId
+    profileId: editorState.profileId,
+    baseRefSha: editorState.baseRefSha,
+    profileFiles: Object.fromEntries(
+      PROFILE_FILES.map((name) => [name, editorState.files[name] || ""])
+    )
   }).catch((error) => showError(error));
 });
 
