@@ -61,8 +61,13 @@ assert.match(controlPlaneAppJs, /configStudioDependencyConditionMatches/);
 assert.match(controlPlaneAppJs, /configStudioEffectiveModifiedEntries/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-dependency-summary"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-show-dependencies"/);
-assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.20\.1<\/span>/);
+assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.20\.2<\/span>/);
 assert.match(controlPlaneIndexHtml, /id="new-adapter-field" hidden/);
+assert.match(controlPlaneIndexHtml, /id="profile-list-result"/);
+assert.match(controlPlaneAppJs, /showProfileListResult/);
+assert.match(controlPlaneAppJs, /forceRefresh: true/);
+assert.match(controlPlaneAppJs, /cache: "no-store"/);
+assert.match(controlPlaneAppJs, /profile-item-refreshed/);
 assert.match(controlPlaneAppJs, /renderNewAdapterVisibility/);
 assert.match(controlPlaneIndexHtml, />标准 OpenWrt 源码<\/option>/);
 
