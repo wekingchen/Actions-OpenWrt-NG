@@ -90,7 +90,8 @@ jobs:
         grep -q 'CONFIG_CCACHE=y' profiles/default/.config
         grep -q 'ccache 配置验收通过' .github/workflows/build-openwrt.yml
         grep -q 'Profile 请求 CONFIG_CCACHE=y' .github/workflows/build-openwrt.yml
-        grep -q 'openwrt-ng-build-v2-' .github/workflows/build-openwrt.yml
+        grep -q 'openwrt-ng-build-v3-ubuntu24-' .github/workflows/build-openwrt.yml
+        ! grep -q 'openwrt-ng-build-v2-' .github/workflows/build-openwrt.yml
         grep -q 'CCACHE_MAXSIZE: 2G' .github/workflows/build-openwrt.yml
         test "$(grep -c 'runs-on: ubuntu-24.04' .github/workflows/build-openwrt.yml)" -eq 4
         ! grep -q 'runs-on: ubuntu-22.04' .github/workflows/build-openwrt.yml
