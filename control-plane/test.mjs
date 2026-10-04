@@ -396,7 +396,7 @@ assert.equal(
 const profileBaseSha = "a".repeat(40);
 const profileFileContents = {
   ".config": "CONFIG_TEST=y\n",
-  "profile.env": "PROFILE_NAME=\"Test\"\n",
+  "profile.env": "PROFILE_NAME=\"Test\"\nCONFIG_FILE=\"profiles/default/.config\"\nDIY_PART1=\"profiles/default/diy-part1.sh\"\n",
   "diy-part1.sh": "#!/bin/bash\n",
   "diy-part2.sh": "#!/bin/bash\n",
   "required-packages.txt": "",
@@ -674,6 +674,76 @@ assert.equal(
   ).mode,
   "100755"
 );
+
+const copyCallStart = profileCalls.length;
+const copiedProfilePr = await profileClient.copyProfilePullRequest(
+  "ghu_profile",
+  "acme",
+  "router",
+  "default",
+  { baseRefSha: profileBaseSha, targetProfileId: "copy-profile" }
+);
+assert.equal(copiedProfilePr.action, "copy");
+assert.equal(copiedProfilePr.sourceProfileId, "default");
+assert.equal(copiedProfilePr.targetProfileId, "copy-profile");
+assert.equal(copiedProfilePr.pullRequest.merged, true);
+const copyCalls = profileCalls.slice(copyCallStart);
+const copyTreeCall = copyCalls.find(
+  (call) => call.method === "POST" && call.path === "/git/trees"
+);
+assert.ok(copyTreeCall);
+const copyTreeBody = JSON.parse(copyTreeCall.body);
+assert.equal(copyTreeBody.tree.length, 7);
+assert.ok(
+  copyTreeBody.tree.every((entry) =>
+    entry.path.startsWith("profiles/copy-profile/")
+  )
+);
+assert.ok(
+  copyCalls
+    .filter((call) => call.method === "POST" && call.path === "/git/blobs")
+    .map((call) => JSON.parse(call.body).content)
+    .some((content) => content.includes("profiles/copy-profile/.config"))
+);
+
+const renameCallStart = profileCalls.length;
+const renamedProfilePr = await profileClient.renameProfilePullRequest(
+  "ghu_profile",
+  "acme",
+  "router",
+  "default",
+  { baseRefSha: profileBaseSha, targetProfileId: "default-renamed" }
+);
+assert.equal(renamedProfilePr.action, "rename");
+assert.equal(renamedProfilePr.sourceProfileId, "default");
+assert.equal(renamedProfilePr.targetProfileId, "default-renamed");
+assert.equal(renamedProfilePr.baselineProfileId, "default-renamed");
+assert.equal(renamedProfilePr.pullRequest.merged, true);
+const renameCalls = profileCalls.slice(renameCallStart);
+const renameTreeCall = renameCalls.find(
+  (call) => call.method === "POST" && call.path === "/git/trees"
+);
+assert.ok(renameTreeCall);
+const renameTreeBody = JSON.parse(renameTreeCall.body);
+assert.equal(renameTreeBody.tree.length, 15);
+assert.ok(
+  renameTreeBody.tree.some((entry) =>
+    entry.path === "profiles/.baseline" && entry.sha !== null
+  )
+);
+assert.equal(
+  renameTreeBody.tree.filter((entry) =>
+    entry.path.startsWith("profiles/default/") && entry.sha === null
+  ).length,
+  7
+);
+assert.equal(
+  renameTreeBody.tree.filter((entry) =>
+    entry.path.startsWith("profiles/default-renamed/") && entry.sha !== null
+  ).length,
+  7
+);
+assert.equal(renamedProfilePr.configStudioCleanup.sessionsFound, 0);
 
 const baselineCallStart = profileCalls.length;
 const baselineProfilePr = await profileClient.setBaselineProfilePullRequest(
