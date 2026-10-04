@@ -1105,6 +1105,318 @@ async function openBuildDialog(repo, profileId) {
   }
 }
 
+function clearUpdateCheckerPolling() {
+  if (updateCheckerState.pollTimer) {
+    clearTimeout(updateCheckerState.pollTimer);
+    updateCheckerState.pollTimer = null;
+  }
+}
+
+function setUpdateCheckerStatus(message = "", isError = false) {
+  const node = $("update-checker-status");
+  node.textContent = message;
+  node.classList.toggle("error-text", Boolean(isError));
+}
+
+function closeUpdateCheckerDialog() {
+  clearUpdateCheckerPolling();
+  updateCheckerState.generation += 1;
+  const restoreFocus = updateCheckerState.restoreFocus;
+  $("update-checker-dialog").hidden = true;
+  document.body.classList.remove("dialog-open");
+  updateCheckerState.repo = null;
+  updateCheckerState.runId = 0;
+  updateCheckerState.restoreFocus = null;
+  renderActionProgressCard("update-checker-progress", null, null);
+  $("update-checker-run-link").hidden = true;
+  setUpdateCheckerStatus();
+  if (restoreFocus?.isConnected && typeof restoreFocus.focus === "function") {
+    restoreFocus.focus();
+  }
+}
+
+async function pollUpdateCheckerRun(generation) {
+  const repo = updateCheckerState.repo;
+  const runId = updateCheckerState.runId;
+  if (
+    !repo ||
+    !runId ||
+    generation !== updateCheckerState.generation ||
+    $("update-checker-dialog").hidden
+  ) return;
+
+  try {
+    const data = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/update-checker/runs/${runId}`,
+      { cache: "no-store" }
+    );
+    if (
+      generation !== updateCheckerState.generation ||
+      $("update-checker-dialog").hidden
+    ) return;
+
+    const run = data.run;
+    renderActionProgressCard(
+      "update-checker-progress",
+      run.progress,
+      run,
+      {
+        force: true,
+        runningTitle: "正在检查上游",
+        runningDetail: "进度来自 Update Checker 的真实 GitHub Actions 步骤。",
+        waitingTitle: "等待 Update Checker",
+        waitingDetail: "运行记录已经建立，正在等待 Runner 开始。"
+      }
+    );
+    $("update-checker-run-link").href = run.url || "#";
+    $("update-checker-run-link").hidden = !run.url;
+
+    if (run.status === "completed") {
+      clearUpdateCheckerPolling();
+      const ok = run.conclusion === "success";
+      setUpdateCheckerStatus(
+        ok
+          ? "更新检查完成；如发现需要处理的新上游状态，已按现有规则触发对应 Builder。"
+          : `更新检查结束：${buildStatusLabel(run)}。请打开 Actions 查看失败步骤。`,
+        !ok
+      );
+      $("confirm-update-checker").disabled = false;
+      $("confirm-update-checker").textContent = "再次检查";
+      return;
+    }
+
+    setUpdateCheckerStatus("Update Checker 正在运行，页面会自动刷新真实步骤。");
+    updateCheckerState.pollTimer = setTimeout(
+      () => pollUpdateCheckerRun(generation),
+      2500
+    );
+  } catch (error) {
+    if (
+      generation !== updateCheckerState.generation ||
+      $("update-checker-dialog").hidden
+    ) return;
+    setUpdateCheckerStatus(friendlyError(error), true);
+    updateCheckerState.pollTimer = setTimeout(
+      () => pollUpdateCheckerRun(generation),
+      5000
+    );
+  }
+}
+
+async function openUpdateCheckerDialog(repo, profileId = "") {
+  showError();
+  if (!canRunRepo(repo)) {
+    showError("当前 GitHub App 没有 Actions 写权限，不能手动触发 Update Checker。");
+    return;
+  }
+  if (!$("build-dialog").hidden) closeBuildDialog();
+  if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
+  if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
+  if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
+  if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
+
+  clearUpdateCheckerPolling();
+  const generation = updateCheckerState.generation + 1;
+  updateCheckerState.generation = generation;
+  updateCheckerState.repo = repo;
+  updateCheckerState.runId = 0;
+  updateCheckerState.restoreFocus =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+  $("update-checker-repo").textContent = repo.fullName;
+  $("update-checker-force").checked = false;
+  $("confirm-update-checker").disabled = true;
+  $("confirm-update-checker").textContent = "正在读取 Profile…";
+  $("update-checker-run-link").hidden = true;
+  renderActionProgressCard("update-checker-progress", null, null);
+  setUpdateCheckerStatus("正在读取可检查的 Profile…");
+  $("update-checker-dialog").hidden = false;
+  document.body.classList.add("dialog-open");
+
+  try {
+    const data = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles`,
+      { cache: "no-store" }
+    );
+    if (
+      generation !== updateCheckerState.generation ||
+      $("update-checker-dialog").hidden
+    ) return;
+
+    const select = $("update-checker-profile");
+    select.replaceChildren();
+    const all = document.createElement("option");
+    all.value = "";
+    all.textContent = "全部 AUTO_UPDATE=true Profile";
+    select.appendChild(all);
+    for (const profile of data.profiles || []) {
+      const option = document.createElement("option");
+      option.value = profile.id;
+      option.textContent = profile.id + (profile.baseline ? " · 基准" : "");
+      select.appendChild(option);
+    }
+    select.value = [...select.options].some((item) => item.value === profileId)
+      ? profileId
+      : "";
+    setUpdateCheckerStatus(
+      profileId
+        ? `将检查 ${profileId}；指定 Profile 时不受 AUTO_UPDATE 开关限制。`
+        : "将检查所有 AUTO_UPDATE=true 的 Profile。"
+    );
+    $("confirm-update-checker").disabled = false;
+    $("confirm-update-checker").textContent = "开始检查";
+  } catch (error) {
+    if (
+      generation !== updateCheckerState.generation ||
+      $("update-checker-dialog").hidden
+    ) return;
+    setUpdateCheckerStatus(friendlyError(error), true);
+    $("confirm-update-checker").disabled = true;
+    $("confirm-update-checker").textContent = "开始检查";
+  }
+}
+
+function clearReleaseExistingPolling() {
+  if (releaseExistingState.pollTimer) {
+    clearTimeout(releaseExistingState.pollTimer);
+    releaseExistingState.pollTimer = null;
+  }
+}
+
+function setReleaseExistingStatus(message = "", isError = false) {
+  const node = $("release-existing-status");
+  node.textContent = message;
+  node.classList.toggle("error-text", Boolean(isError));
+}
+
+function closeReleaseExistingDialog() {
+  clearReleaseExistingPolling();
+  releaseExistingState.generation += 1;
+  const restoreFocus = releaseExistingState.restoreFocus;
+  $("release-existing-dialog").hidden = true;
+  document.body.classList.remove("dialog-open");
+  releaseExistingState.repo = null;
+  releaseExistingState.sourceRunId = 0;
+  releaseExistingState.sourceRunNumber = 0;
+  releaseExistingState.runId = 0;
+  releaseExistingState.restoreFocus = null;
+  renderActionProgressCard("release-existing-progress", null, null);
+  $("release-existing-run-link").hidden = true;
+  setReleaseExistingStatus();
+  if (restoreFocus?.isConnected && typeof restoreFocus.focus === "function") {
+    restoreFocus.focus();
+  }
+}
+
+async function pollReleaseExistingRun(generation) {
+  const repo = releaseExistingState.repo;
+  const runId = releaseExistingState.runId;
+  if (
+    !repo ||
+    !runId ||
+    generation !== releaseExistingState.generation ||
+    $("release-existing-dialog").hidden
+  ) return;
+
+  try {
+    const data = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/release-existing/runs/${runId}`,
+      { cache: "no-store" }
+    );
+    if (
+      generation !== releaseExistingState.generation ||
+      $("release-existing-dialog").hidden
+    ) return;
+
+    const run = data.run;
+    renderActionProgressCard(
+      "release-existing-progress",
+      run.progress,
+      run,
+      {
+        force: true,
+        runningTitle: "正在补发 Release",
+        runningDetail: "正在复用已有 Build 的 Release bundle。",
+        waitingTitle: "等待 Release Runner",
+        waitingDetail: "恢复发布任务已经建立，正在等待 Runner。"
+      }
+    );
+    $("release-existing-run-link").href = run.url || "#";
+    $("release-existing-run-link").hidden = !run.url;
+
+    if (run.status === "completed") {
+      clearReleaseExistingPolling();
+      const ok = run.conclusion === "success";
+      setReleaseExistingStatus(
+        ok
+          ? "Release Existing Build 已完成；正在刷新来源构建的 Release 信息。"
+          : `恢复发布结束：${buildStatusLabel(run)}。请打开 Actions 查看失败步骤。`,
+        !ok
+      );
+      $("confirm-release-existing").disabled = ok;
+      $("confirm-release-existing").textContent = ok ? "发布完成" : "重新尝试";
+      if (ok && buildState.repo?.fullName === repo.fullName) {
+        await loadBuildDetail(releaseExistingState.sourceRunId);
+        await loadBuildRuns({ generation: buildState.generation });
+      }
+      return;
+    }
+
+    setReleaseExistingStatus("正在从已有构建补发 Release，页面会自动刷新真实步骤。");
+    releaseExistingState.pollTimer = setTimeout(
+      () => pollReleaseExistingRun(generation),
+      2500
+    );
+  } catch (error) {
+    if (
+      generation !== releaseExistingState.generation ||
+      $("release-existing-dialog").hidden
+    ) return;
+    setReleaseExistingStatus(friendlyError(error), true);
+    releaseExistingState.pollTimer = setTimeout(
+      () => pollReleaseExistingRun(generation),
+      5000
+    );
+  }
+}
+
+function openReleaseExistingDialog(repo, run) {
+  showError();
+  if (!canRunRepo(repo)) {
+    showError("当前 GitHub App 没有 Actions 写权限，不能补发 Release。");
+    return;
+  }
+  if (!run?.releaseRecoveryEligible) {
+    showError(run?.releaseRecoveryReason || "release_existing_unavailable");
+    return;
+  }
+  if (!$("build-dialog").hidden) closeBuildDialog();
+  if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
+
+  clearReleaseExistingPolling();
+  const generation = releaseExistingState.generation + 1;
+  releaseExistingState.generation = generation;
+  releaseExistingState.repo = repo;
+  releaseExistingState.sourceRunId = Number(run.id || 0);
+  releaseExistingState.sourceRunNumber = Number(run.runNumber || 0);
+  releaseExistingState.runId = 0;
+  releaseExistingState.restoreFocus =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+  $("release-existing-repo").textContent = repo.fullName;
+  $("release-existing-source").textContent =
+    `#${run.runNumber} ${buildProfileId(run)} · ${String(run.headSha || "").slice(0, 12)}`;
+  $("confirm-release-existing").disabled = false;
+  $("confirm-release-existing").textContent = "发布现有构建";
+  $("release-existing-run-link").hidden = true;
+  renderActionProgressCard("release-existing-progress", null, null);
+  setReleaseExistingStatus(
+    "将直接复用已有 Release bundle；不会重新编译，也不会改变来源 Build。"
+  );
+  $("release-existing-dialog").hidden = false;
+  document.body.classList.add("dialog-open");
+}
+
 function setProfileLifecycleStatus(message = "", isError = false) {
   const node = $("profile-lifecycle-status");
   node.hidden = !message;
