@@ -70,6 +70,7 @@ jobs:
         node --check control-plane/test.mjs
         python3 -m py_compile scripts/config-studio.py
         python3 scripts/test-config-studio.py
+        python3 scripts/test_detect_failed_target.py
         bash -n scripts/compile.sh
         bash -n scripts/apply-extra-feeds.sh
         python3 -m py_compile scripts/merge-feeds.py
