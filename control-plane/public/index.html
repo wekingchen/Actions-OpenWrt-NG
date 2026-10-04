@@ -37,7 +37,7 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.21.3</small>
+        <small>Control Plane 0.21.4</small>
       </div>
     </aside>
 
@@ -65,7 +65,7 @@
         </div>
 
         <div class="topbar-actions">
-          <span class="mobile-version-badge" aria-label="Control Plane 版本">0.21.3</span>
+          <span class="mobile-version-badge" aria-label="Control Plane 版本">0.21.4</span>
           <div class="connection-badge" title="Control Plane 服务可用">
             <span class="status-dot"></span>
             <span>服务正常</span>
@@ -125,7 +125,7 @@
               <div class="panel-header">
                 <div>
                   <h2 id="profile-title">配置</h2>
-                  <p class="panel-description">管理 Profile；可查看、构建、切换基准，或删除不再需要的配置。</p>
+                  <p class="panel-description">管理 Profile；可查看、复制、重命名、构建、切换基准或删除配置。</p>
                 </div>
                 <button class="button ghost secondary-action" id="new-profile-open" type="button">
                   <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -609,6 +609,40 @@
         </section>
       </div>
 
+      <div class="build-dialog-backdrop" id="profile-lifecycle-dialog" hidden>
+        <section class="build-dialog profile-lifecycle-dialog-panel" role="dialog" aria-modal="true"
+                 aria-labelledby="profile-lifecycle-title" aria-describedby="profile-lifecycle-description">
+          <div class="build-dialog-handle" aria-hidden="true"></div>
+          <div class="panel-header build-dialog-header">
+            <div>
+              <p class="eyebrow" id="profile-lifecycle-eyebrow">配置管理</p>
+              <h2 id="profile-lifecycle-title">复制 Profile</h2>
+              <p class="panel-description" id="profile-lifecycle-repo"></p>
+            </div>
+            <button class="icon-button" id="profile-lifecycle-close" type="button" aria-label="关闭配置管理">×</button>
+          </div>
+
+          <div class="build-target profile-lifecycle-source">
+            <span>当前 Profile</span>
+            <strong id="profile-lifecycle-source">—</strong>
+          </div>
+
+          <label class="field">
+            <span id="profile-lifecycle-target-label">新 Profile ID</span>
+            <input id="profile-lifecycle-target" maxlength="64" autocomplete="off"
+                   pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" placeholder="new-profile">
+            <small id="profile-lifecycle-description">目录名只能包含字母、数字、点、下划线和连字符。内部 profiles/&lt;id&gt;/ 路径会同步重写。</small>
+          </label>
+
+          <p class="build-dialog-status" id="profile-lifecycle-status" aria-live="polite" hidden></p>
+
+          <div class="form-actions build-dialog-actions">
+            <button class="button ghost" id="profile-lifecycle-cancel" type="button">取消</button>
+            <button class="button primary" id="confirm-profile-lifecycle" type="button" disabled>确认</button>
+          </div>
+        </section>
+      </div>
+
       <div class="build-dialog-backdrop" id="baseline-profile-dialog" hidden>
         <section class="build-dialog baseline-profile-dialog-panel" role="dialog" aria-modal="true"
                  aria-labelledby="baseline-profile-title" aria-describedby="baseline-profile-description">
@@ -661,7 +695,7 @@
 
           <div class="delete-profile-warning" id="delete-profile-description">
             <strong>这会删除该 Profile 的全部 7 个标准配置文件。</strong>
-            <span>Control Plane 不会直接改默认分支，而是创建独立 Pull Request 并尝试自动合并；Git 历史和 PR 审计记录仍会保留。运行中的 Builder 会阻止删除。</span>
+            <span>Control Plane 不会直接改默认分支，而是创建独立 Pull Request 并尝试自动合并；Git 历史和 PR 审计记录仍会保留。运行中的 Builder 会阻止删除；删除成功后，关联的 Config Studio 会话会先取消其活动 Action，再清理临时会话分支。</span>
           </div>
 
           <p class="build-dialog-status" id="delete-profile-status" aria-live="polite" hidden></p>
