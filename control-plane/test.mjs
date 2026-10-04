@@ -1512,8 +1512,9 @@ try {
     { headers: { Cookie: cookie } }
   );
   const profilesBody = await profiles.json();
+  assert.equal(profilesBody.baselineProfileId, "default");
   assert.deepEqual(profilesBody.profiles, [
-    { id: "default", path: "profiles/default", sha: "abc" }
+    { id: "default", path: "profiles/default", sha: "abc", baseline: true }
   ]);
 
   const previewProfileTemplate = await fetch(
