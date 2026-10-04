@@ -1,4 +1,5 @@
 name: Release Existing Build
+run-name: Release Existing · source:${{ inputs.run_id }}
 
 on:
   workflow_dispatch:
@@ -18,7 +19,7 @@ env:
 jobs:
   release-existing:
     name: 从已有 Build Artifact 发布 Release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:
@@ -34,14 +35,16 @@ jobs:
           exit 1
         }
 
-        source_head_sha="$(
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" \
-            --jq '.head_sha'
+        source_run_json="$(
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID"
         )"
-        source_run_number="$(
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" \
-            --jq '.run_number'
+        source_head_sha="$(jq -r '.head_sha // ""' <<<"$source_run_json")"
+        source_run_number="$(jq -r '.run_number // 0' <<<"$source_run_json")"
+        source_workflow_path="$(
+          jq -r '.path // ""' <<<"$source_run_json" | cut -d@ -f1
         )"
+        source_status="$(jq -r '.status // ""' <<<"$source_run_json")"
+        source_conclusion="$(jq -r '.conclusion // ""' <<<"$source_run_json")"
         build_result="$(
           gh api --paginate \
             "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100" \
@@ -49,6 +52,14 @@ jobs:
             | head -n1
         )"
 
+        [ "$source_workflow_path" = ".github/workflows/build-openwrt.yml" ] || {
+          echo "ERROR: 来源 Run 不是 OpenWrt NG Builder：$source_workflow_path" >&2
+          exit 1
+        }
+        [ "$source_status" = "completed" ] || {
+          echo "ERROR: 来源 Run 尚未完成：status=$source_status conclusion=$source_conclusion" >&2
+          exit 1
+        }
         [[ "$source_head_sha" =~ ^[0-9a-f]{40}$ ]] || {
           echo "ERROR: 来源 Run head SHA 无效：$source_head_sha" >&2
           exit 1
@@ -64,6 +75,7 @@ jobs:
 
         echo "来源 Run：#$source_run_number / $SOURCE_RUN_ID"
         echo "来源提交：$source_head_sha"
+        echo "来源 Run 结论：$source_conclusion（允许 Release 等下游阶段失败；build job 必须 success）"
 
     - name: 下载已有 Release 交接包
       uses: actions/download-artifact@v8

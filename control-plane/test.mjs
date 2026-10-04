@@ -30,6 +30,14 @@ const configStudioWorkflow = readFileSync(
   "../.github/workflows/config-studio.yml",
   "utf8"
 );
+const releaseExistingWorkflow = readFileSync(
+  "../.github/workflows/release-existing.yml",
+  "utf8"
+);
+const updateCheckerWorkflow = readFileSync(
+  "../.github/workflows/update-checker.yml",
+  "utf8"
+);
 const referencedDomIds = [
   ...new Set(
     [...controlPlaneAppJs.matchAll(/\$\("([^"]+)"\)/g)].map((match) => match[1])
@@ -66,7 +74,7 @@ assert.match(controlPlaneAppJs, /configStudioDependencyConditionMatches/);
 assert.match(controlPlaneAppJs, /configStudioEffectiveModifiedEntries/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-dependency-summary"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-show-dependencies"/);
-assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.4<\/span>/);
+assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.5<\/span>/);
 assert.match(controlPlaneIndexHtml, /id="new-adapter-field" hidden/);
 assert.match(controlPlaneIndexHtml, /id="profile-list-result"/);
 assert.match(controlPlaneAppJs, /showProfileListResult/);
@@ -95,6 +103,23 @@ assert.match(githubClientSource, /renameProfilePullRequest/);
 assert.match(githubClientSource, /cleanupConfigStudioSessionsForProfile/);
 assert.match(githubClientSource, /cancelBuilderRun/);
 assert.match(githubClientSource, /rerunBuilderRun/);
+assert.match(githubClientSource, /listDeletedProfiles/);
+assert.match(githubClientSource, /restoreDeletedProfilePullRequest/);
+assert.match(githubClientSource, /triggerReleaseExisting/);
+assert.match(githubClientSource, /triggerUpdateChecker/);
+assert.match(controlPlaneIndexHtml, /id="deleted-profiles-section"/);
+assert.match(controlPlaneIndexHtml, /id="update-checker-dialog"/);
+assert.match(controlPlaneIndexHtml, /id="release-existing-dialog"/);
+assert.match(controlPlaneAppJs, /loadDeletedProfiles/);
+assert.match(controlPlaneAppJs, /restoreDeletedProfile/);
+assert.match(controlPlaneAppJs, /openUpdateCheckerDialog/);
+assert.match(controlPlaneAppJs, /openReleaseExistingDialog/);
+assert.match(releaseExistingWorkflow, /run-name: Release Existing/);
+assert.match(releaseExistingWorkflow, /source_workflow_path/);
+assert.match(releaseExistingWorkflow, /\.github\/workflows\/build-openwrt\.yml/);
+assert.match(updateCheckerWorkflow, /run-name: Update Checker/);
+assert.doesNotMatch(releaseExistingWorkflow, /runs-on: ubuntu-22\.04/);
+assert.doesNotMatch(updateCheckerWorkflow, /runs-on: ubuntu-22\.04/);
 assert.match(controlPlaneAppJs, /renderNewAdapterVisibility/);
 assert.match(controlPlaneIndexHtml, />标准 OpenWrt 源码<\/option>/);
 assert.doesNotMatch(controlPlaneIndexHtml, /id="new-stream-log"/);
@@ -902,6 +927,189 @@ await assert.rejects(
   }
 );
 
+const deletedProfileCommitSha = "7".repeat(40);
+const deletedProfileParentSha = "6".repeat(40);
+const retiredSnapshot = {
+  ...profileFileContents,
+  ".config": "CONFIG_RETIRED_SNAPSHOT=y\n",
+  "profile.env":
+    "PROFILE_NAME=\"Retired Snapshot\"\n" +
+    "CONFIG_FILE=\"profiles/retired/.config\"\n" +
+    "DIY_PART1=\"profiles/retired/diy-part1.sh\"\n"
+};
+const restoreCalls = [];
+const restoreClient = new GitHubAppClient(
+  {
+    clientId: "Iv1.profile-restore",
+    clientSecret: "profile-restore-secret",
+    redirectUri: "https://example.test/api/v1/auth/callback"
+  },
+  async (url, options = {}) => {
+    const parsed = new URL(String(url));
+    const path = parsed.pathname.replace(/^\/repos\/acme\/router/, "");
+    const method = String(options.method || "GET").toUpperCase();
+    restoreCalls.push({ path, method, body: options.body || "", search: parsed.search });
+
+    if (
+      method === "GET" &&
+      path === "/commits" &&
+      parsed.searchParams.get("per_page") === "100"
+    ) {
+      return Response.json([
+        {
+          sha: deletedProfileCommitSha,
+          html_url:
+            "https://github.com/acme/router/commit/" + deletedProfileCommitSha,
+          commit: {
+            message: "profile(retired): delete via Control Plane (#99)\n\nAudit",
+            committer: { date: "2026-10-04T10:00:00Z" },
+            author: { date: "2026-10-04T09:59:00Z" }
+          }
+        },
+        {
+          sha: "5".repeat(40),
+          html_url: "https://github.com/acme/router/commit/" + "5".repeat(40),
+          commit: {
+            message: "profile(deletable): delete via Control Plane",
+            committer: { date: "2026-10-03T10:00:00Z" }
+          }
+        }
+      ]);
+    }
+
+    if (
+      method === "GET" &&
+      path === "/contents/profiles/retired" &&
+      parsed.searchParams.get("ref") === profileBaseSha
+    ) {
+      return Response.json({ message: "Not Found" }, { status: 404 });
+    }
+
+    if (
+      method === "GET" &&
+      path === "/commits/" + deletedProfileCommitSha
+    ) {
+      return Response.json({
+        sha: deletedProfileCommitSha,
+        commit: {
+          message: "profile(retired): delete via Control Plane (#99)\n\nAudit"
+        },
+        parents: [{ sha: deletedProfileParentSha }]
+      });
+    }
+    if (
+      method === "GET" &&
+      path === "/commits/" + "4".repeat(40)
+    ) {
+      return Response.json({
+        sha: "4".repeat(40),
+        commit: {
+          message: "profile(someone-else): delete via Control Plane"
+        },
+        parents: [{ sha: "3".repeat(40) }]
+      });
+    }
+
+    if (
+      method === "GET" &&
+      path.startsWith("/contents/profiles/retired/") &&
+      parsed.searchParams.get("ref") === deletedProfileParentSha
+    ) {
+      const name = decodeURIComponent(
+        path.slice("/contents/profiles/retired/".length)
+      );
+      if (!Object.hasOwn(retiredSnapshot, name)) {
+        return Response.json({ message: "Not Found" }, { status: 404 });
+      }
+      return Response.json({
+        type: "file",
+        name,
+        path: "profiles/retired/" + name,
+        sha: "retired-" + name,
+        encoding: "base64",
+        content: Buffer.from(retiredSnapshot[name], "utf8").toString("base64")
+      });
+    }
+
+    return profileFetch(url, options);
+  }
+);
+
+const deletedProfiles = await restoreClient.listDeletedProfiles(
+  "ghu_profile",
+  "acme",
+  "router",
+  { limit: 10 }
+);
+assert.deepEqual(
+  deletedProfiles.map((item) => item.id),
+  ["retired"]
+);
+assert.equal(
+  deletedProfiles[0].deletionCommitSha,
+  deletedProfileCommitSha
+);
+assert.equal(
+  deletedProfiles[0].deletedAt,
+  "2026-10-04T10:00:00Z"
+);
+
+const restoreCallStart = restoreCalls.length;
+const restoredProfilePr = await restoreClient.restoreDeletedProfilePullRequest(
+  "ghu_profile",
+  "acme",
+  "router",
+  "retired",
+  { deletionCommitSha: deletedProfileCommitSha }
+);
+assert.equal(restoredProfilePr.action, "restore");
+assert.equal(restoredProfilePr.changedFiles.length, 7);
+assert.equal(restoredProfilePr.pullRequest.merged, true);
+const restoreMutationCalls = restoreCalls.slice(restoreCallStart);
+assert.ok(
+  restoreMutationCalls.some((call) =>
+    call.method === "GET" &&
+    call.path ===
+      "/contents/profiles/retired/.config" &&
+    call.search.includes(encodeURIComponent(deletedProfileParentSha))
+  ),
+  "恢复必须读取删除 commit 的父提交快照"
+);
+assert.ok(
+  restoreMutationCalls
+    .filter((call) => call.method === "POST" && call.path === "/git/blobs")
+    .map((call) => JSON.parse(call.body).content)
+    .includes("CONFIG_RETIRED_SNAPSHOT=y\n"),
+  "恢复写入内容必须来自删除前快照"
+);
+const restoreTreeCall = restoreMutationCalls.find(
+  (call) => call.method === "POST" && call.path === "/git/trees"
+);
+assert.ok(restoreTreeCall);
+const restoreTree = JSON.parse(restoreTreeCall.body).tree;
+assert.equal(
+  restoreTree.filter((entry) =>
+    entry.path.startsWith("profiles/retired/") && entry.sha !== null
+  ).length,
+  7
+);
+
+await assert.rejects(
+  () =>
+    restoreClient.restoreDeletedProfilePullRequest(
+      "ghu_profile",
+      "acme",
+      "router",
+      "retired",
+      { deletionCommitSha: "4".repeat(40) }
+    ),
+  (error) => {
+    assert.equal(error.code, "deletion_commit_mismatch");
+    assert.equal(error.status, 409);
+    return true;
+  }
+);
+
 const switchedBaselineClient = new GitHubAppClient(
   {
     clientId: "Iv1.profile-switched-baseline",
@@ -1384,6 +1592,294 @@ assert.ok(
     call.method === "POST" && call.path === "/actions/runs/124/cancel"
   )
 );
+
+let recoveredReleasePresent = false;
+const managedWorkflowCalls = [];
+const managedWorkflowFetch = async (url, options = {}) => {
+  const parsed = new URL(String(url));
+  const path = parsed.pathname.replace(/^\/repos\/acme\/router/, "");
+  const method = String(options.method || "GET").toUpperCase();
+  managedWorkflowCalls.push({ path, method, body: options.body || "" });
+
+  if (method === "GET" && path === "") {
+    return Response.json({ default_branch: "main" });
+  }
+  if (method === "GET" && path === "/commits/main") {
+    return Response.json({ sha: "9".repeat(40) });
+  }
+  if (method === "GET" && path === "/actions/runs/222") {
+    return Response.json({
+      id: 222,
+      run_number: 18,
+      run_attempt: 1,
+      display_title: "Build · default · cp:feedfacecafebeef",
+      status: "completed",
+      conclusion: "failure",
+      event: "workflow_dispatch",
+      path: ".github/workflows/build-openwrt.yml",
+      head_branch: "main",
+      head_sha: "8".repeat(40),
+      created_at: "2026-10-04T08:00:00Z",
+      updated_at: "2026-10-04T09:00:00Z",
+      run_started_at: "2026-10-04T08:00:10Z",
+      html_url: "https://github.com/acme/router/actions/runs/222"
+    });
+  }
+  if (method === "GET" && path === "/actions/runs/222/jobs") {
+    return Response.json({
+      jobs: [{
+        id: 2201,
+        name: "编译 OpenWrt 固件",
+        status: "completed",
+        conclusion: "success",
+        html_url: "https://github.com/acme/router/actions/runs/222/job/2201",
+        steps: [{
+          name: "编译固件",
+          status: "completed",
+          conclusion: "success"
+        }]
+      }]
+    });
+  }
+  if (method === "GET" && path === "/actions/runs/222/artifacts") {
+    return Response.json({
+      artifacts: [
+        {
+          id: 880,
+          name: "OpenWrt_firmware_default_20261004",
+          size_in_bytes: 23456,
+          expired: false,
+          created_at: "2026-10-04T08:55:00Z",
+          expires_at: "2026-11-03T08:55:00Z"
+        },
+        {
+          id: 881,
+          name: "OpenWrt_NG_release_bundle_222",
+          size_in_bytes: 34567,
+          expired: false,
+          created_at: "2026-10-04T08:56:00Z",
+          expires_at: "2026-10-05T08:56:00Z"
+        }
+      ]
+    });
+  }
+  if (method === "GET" && path === "/releases") {
+    if (!recoveredReleasePresent) return Response.json([]);
+    return Response.json([{
+      tag_name: "2026.10.04-1910-run18-r77",
+      name: "2026.10.04-1910-run18-r77",
+      target_commitish: "9".repeat(40),
+      body:
+        "## 恢复发布\n\n- 原 OpenWrt NG Run: #18\n" +
+        "- 原 Run ID: 222\n" +
+        "- 原仓库构建 Commit: " + "8".repeat(40),
+      html_url:
+        "https://github.com/acme/router/releases/tag/2026.10.04-1910-run18-r77",
+      published_at: "2026-10-04T11:10:00Z"
+    }]);
+  }
+
+  if (
+    method === "GET" &&
+    path === "/actions/workflows/release-existing.yml/runs"
+  ) {
+    return Response.json({ workflow_runs: [] });
+  }
+  if (
+    method === "POST" &&
+    path === "/actions/workflows/release-existing.yml/dispatches"
+  ) {
+    const body = JSON.parse(options.body);
+    assert.equal(body.ref, "main");
+    assert.equal(body.return_run_details, true);
+    assert.equal(body.inputs.run_id, "222");
+    return Response.json({
+      workflow_run_id: 333,
+      html_url: "https://github.com/acme/router/actions/runs/333"
+    });
+  }
+  if (method === "GET" && path === "/actions/runs/333") {
+    return Response.json({
+      id: 333,
+      run_number: 77,
+      run_attempt: 1,
+      display_title: "Release Existing · source:222",
+      status: "in_progress",
+      conclusion: null,
+      event: "workflow_dispatch",
+      path: ".github/workflows/release-existing.yml",
+      head_branch: "main",
+      head_sha: "9".repeat(40),
+      created_at: "2026-10-04T11:00:00Z",
+      updated_at: "2026-10-04T11:01:00Z",
+      run_started_at: "2026-10-04T11:00:10Z",
+      html_url: "https://github.com/acme/router/actions/runs/333"
+    });
+  }
+  if (method === "GET" && path === "/actions/runs/333/jobs") {
+    return Response.json({
+      jobs: [{
+        id: 3301,
+        name: "发布已有构建",
+        status: "in_progress",
+        conclusion: null,
+        html_url: "https://github.com/acme/router/actions/runs/333/job/3301",
+        steps: [
+          { name: "Set up job", status: "completed", conclusion: "success" },
+          { name: "校验来源 Run", status: "completed", conclusion: "success" },
+          { name: "下载 Release 交接包", status: "in_progress", conclusion: null },
+          { name: "发布 Release", status: "pending", conclusion: null }
+        ]
+      }]
+    });
+  }
+
+  if (
+    method === "GET" &&
+    path === "/actions/workflows/update-checker.yml/runs"
+  ) {
+    return Response.json({ workflow_runs: [] });
+  }
+  if (
+    method === "POST" &&
+    path === "/actions/workflows/update-checker.yml/dispatches"
+  ) {
+    const body = JSON.parse(options.body);
+    assert.equal(body.ref, "main");
+    assert.equal(body.return_run_details, true);
+    assert.equal(body.inputs.profile, "");
+    assert.equal(body.inputs.force, true);
+    return Response.json({
+      workflow_run_id: 444,
+      html_url: "https://github.com/acme/router/actions/runs/444"
+    });
+  }
+  if (method === "GET" && path === "/actions/runs/444") {
+    return Response.json({
+      id: 444,
+      run_number: 31,
+      run_attempt: 1,
+      display_title: "Update Checker · profile: · force:true",
+      status: "in_progress",
+      conclusion: null,
+      event: "workflow_dispatch",
+      path: ".github/workflows/update-checker.yml",
+      head_branch: "main",
+      head_sha: "9".repeat(40),
+      created_at: "2026-10-04T11:02:00Z",
+      updated_at: "2026-10-04T11:03:00Z",
+      run_started_at: "2026-10-04T11:02:10Z",
+      html_url: "https://github.com/acme/router/actions/runs/444"
+    });
+  }
+  if (method === "GET" && path === "/actions/runs/444/jobs") {
+    return Response.json({
+      jobs: [{
+        id: 4401,
+        name: "检查上游状态",
+        status: "in_progress",
+        conclusion: null,
+        html_url: "https://github.com/acme/router/actions/runs/444/job/4401",
+        steps: [
+          { name: "Set up job", status: "completed", conclusion: "success" },
+          { name: "发现需要检查的 Profile", status: "completed", conclusion: "success" },
+          { name: "比较上游状态", status: "in_progress", conclusion: null }
+        ]
+      }]
+    });
+  }
+
+  return Response.json(
+    { message: "unexpected managed workflow request " + path },
+    { status: 500 }
+  );
+};
+
+const managedWorkflowClient = new GitHubAppClient(
+  {
+    clientId: "Iv1.managed-workflows",
+    clientSecret: "managed-workflows-secret",
+    redirectUri: "https://example.test/api/v1/auth/callback"
+  },
+  managedWorkflowFetch
+);
+
+const releasableBuild = await managedWorkflowClient.getBuilderRun(
+  "ghu_managed",
+  "acme",
+  "router",
+  222
+);
+assert.equal(releasableBuild.release, null);
+assert.equal(releasableBuild.releaseRecoveryEligible, true);
+assert.equal(releasableBuild.releaseRecoveryReason, "");
+
+const releaseDispatch = await managedWorkflowClient.triggerReleaseExisting(
+  "ghu_managed",
+  "acme",
+  "router",
+  222
+);
+assert.equal(releaseDispatch.accepted, true);
+assert.equal(releaseDispatch.sourceRunId, 222);
+assert.equal(releaseDispatch.runId, 333);
+
+const releaseExistingRun = await managedWorkflowClient.getReleaseExistingRun(
+  "ghu_managed",
+  "acme",
+  "router",
+  333
+);
+assert.equal(releaseExistingRun.displayTitle, "Release Existing · source:222");
+assert.equal(releaseExistingRun.progress?.current, "下载 Release 交接包");
+assert.equal(releaseExistingRun.progress?.completed, 1);
+
+const updateDispatch = await managedWorkflowClient.triggerUpdateChecker(
+  "ghu_managed",
+  "acme",
+  "router",
+  { profileId: "", force: true }
+);
+assert.equal(updateDispatch.accepted, true);
+assert.equal(updateDispatch.profileId, "");
+assert.equal(updateDispatch.force, true);
+assert.equal(updateDispatch.runId, 444);
+
+const updateRun = await managedWorkflowClient.getUpdateCheckerRun(
+  "ghu_managed",
+  "acme",
+  "router",
+  444
+);
+assert.equal(updateRun.displayTitle, "Update Checker · profile: · force:true");
+assert.equal(updateRun.progress?.current, "比较上游状态");
+assert.equal(updateRun.progress?.completed, 1);
+
+await assert.rejects(
+  () =>
+    managedWorkflowClient.getReleaseExistingRun(
+      "ghu_managed",
+      "acme",
+      "router",
+      444
+    ),
+  (error) => {
+    assert.equal(error.code, "unexpected_workflow_run");
+    assert.equal(error.status, 404);
+    return true;
+  }
+);
+
+recoveredReleasePresent = true;
+const recoveredBuild = await managedWorkflowClient.getBuilderRun(
+  "ghu_managed",
+  "acme",
+  "router",
+  222
+);
+assert.equal(recoveredBuild.release?.recovered, true);
+assert.equal(recoveredBuild.releaseRecoveryEligible, false);
+assert.equal(recoveredBuild.releaseRecoveryReason, "release_already_exists");
 
 const calls = [];
 const fakeFetch = async (url, options = {}) => {

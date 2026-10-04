@@ -37,7 +37,7 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.21.4</small>
+        <small>Control Plane 0.21.5</small>
       </div>
     </aside>
 
@@ -65,7 +65,7 @@
         </div>
 
         <div class="topbar-actions">
-          <span class="mobile-version-badge" aria-label="Control Plane 版本">0.21.4</span>
+          <span class="mobile-version-badge" aria-label="Control Plane 版本">0.21.5</span>
           <div class="connection-badge" title="Control Plane 服务可用">
             <span class="status-dot"></span>
             <span>服务正常</span>
@@ -127,13 +127,28 @@
                   <h2 id="profile-title">配置</h2>
                   <p class="panel-description">管理 Profile；可查看、复制、重命名、构建、切换基准或删除配置。</p>
                 </div>
-                <button class="button ghost secondary-action" id="new-profile-open" type="button">
-                  <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                  新建
-                </button>
+                <div class="panel-header-actions">
+                  <button class="button ghost secondary-action" id="update-checker-open" type="button">
+                    <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+                    检查更新
+                  </button>
+                  <button class="button ghost secondary-action" id="new-profile-open" type="button">
+                    <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                    新建
+                  </button>
+                </div>
               </div>
               <p class="success profile-list-result" id="profile-list-result" aria-live="polite" hidden></p>
               <div id="profiles" class="profile-list"></div>
+              <section class="deleted-profiles-section" id="deleted-profiles-section" hidden>
+                <div class="deleted-profiles-head">
+                  <div>
+                    <strong>最近删除</strong>
+                    <span>仅显示通过 Control Plane 删除、且当前仍不存在的 Profile；恢复仍走独立 PR。</span>
+                  </div>
+                </div>
+                <div id="deleted-profiles" class="profile-list deleted-profile-list"></div>
+              </section>
             </section>
 
             <section class="panel create-panel" id="new-profile-card" hidden>
@@ -413,6 +428,77 @@
           </div>
         </section>
       </main>
+
+      <div class="build-dialog-backdrop" id="update-checker-dialog" hidden>
+        <section class="build-dialog workflow-action-dialog" role="dialog" aria-modal="true"
+                 aria-labelledby="update-checker-title" aria-describedby="update-checker-status">
+          <div class="build-dialog-handle" aria-hidden="true"></div>
+          <div class="panel-header build-dialog-header">
+            <div>
+              <p class="eyebrow">Update Checker</p>
+              <h2 id="update-checker-title">手动检查上游更新</h2>
+              <p class="panel-description" id="update-checker-repo"></p>
+            </div>
+            <button class="icon-button" id="update-checker-close" type="button" aria-label="关闭更新检查">×</button>
+          </div>
+
+          <label class="field">
+            <span>检查范围</span>
+            <select id="update-checker-profile"></select>
+            <small>“全部自动追新 Profile”只检查 AUTO_UPDATE=true；指定 Profile 时不受 AUTO_UPDATE 开关限制。</small>
+          </label>
+
+          <label class="check-row release-check">
+            <input id="update-checker-force" type="checkbox">
+            <span>
+              <strong>强制触发构建</strong>
+              <small>忽略已记录的上游状态；用于明确需要重新构建时。</small>
+            </span>
+          </label>
+
+          <div id="update-checker-progress" class="action-progress-panel" hidden></div>
+          <p class="build-dialog-status" id="update-checker-status" aria-live="polite"></p>
+          <a class="text-link" id="update-checker-run-link" href="#" target="_blank" rel="noreferrer" hidden>打开 Actions ↗</a>
+
+          <div class="form-actions build-dialog-actions">
+            <button class="button ghost" id="update-checker-cancel" type="button">关闭</button>
+            <button class="button primary" id="confirm-update-checker" type="button">开始检查</button>
+          </div>
+        </section>
+      </div>
+
+      <div class="build-dialog-backdrop" id="release-existing-dialog" hidden>
+        <section class="build-dialog workflow-action-dialog" role="dialog" aria-modal="true"
+                 aria-labelledby="release-existing-title" aria-describedby="release-existing-status">
+          <div class="build-dialog-handle" aria-hidden="true"></div>
+          <div class="panel-header build-dialog-header">
+            <div>
+              <p class="eyebrow">Release Existing Build</p>
+              <h2 id="release-existing-title">发布已有构建</h2>
+              <p class="panel-description" id="release-existing-repo"></p>
+            </div>
+            <button class="icon-button" id="release-existing-close" type="button" aria-label="关闭恢复发布">×</button>
+          </div>
+
+          <div class="build-target">
+            <span>来源构建</span>
+            <strong id="release-existing-source">—</strong>
+          </div>
+          <div class="baseline-profile-note">
+            <strong>不会重新编译固件。</strong>
+            <span>直接复用该 Build 已验证并保留的 Release bundle 创建 Release；完成后仍执行 Release 保留数量清理。</span>
+          </div>
+
+          <div id="release-existing-progress" class="action-progress-panel" hidden></div>
+          <p class="build-dialog-status" id="release-existing-status" aria-live="polite"></p>
+          <a class="text-link" id="release-existing-run-link" href="#" target="_blank" rel="noreferrer" hidden>打开 Actions ↗</a>
+
+          <div class="form-actions build-dialog-actions">
+            <button class="button ghost" id="release-existing-cancel" type="button">关闭</button>
+            <button class="button primary" id="confirm-release-existing" type="button">发布现有构建</button>
+          </div>
+        </section>
+      </div>
 
       <div class="build-dialog-backdrop" id="config-studio-dialog" hidden>
         <section class="config-studio-dialog" role="dialog" aria-modal="true"

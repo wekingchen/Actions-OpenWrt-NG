@@ -490,6 +490,142 @@ const github = {
       }
     };
   },
+  async listDeletedProfiles(token, owner, repo, options = {}) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(Number(options.limit), 10);
+    return [{
+      id: "old-profile",
+      deletionCommitSha: "7".repeat(40),
+      deletedAt: "2026-10-04T10:00:00Z",
+      commitUrl: "https://github.com/acme/router/commit/" + "7".repeat(40),
+      message: "profile(old-profile): delete via Control Plane"
+    }];
+  },
+  async restoreDeletedProfilePullRequest(token, owner, repo, profileId, payload) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(profileId, "old-profile");
+    assert.equal(payload.deletionCommitSha, "7".repeat(40));
+    return {
+      branch: "openwrt-ng/profile-old-profile-restore",
+      commitSha: "6".repeat(40),
+      changedFiles: [
+        ".config",
+        "profile.env",
+        "diy-part1.sh",
+        "diy-part2.sh",
+        "required-packages.txt",
+        "watch-sources.txt",
+        "feeds.conf"
+      ],
+      action: "restore",
+      pullRequest: {
+        number: 14,
+        url: "https://github.com/acme/router/pull/14",
+        merged: true,
+        mergeCommitSha: "6".repeat(40),
+        mergeReason: ""
+      },
+      cleanup: {
+        branchDeleted: true,
+        supersededPullRequests: []
+      }
+    };
+  },
+  async triggerReleaseExisting(token, owner, repo, sourceRunId) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(String(sourceRunId), "123");
+    return {
+      accepted: true,
+      sourceRunId: 123,
+      ref: "main",
+      runId: 333,
+      runUrl: "https://github.com/acme/router/actions/runs/333"
+    };
+  },
+  async getReleaseExistingRun(token, owner, repo, runId) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(String(runId), "333");
+    return {
+      id: 333,
+      runNumber: 77,
+      runAttempt: 1,
+      displayTitle: "Release Existing · source:123",
+      status: "in_progress",
+      conclusion: "",
+      event: "workflow_dispatch",
+      headBranch: "main",
+      headSha: "a".repeat(40),
+      createdAt: "2026-10-04T11:00:00Z",
+      updatedAt: "2026-10-04T11:01:00Z",
+      runStartedAt: "2026-10-04T11:00:10Z",
+      url: "https://github.com/acme/router/actions/runs/333",
+      progress: {
+        completed: 1,
+        total: 2,
+        percent: 50,
+        current: "发布 Release",
+        currentDetail: "发布已有构建",
+        failed: "",
+        steps: []
+      },
+      jobs: []
+    };
+  },
+  async triggerUpdateChecker(token, owner, repo, payload) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(payload.profileId, "default");
+    assert.equal(payload.force, true);
+    return {
+      accepted: true,
+      profileId: "default",
+      force: true,
+      ref: "main",
+      runId: 444,
+      runUrl: "https://github.com/acme/router/actions/runs/444"
+    };
+  },
+  async getUpdateCheckerRun(token, owner, repo, runId) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(String(runId), "444");
+    return {
+      id: 444,
+      runNumber: 31,
+      runAttempt: 1,
+      displayTitle: "Update Checker · profile:default · force:true",
+      status: "in_progress",
+      conclusion: "",
+      event: "workflow_dispatch",
+      headBranch: "main",
+      headSha: "a".repeat(40),
+      createdAt: "2026-10-04T11:02:00Z",
+      updatedAt: "2026-10-04T11:03:00Z",
+      runStartedAt: "2026-10-04T11:02:10Z",
+      url: "https://github.com/acme/router/actions/runs/444",
+      progress: {
+        completed: 1,
+        total: 2,
+        percent: 50,
+        current: "比较上游状态",
+        currentDetail: "检查上游状态",
+        failed: "",
+        steps: []
+      },
+      jobs: []
+    };
+  },
+
   async deleteProfilePullRequest(token, owner, repo, profileId, payload) {
     assert.equal(token, "ghu_worker_access");
     assert.equal(owner, "acme");
@@ -828,6 +964,44 @@ assert.equal(createProfileBody.profileId, "new-profile");
 assert.equal(createProfileBody.action, "create");
 assert.equal(createProfileBody.pullRequest.number, 8);
 assert.equal(createProfileBody.pullRequest.merged, true);
+
+const deletedProfiles = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/deleted?limit=10",
+    { headers: { Cookie: sessionCookie } }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(deletedProfiles.status, 200);
+const deletedProfilesBody = await deletedProfiles.json();
+assert.equal(deletedProfilesBody.profiles[0].id, "old-profile");
+assert.equal(
+  deletedProfilesBody.profiles[0].deletionCommitSha,
+  "7".repeat(40)
+);
+
+const restoreProfile = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/old-profile/restore",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ deletionCommitSha: "7".repeat(40) })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(restoreProfile.status, 201);
+const restoreProfileBody = await restoreProfile.json();
+assert.equal(restoreProfileBody.action, "restore");
+assert.equal(restoreProfileBody.pullRequest.number, 14);
 
 const detail = await handleControlPlaneRequest(
   new Request(
@@ -1208,6 +1382,77 @@ assert.equal(rerunBuild.status, 202);
 const rerunBuildBody = await rerunBuild.json();
 assert.equal(rerunBuildBody.action, "rerun");
 assert.equal(rerunBuildBody.nextAttempt, 2);
+
+const releaseExisting = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/builds/123/release-existing",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1"
+      },
+      body: "{}"
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(releaseExisting.status, 202);
+const releaseExistingBody = await releaseExisting.json();
+assert.equal(releaseExistingBody.sourceRunId, 123);
+assert.equal(releaseExistingBody.runId, 333);
+
+const releaseExistingRun = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/release-existing/runs/333",
+    { headers: { Cookie: sessionCookie } }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(releaseExistingRun.status, 200);
+assert.equal(
+  (await releaseExistingRun.json()).run.displayTitle,
+  "Release Existing · source:123"
+);
+
+const updateChecker = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/update-checker",
+    {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ profileId: "default", force: true })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(updateChecker.status, 202);
+const updateCheckerBody = await updateChecker.json();
+assert.equal(updateCheckerBody.profileId, "default");
+assert.equal(updateCheckerBody.runId, 444);
+
+const updateCheckerRun = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/update-checker/runs/444",
+    { headers: { Cookie: sessionCookie } }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(updateCheckerRun.status, 200);
+assert.equal(
+  (await updateCheckerRun.json()).run.displayTitle,
+  "Update Checker · profile:default · force:true"
+);
 
 const artifactDownload = await handleControlPlaneRequest(
   new Request(

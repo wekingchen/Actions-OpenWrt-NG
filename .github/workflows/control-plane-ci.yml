@@ -11,6 +11,8 @@ on:
       - ".github/workflows/deploy-control-plane.yml"
       - ".github/workflows/build-openwrt.yml"
       - ".github/workflows/config-studio.yml"
+      - ".github/workflows/release-existing.yml"
+      - ".github/workflows/update-checker.yml"
       - "scripts/compile.sh"
       - "scripts/extract_failure_context.py"
       - "scripts/test_extract_failure_context.py"
@@ -27,6 +29,8 @@ on:
       - ".github/workflows/deploy-control-plane.yml"
       - ".github/workflows/build-openwrt.yml"
       - ".github/workflows/config-studio.yml"
+      - ".github/workflows/release-existing.yml"
+      - ".github/workflows/update-checker.yml"
       - "scripts/compile.sh"
       - "scripts/extract_failure_context.py"
       - "scripts/test_extract_failure_context.py"
@@ -111,6 +115,27 @@ jobs:
         grep -q 'id="profile-lifecycle-dialog"' control-plane/public/index.html
         grep -q 'openProfileLifecycleDialog' control-plane/public/app.js
         grep -q 'controlBuilderRun' control-plane/public/app.js
+        grep -q 'listDeletedProfiles' control-plane/lib/github.mjs
+        grep -q 'restoreDeletedProfilePullRequest' control-plane/lib/github.mjs
+        grep -q 'triggerReleaseExisting' control-plane/lib/github.mjs
+        grep -q 'getReleaseExistingRun' control-plane/lib/github.mjs
+        grep -q 'triggerUpdateChecker' control-plane/lib/github.mjs
+        grep -q 'getUpdateCheckerRun' control-plane/lib/github.mjs
+        grep -q 'deletedProfilesMatch' control-plane/worker.mjs
+        grep -q 'profileRestoreMatch' control-plane/worker.mjs
+        grep -q 'releaseExistingTriggerMatch' control-plane/worker.mjs
+        grep -q 'updateCheckerMatch' control-plane/worker.mjs
+        grep -q 'deletedProfilesMatch' control-plane/server.mjs
+        grep -q 'profileRestoreMatch' control-plane/server.mjs
+        grep -q 'releaseExistingTriggerMatch' control-plane/server.mjs
+        grep -q 'updateCheckerMatch' control-plane/server.mjs
+        grep -q 'id="update-checker-dialog"' control-plane/public/index.html
+        grep -q 'id="release-existing-dialog"' control-plane/public/index.html
+        grep -q 'id="deleted-profiles-section"' control-plane/public/index.html
+        grep -q 'openUpdateCheckerDialog' control-plane/public/app.js
+        grep -q 'openReleaseExistingDialog' control-plane/public/app.js
+        grep -q 'loadDeletedProfiles' control-plane/public/app.js
+        grep -q 'restoreDeletedProfile' control-plane/public/app.js
         python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
         python3 -m json.tool control-plane/api-schema.json >/dev/null
 
@@ -158,6 +183,14 @@ jobs:
         grep -q "steps.compile.outcome == 'failure'" .github/workflows/build-openwrt.yml
         grep -q 'actions/cache/save@v6' .github/workflows/build-openwrt.yml
         test "$(grep -c 'overwrite: true' .github/workflows/build-openwrt.yml)" -eq 6
+        grep -q '^run-name: Release Existing · source:' .github/workflows/release-existing.yml
+        grep -q 'source_workflow_path' .github/workflows/release-existing.yml
+        grep -Fq '.github/workflows/build-openwrt.yml' .github/workflows/release-existing.yml
+        ! grep -q 'runs-on: ubuntu-22.04' .github/workflows/release-existing.yml
+        grep -q '^run-name: Update Checker · profile:' .github/workflows/update-checker.yml
+        grep -q 'force:' .github/workflows/update-checker.yml
+        ! grep -q 'runs-on: ubuntu-22.04' .github/workflows/update-checker.yml
+        test "$(grep -c 'runs-on: ubuntu-24.04' .github/workflows/update-checker.yml)" -eq 2
         grep -q 'Resource not accessible by integration' .github/workflows/build-openwrt.yml
         grep -q 'default-branch-fallback' .github/workflows/build-openwrt.yml
         grep -q 'target_mode=' .github/workflows/build-openwrt.yml

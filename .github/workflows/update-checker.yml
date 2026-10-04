@@ -1,4 +1,5 @@
 name: OpenWrt NG Update Checker
+run-name: Update Checker · profile:${{ inputs.profile }} · force:${{ inputs.force }}
 
 on:
   workflow_dispatch:
@@ -26,7 +27,7 @@ concurrency:
 jobs:
   discover:
     name: 解析需要检查的 Profile
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -195,7 +196,7 @@ jobs:
     name: 检查上游 · ${{ matrix.profile }}
     needs: discover
     if: needs.discover.outputs.has_profiles == 'true'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write

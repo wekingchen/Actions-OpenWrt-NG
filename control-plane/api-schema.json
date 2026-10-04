@@ -390,7 +390,8 @@
             "delete",
             "baseline",
             "copy",
-            "rename"
+            "rename",
+            "restore"
           ]
         },
         "sourceProfileId": {
@@ -656,13 +657,17 @@
         },
         "publishedAt": {
           "type": "string"
+        },
+        "recovered": {
+          "type": "boolean"
         }
       },
       "required": [
         "tag",
         "name",
         "url",
-        "publishedAt"
+        "publishedAt",
+        "recovered"
       ]
     },
     "buildDetail": {
@@ -685,7 +690,9 @@
         "progress",
         "jobs",
         "artifacts",
-        "release"
+        "release",
+        "releaseRecoveryEligible",
+        "releaseRecoveryReason"
       ],
       "additionalProperties": false,
       "properties": {
@@ -751,6 +758,12 @@
         },
         "progress": {
           "$ref": "#/$defs/actionProgress"
+        },
+        "releaseRecoveryEligible": {
+          "type": "boolean"
+        },
+        "releaseRecoveryReason": {
+          "type": "string"
         }
       }
     },
@@ -1525,6 +1538,175 @@
         },
         "url": {
           "type": "string"
+        }
+      }
+    },
+    "deletedProfile": {
+      "type": "object",
+      "required": [
+        "id",
+        "deletionCommitSha",
+        "deletedAt",
+        "commitUrl",
+        "message"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "deletionCommitSha": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{40}$"
+        },
+        "deletedAt": {
+          "type": "string"
+        },
+        "commitUrl": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "profileRestoreRequest": {
+      "type": "object",
+      "required": [
+        "deletionCommitSha"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "deletionCommitSha": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{40}$"
+        }
+      }
+    },
+    "updateCheckerRequest": {
+      "type": "object",
+      "required": [
+        "force"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "force": {
+          "type": "boolean"
+        }
+      }
+    },
+    "workflowDispatchResponse": {
+      "type": "object",
+      "required": [
+        "accepted",
+        "ref",
+        "runId",
+        "runUrl"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "accepted": {
+          "const": true
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "runUrl": {
+          "type": "string"
+        },
+        "sourceRunId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "profileId": {
+          "type": "string"
+        },
+        "force": {
+          "type": "boolean"
+        }
+      }
+    },
+    "managedWorkflowRun": {
+      "type": "object",
+      "required": [
+        "id",
+        "runNumber",
+        "runAttempt",
+        "displayTitle",
+        "status",
+        "conclusion",
+        "event",
+        "headBranch",
+        "headSha",
+        "createdAt",
+        "updatedAt",
+        "runStartedAt",
+        "url",
+        "progress",
+        "jobs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "runNumber": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "runAttempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "displayTitle": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "conclusion": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        },
+        "headBranch": {
+          "type": "string"
+        },
+        "headSha": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "runStartedAt": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "progress": {
+          "$ref": "#/$defs/actionProgress"
+        },
+        "jobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/buildJob"
+          }
         }
       }
     }
