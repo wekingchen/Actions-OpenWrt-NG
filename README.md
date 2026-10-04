@@ -48,6 +48,7 @@ Cleanup
 - 设备或业务定制逻辑放在 Profile / DIY Hook。
 - Profile 如需覆盖 rootfs `files/`，Core 内部统一使用 `PROFILE_FILES_DIR`；旧 Profile 的 `FILES_DIR` 仍会兼容读取，但不会再导出到 OpenWrt `make` 环境，避免与 OpenWrt 内核构建同名变量冲突。
 - 通用 Core 只负责构建编排、缓存、诊断、验收、留档和发布。
+- 模板仓构建时只执行自身仓库中已检出的 Workflow、`scripts/` 与 `adapters/`，不会在运行时从本维护仓拉取并覆盖代码；自定义 Adapter 与本地脚本修改因此保持有效。模板升级应通过可审阅的代码同步/PR 完成，而不是构建时热替换。
 
 ## 快速开始
 
@@ -105,6 +106,8 @@ UPLOAD_RELEASE="true"
 ## 开发与验证原则
 
 本仓库的 `main` 只保留第三方可复用能力。
+
+测试仓若需要强制验证共享代码与上游一致，可设置仓库变量 `OPENWRT_NG_SYNC_GATE_UPSTREAM=<owner/repo>`，可选 `OPENWRT_NG_SYNC_GATE_REF=<branch-or-sha>`；普通模板仓不设置时门禁自动跳过。该变量只用于 CI 一致性校验，不会覆盖本地代码。
 
 特殊设备、特殊 SDK 或厂商源码的兼容验证，应在独立分支进行，例如：
 

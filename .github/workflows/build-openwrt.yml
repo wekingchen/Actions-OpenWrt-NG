@@ -47,29 +47,14 @@ jobs:
       with:
         persist-credentials: false
 
-    - name: 测试仓共享代码同步门禁
-      if: github.repository == 'wekingchen/Actions-OpenWrt-NG-Test'
+    - name: 共享代码同步门禁
+      if: vars.OPENWRT_NG_SYNC_GATE_UPSTREAM != ''
+      env:
+        OPENWRT_NG_UPSTREAM_REPOSITORY: ${{ vars.OPENWRT_NG_SYNC_GATE_UPSTREAM }}
+        OPENWRT_NG_UPSTREAM_REF: ${{ vars.OPENWRT_NG_SYNC_GATE_REF || 'main' }}
       run: |
         set -Eeuo pipefail
         python3 scripts/verify-shared-sync.py
-
-    - name: 同步主仓运行时脚本
-      if: github.repository != 'wekingchen/Actions-OpenWrt-NG'
-      run: |
-        set -Eeuo pipefail
-
-        runtime="$RUNNER_TEMP/openwrt-ng-runtime"
-        rm -rf "$runtime"
-        git clone --depth=1 --branch main \
-          https://github.com/wekingchen/Actions-OpenWrt-NG.git \
-          "$runtime"
-
-        rm -rf scripts adapters
-        cp -a "$runtime/scripts" "$GITHUB_WORKSPACE/scripts"
-        cp -a "$runtime/adapters" "$GITHUB_WORKSPACE/adapters"
-
-        echo "已同步主仓最新运行时：wekingchen/Actions-OpenWrt-NG@main"
-        echo "  commit: $(git -C "$runtime" rev-parse HEAD)"
 
     - name: 解析并校验 Profile
       id: profile
@@ -234,24 +219,6 @@ jobs:
       uses: actions/checkout@v7
       with:
         persist-credentials: false
-
-    - name: 同步主仓运行时脚本
-      if: github.repository != 'wekingchen/Actions-OpenWrt-NG'
-      run: |
-        set -Eeuo pipefail
-
-        runtime="$RUNNER_TEMP/openwrt-ng-runtime"
-        rm -rf "$runtime"
-        git clone --depth=1 --branch main \
-          https://github.com/wekingchen/Actions-OpenWrt-NG.git \
-          "$runtime"
-
-        rm -rf scripts adapters
-        cp -a "$runtime/scripts" "$GITHUB_WORKSPACE/scripts"
-        cp -a "$runtime/adapters" "$GITHUB_WORKSPACE/adapters"
-
-        echo "已同步主仓最新运行时：wekingchen/Actions-OpenWrt-NG@main"
-        echo "  commit: $(git -C "$runtime" rev-parse HEAD)"
 
     - name: 下载 Preflight 元数据
       uses: actions/download-artifact@v8

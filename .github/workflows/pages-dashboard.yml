@@ -49,8 +49,11 @@ jobs:
       with:
         persist-credentials: false
 
-    - name: 测试仓共享代码同步门禁
-      if: github.repository == 'wekingchen/Actions-OpenWrt-NG-Test'
+    - name: 共享代码同步门禁
+      if: vars.OPENWRT_NG_SYNC_GATE_UPSTREAM != ''
+      env:
+        OPENWRT_NG_UPSTREAM_REPOSITORY: ${{ vars.OPENWRT_NG_SYNC_GATE_UPSTREAM }}
+        OPENWRT_NG_UPSTREAM_REF: ${{ vars.OPENWRT_NG_SYNC_GATE_REF || 'main' }}
       run: |
         set -Eeuo pipefail
         python3 scripts/verify-shared-sync.py
