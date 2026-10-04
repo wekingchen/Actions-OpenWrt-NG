@@ -811,8 +811,8 @@ jobs:
         } >> "$GITHUB_STEP_SUMMARY"
 
   cleanup:
-    name: 清理旧 Workflow 运行记录
-    needs: [build, release]
+    name: 清理旧 Workflow 与 Actions Cache
+    needs: [preflight, build, release]
     if: always() && !cancelled()
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -832,3 +832,14 @@ jobs:
         WORKFLOW_RETENTION_DAYS: "30"
         WORKFLOW_KEEP_MINIMUM_RUNS: "10"
       run: bash scripts/cleanup-workflow-runs.sh
+
+    - name: 清理当前 Profile 的旧 Actions Cache
+      if: needs.preflight.result == 'success' && needs.preflight.outputs.profile != ''
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        ACTIONS_CACHE_KEEP_PER_PREFIX: "2"
+        ACTIONS_CACHE_PREFIXES: |
+          openwrt-ng-dl-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-
+          openwrt-ng-build-v3-ubuntu24-${{ runner.os }}-${{ runner.arch }}-${{ needs.preflight.outputs.profile }}-
+      run: python3 scripts/cleanup-actions-caches.py

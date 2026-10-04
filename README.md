@@ -355,6 +355,7 @@ Core 提供：
 - 180 分钟构建超时。
 - 可选构建空间扩展。
 - `dl` 下载缓存。
+- Actions Cache 采用按 Profile 治理：每次 Builder 收尾时仅处理当前 Profile 的 `dl` 与 build cache 前缀，每类默认保留最近访问的 2 份热缓存，删除更老条目；其他 Profile 和其他用途缓存不受影响。清理为 best-effort，不会把已经完成的固件编译判失败，并在 Actions Summary 记录清理前后数量/容量。
 - ccache / Go build cache；Lean/OpenWrt 的 `CONFIG_CCACHE=y` 需要同时启用 `CONFIG_DEVEL=y`，默认缓存目录为源码树内的 `openwrt/.ccache`。Core 会直接持久化这一实际目录，并在 `make defconfig` 后校验 ccache 没有被 Kconfig 静默裁掉；即使本轮编译失败，也会先记录 ccache Hits / Misses / 大小并保存可复用的部分编译缓存，避免后续修复后完全冷启动。 Ubuntu 24.04 构建缓存使用独立 `build-v3-ubuntu24` 命名空间，不恢复 Ubuntu 22.04 生成的 host/ccache 数据；`dl/` 源码下载缓存继续跨 Runner 版本复用。
 - 默认静默编译并保留长编译心跳；只有 Core 调试变量 `OPENWRT_NG_DEBUG_STREAM_LOG=true` 才临时恢复全量流式输出。
 - 默认静默编译：完整 `make -jN` 输出仅保存在 Runner 临时文件，不持续写入 GitHub step；成功时只显示心跳、耗时和 ccache 统计。失败时才自动识别失败目标并从并行日志/单目标诊断日志中提取有限上下文，生成 `build-error-context.log`。失败 Artifact 不再上传整份 `build.log`，避免超长日志触发 GitHub `This step has been truncated...`。
