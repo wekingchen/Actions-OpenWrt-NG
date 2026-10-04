@@ -182,6 +182,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: OpenWrt_NG_preflight_${{ github.run_id }}
+        overwrite: true
         path: openwrt-ng-preflight.env
         if-no-files-found: error
         retention-days: 1
@@ -541,6 +542,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: OpenWrt_config_record_${{ env.PROFILE_ID }}_${{ env.FILE_DATE }}
+        overwrite: true
         path: config-record
         if-no-files-found: error
         retention-days: 30
@@ -550,6 +552,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: OpenWrt_failure_${{ env.PROFILE_ID }}_${{ github.run_id }}
+        overwrite: true
         path: |
           build-error-context.log
           build-failure.log
@@ -563,6 +566,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: OpenWrt_bin_${{ env.PROFILE_ID }}_${{ env.FILE_DATE }}
+        overwrite: true
         path: openwrt/bin
         if-no-files-found: error
         retention-days: 30
@@ -573,6 +577,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: OpenWrt_firmware_${{ env.PROFILE_ID }}_${{ env.FILE_DATE }}
+        overwrite: true
         path: openwrt/bin/targets
         if-no-files-found: error
         retention-days: 30
@@ -595,6 +600,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: OpenWrt_NG_release_bundle_${{ github.run_id }}
+        overwrite: true
         path: release-bundle
         if-no-files-found: error
         retention-days: 1
