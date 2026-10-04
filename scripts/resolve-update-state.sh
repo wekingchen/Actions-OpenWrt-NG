@@ -6,6 +6,15 @@ output_file="${2:?output file is required}"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+git_timeout="${OPENWRT_NG_GIT_TIMEOUT:-30s}"
+
+git_ls_remote() {
+  # 坏源 / DNS / 远端半开连接不能拖到整个 Update Checker job 超时。
+  # timeout 的失败会被调用点当作“该 ref 无法解析”，随后给出统一错误。
+  timeout --signal=TERM --kill-after=5s "$git_timeout" \
+    git_ls_remote "$@"
+}
+
 [[ "$profile_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || {
   echo "ERROR: invalid profile id: $profile_id" >&2
   exit 1
@@ -45,13 +54,13 @@ resolve_ref() {
   fi
 
   if [[ "$ref" == refs/heads/* ]]; then
-    lines="$(git ls-remote --exit-code "$repo" "$ref" 2>/dev/null || true)"
+    lines="$(git_ls_remote "$repo" "$ref" 2>/dev/null || true)"
   elif [[ "$ref" == refs/tags/* ]]; then
-    lines="$(git ls-remote --exit-code "$repo" "$ref" "$ref^{}" 2>/dev/null || true)"
+    lines="$(git_ls_remote "$repo" "$ref" "$ref^{}" 2>/dev/null || true)"
   else
-    lines="$(git ls-remote --exit-code "$repo" "refs/heads/$ref" 2>/dev/null || true)"
+    lines="$(git_ls_remote "$repo" "refs/heads/$ref" 2>/dev/null || true)"
     if [ -z "$lines" ]; then
-      lines="$(git ls-remote --exit-code "$repo" "refs/tags/$ref" "refs/tags/$ref^{}" 2>/dev/null || true)"
+      lines="$(git_ls_remote "$repo" "refs/tags/$ref" "refs/tags/$ref^{}" 2>/dev/null || true)"
     fi
   fi
 
