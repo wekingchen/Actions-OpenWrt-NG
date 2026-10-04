@@ -56,8 +56,8 @@ jobs:
           echo "ERROR: 来源 Run 不是 OpenWrt NG Builder：$source_workflow_path" >&2
           exit 1
         }
-        [ "$source_status" = "completed" ] && [ "$source_conclusion" = "success" ] || {
-          echo "ERROR: 来源 Run 未成功完成：status=$source_status conclusion=$source_conclusion" >&2
+        [ "$source_status" = "completed" ] || {
+          echo "ERROR: 来源 Run 尚未完成：status=$source_status conclusion=$source_conclusion" >&2
           exit 1
         }
         [[ "$source_head_sha" =~ ^[0-9a-f]{40}$ ]] || {
@@ -75,6 +75,7 @@ jobs:
 
         echo "来源 Run：#$source_run_number / $SOURCE_RUN_ID"
         echo "来源提交：$source_head_sha"
+        echo "来源 Run 结论：$source_conclusion（允许 Release 等下游阶段失败；build job 必须 success）"
 
     - name: 下载已有 Release 交接包
       uses: actions/download-artifact@v8
