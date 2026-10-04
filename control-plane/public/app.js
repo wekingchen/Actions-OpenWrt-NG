@@ -1041,6 +1041,8 @@ function closeBuildDialog() {
 
 async function openBuildDialog(repo, profileId) {
   showError();
+  if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
+  if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
   if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
   if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
   if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
@@ -1443,6 +1445,8 @@ function closeProfileLifecycleDialog() {
 
 async function openProfileLifecycleDialog(repo, profileId, mode) {
   showError();
+  if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
+  if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
   if (!canWriteRepo(repo)) {
     showError("需要 Contents 与 Pull requests 写权限才能管理 Profile。");
     return;
@@ -1532,6 +1536,8 @@ function closeBaselineProfileDialog() {
 
 async function openBaselineProfileDialog(repo, profileId) {
   showError();
+  if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
+  if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
   if (!canWriteRepo(repo)) {
     showError("需要 Contents 与 Pull requests 写权限才能切换基准 Profile。");
     return;
@@ -1623,6 +1629,8 @@ function closeDeleteProfileDialog() {
 
 async function openDeleteProfileDialog(repo, profileId) {
   showError();
+  if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
+  if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
   if (!canWriteRepo(repo)) {
     showError("需要 Contents 与 Pull requests 写权限才能删除 Profile。");
     return;
@@ -2370,6 +2378,8 @@ async function loadDeletedProfiles(repo, selectionVersion) {
 
 async function loadProfiles(repo, selectionVersion, options = {}) {
   showError();
+  if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
+  if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
   clearBuildPolling();
   editorState.loadVersion += 1;
   createState.repo = repo;
@@ -2389,6 +2399,10 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
   $("new-profile-open").title = canWriteRepo(repo)
     ? "通过 Pull Request 新建标准 Profile"
     : "需要 Contents 与 Pull requests 写权限";
+  $("update-checker-open").disabled = !canRunRepo(repo);
+  $("update-checker-open").title = canRunRepo(repo)
+    ? "手动触发 OpenWrt NG Update Checker"
+    : "需要 Actions 写权限";
 
   $("profile-card").hidden = false;
   $("profile-title").textContent = "配置";
