@@ -73,6 +73,24 @@ const baselineProfileState = {
   restoreFocus: null
 };
 
+const updateCheckerState = {
+  repo: null,
+  runId: 0,
+  pollTimer: null,
+  generation: 0,
+  restoreFocus: null
+};
+
+const releaseExistingState = {
+  repo: null,
+  sourceRunId: 0,
+  sourceRunNumber: 0,
+  runId: 0,
+  pollTimer: null,
+  generation: 0,
+  restoreFocus: null
+};
+
 const createState = {
   repo: null,
   previewFiles: [],
@@ -189,6 +207,8 @@ function iconSvg(name) {
     chevron: '<path d="m7 9 5 5 5-5"/>',
     copy: '<path d="M9 9h10v10H9z"/><path d="M5 15H4V5h10v1"/>',
     rename: '<path d="M4 17.5V20h2.5L17.8 8.7l-2.5-2.5z"/><path d="m14.9 6.6 2.5 2.5"/>',
+    refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
+    restore: '<path d="M4 10a8 8 0 1 1 2.3 5.7"/><path d="M4 17v-7h7"/>',
     star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9z"/>',
     trash: '<path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/>'
   };
@@ -430,6 +450,41 @@ const ERROR_MESSAGES = {
     "GitHub 未能启动 Builder，请检查 Actions 权限与 workflow 是否存在。",
   github_builder_control_failed:
     "GitHub 未能完成 Builder 取消 / 重跑操作。",
+  github_release_existing_failed:
+    "GitHub 未能启动 Release Existing Build。",
+  release_existing_unavailable:
+    "这个构建当前不能直接补发 Release。",
+  release_existing_already_active:
+    "这个构建已经有 Release Existing 任务在运行。",
+  release_already_exists:
+    "这个构建已经有关联 Release，不需要重复发布。",
+  release_bundle_missing:
+    "这个构建没有保留 Release bundle，无法直接补发 Release。",
+  release_bundle_expired:
+    "这个构建的 Release bundle 已过期，无法直接补发 Release。",
+  build_not_successful:
+    "只有成功完成的 Builder 才能补发 Release。",
+  github_update_checker_failed:
+    "GitHub 未能启动 Update Checker。",
+  update_check_already_active:
+    "当前已有 Update Checker 在运行，本次不会重复排队。",
+  invalid_update_check_request:
+    "Update Checker 请求参数无效。",
+  invalid_update_check_force:
+    "Update Checker 强制选项无效。",
+  github_deleted_profiles_failed:
+    "暂时无法读取最近删除的 Profile。",
+  github_profile_restore_failed:
+    "GitHub 未能完成 Profile 恢复 Pull Request。",
+  invalid_deletion_commit:
+    "删除记录无效，无法恢复 Profile。",
+  deletion_commit_mismatch:
+    "该删除记录与目标 Profile 不匹配，已拒绝恢复。",
+  deleted_profile_snapshot_unavailable:
+    "删除前的 Profile 快照已经不可用。",
+  deleted_profile_snapshot_incomplete:
+    "删除前快照缺少标准 Profile 文件，无法安全恢复。"
+
   build_not_active:
     "这个构建已经不在运行，不能再取消。",
   build_not_completed:
