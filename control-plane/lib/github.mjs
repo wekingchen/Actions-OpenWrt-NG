@@ -96,6 +96,7 @@ const CONFIG_STUDIO_PROGRESS_LABELS = Object.freeze({
   "校验会话并读取请求": "读取配置请求",
   "安装配置解析依赖": "安装配置工具",
   "加载 Profile 上下文": "加载 Profile",
+  "运行 Profile Preflight": "运行 Profile 预检",
   "准备 OpenWrt 源码": "拉取并准备 OpenWrt 源码",
   "应用源码预处理与额外 Feeds": "应用源码预处理与额外 Feeds",
   "更新 Feeds": "更新 Feeds",
