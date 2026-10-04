@@ -988,6 +988,7 @@ async function openBuildDialog(repo, profileId) {
   showError();
   if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
   if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
+  if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
   const requestVersion = buildDialogState.requestVersion + 1;
   buildDialogState.requestVersion = requestVersion;
   buildDialogState.repo = repo;
@@ -1170,6 +1171,7 @@ async function openBaselineProfileDialog(repo, profileId) {
   }
   if (!$("build-dialog").hidden) closeBuildDialog();
   if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
+  if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
 
   const requestVersion = baselineProfileState.requestVersion + 1;
   baselineProfileState.requestVersion = requestVersion;
@@ -1260,6 +1262,7 @@ async function openDeleteProfileDialog(repo, profileId) {
   }
   if (!$("build-dialog").hidden) closeBuildDialog();
   if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
+  if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
 
   const requestVersion = deleteProfileState.requestVersion + 1;
   deleteProfileState.requestVersion = requestVersion;
@@ -1794,6 +1797,7 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
   if (!$("build-dialog").hidden) closeBuildDialog();
   if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
   if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
+  if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
   $("repo-switcher").value = repo.fullName;
   $("workspace-empty").hidden = true;
   $("editor-card").hidden = true;
