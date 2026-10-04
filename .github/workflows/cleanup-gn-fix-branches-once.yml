@@ -1,0 +1,39 @@
+name: Cleanup GN diagnostic branches
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/cleanup-gn-fix-branches-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: 删除已合并或已废弃修复分支
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          for branch in             fix/builder-ubuntu24-gn-host-diagnostics             fix/builder-ubuntu-2404             fix/robust-failure-target-detection
+          do
+            gh api -X DELETE               "repos/${GITHUB_REPOSITORY}/git/refs/heads/${branch}"               --silent || true
+          done
+
+      - name: 检出 main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: 删除一次性 Workflow
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm ".github/workflows/cleanup-gn-fix-branches-once.yml"
+          git commit -m "chore: remove GN branch cleanup helper"
+          git push origin HEAD:main
