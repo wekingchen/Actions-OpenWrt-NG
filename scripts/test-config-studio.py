@@ -64,9 +64,15 @@ def test_dependency_rules() -> None:
 
 def test_package_config_options() -> None:
     packages = [
-        {"name": "luci-app-ssr-plus"},
-        {"name": "luci-app-ssr-plus-helper"},
-        {"name": "dnsmasq-full"},
+        {
+            "name": "luci-app-ssr-plus",
+            "menuPath": ["LuCI", "Applications"],
+        },
+        {
+            "name": "luci-app-ssr-plus-helper",
+            "menuPath": ["LuCI", "Applications"],
+        },
+        {"name": "dnsmasq-full", "menuPath": ["Base system"]},
     ]
     package_kconfig = {
         "luci-app-ssr-plus": {
@@ -85,6 +91,10 @@ def test_package_config_options() -> None:
             "choicePrompt": "",
             "choiceValue": False,
             "menuPath": ["LuCI", "Applications"],
+            "menuTrail": [
+                {"prompt": "LuCI", "kind": "menu"},
+                {"prompt": "Applications", "kind": "menu"},
+            ],
         },
         "luci-app-ssr-plus_Iptables_Transparent_Proxy": {
             "symbol": "CONFIG_PACKAGE_luci-app-ssr-plus_Iptables_Transparent_Proxy",
@@ -98,6 +108,11 @@ def test_package_config_options() -> None:
             "choicePrompt": "Transparent Proxy Backend",
             "choiceValue": True,
             "menuPath": ["LuCI", "Applications", "Transparent Proxy Backend"],
+            "menuTrail": [
+                {"prompt": "LuCI", "kind": "menu"},
+                {"prompt": "Applications", "kind": "menu"},
+                {"prompt": "Transparent Proxy Backend", "kind": "choice"},
+            ],
         },
         "luci-app-ssr-plus_Nftables_Transparent_Proxy": {
             "symbol": "CONFIG_PACKAGE_luci-app-ssr-plus_Nftables_Transparent_Proxy",
@@ -111,6 +126,11 @@ def test_package_config_options() -> None:
             "choicePrompt": "Transparent Proxy Backend",
             "choiceValue": True,
             "menuPath": ["LuCI", "Applications", "Transparent Proxy Backend"],
+            "menuTrail": [
+                {"prompt": "LuCI", "kind": "menu"},
+                {"prompt": "Applications", "kind": "menu"},
+                {"prompt": "Transparent Proxy Backend", "kind": "choice"},
+            ],
         },
         "luci-app-ssr-plus-helper_DEBUG": {
             "symbol": "CONFIG_PACKAGE_luci-app-ssr-plus-helper_DEBUG",
@@ -150,6 +170,22 @@ def test_package_config_options() -> None:
     ]
     assert len(choice) == 2
     assert all(item["choiceValue"] for item in choice)
+    assert all(
+        item["relativeMenuPath"] == ["Transparent Proxy Backend"]
+        for item in choice
+    )
+    assert all(
+        item["relativeMenuTrail"] == [
+            {"prompt": "Transparent Proxy Backend", "kind": "choice"}
+        ]
+        for item in choice
+    )
+    direct = next(
+        item
+        for item in ssr["configOptions"]
+        if item["name"] == "INCLUDE_Mihomo"
+    )
+    assert direct["relativeMenuPath"] == []
     assert {item["name"] for item in helper["configOptions"]} == {"DEBUG"}
 
 
@@ -161,6 +197,8 @@ def main() -> None:
         encoding="utf-8"
     )
     assert "choicePrompt" in exporter_source
+    assert "menuTrail" in exporter_source
+    assert "menu_node_kind" in exporter_source
     assert "package_symbol(sym->name)" in exporter_source
 
     legacy = CONFIG_STUDIO.decode_process_text(
