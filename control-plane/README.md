@@ -242,7 +242,7 @@ Control Plane 尝试 squash 自动合并
 
 如果后续修改 GitHub App 权限，已有安装可能需要重新确认权限变更。修改后建议退出 Control Plane 并重新登录一次，避免旧授权状态造成判断混乱。
 
-V2.0B 只接受以下文件：
+V2.0B 只接受以下 7 个标准文件：
 
 ```text
 .config
@@ -251,6 +251,7 @@ diy-part1.sh
 diy-part2.sh
 required-packages.txt
 watch-sources.txt
+feeds.conf
 ```
 
 控制面不会接受任意仓库路径，也不会修改 `.github/workflows/*`，因此本阶段不需要 Workflows 权限。
