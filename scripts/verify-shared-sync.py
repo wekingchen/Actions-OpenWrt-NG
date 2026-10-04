@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""Fail fast when the test repository's shared code differs from upstream main."""
+"""Fail fast when shared code differs from a configured upstream repository."""
 
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 
-TEST_REPOSITORY = "wekingchen/Actions-OpenWrt-NG-Test"
-DEFAULT_UPSTREAM_REPOSITORY = "wekingchen/Actions-OpenWrt-NG"
 DEFAULT_UPSTREAM_REF = "main"
 EXCLUDED_PREFIXES = (
     "profiles/",
     "dashboard/data/",
     ".openwrt-ng/",
 )
+REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
 def run(*args: str, cwd: Path | None = None) -> str:
@@ -49,18 +49,41 @@ def tracked_index(root: Path) -> dict[str, tuple[str, str]]:
     return result
 
 
-def main() -> int:
-    repository = os.environ.get("GITHUB_REPOSITORY", "")
+def configured_upstream() -> tuple[str, str]:
+    repository = os.environ.get("OPENWRT_NG_UPSTREAM_REPOSITORY", "").strip()
+    ref = os.environ.get("OPENWRT_NG_UPSTREAM_REF", DEFAULT_UPSTREAM_REF).strip()
     force = os.environ.get("OPENWRT_NG_FORCE_SYNC_CHECK", "") == "1"
-    if repository != TEST_REPOSITORY and not force:
-        print(f"共享代码同步门禁跳过：repository={repository or 'local'}")
+
+    if not repository:
+        if force:
+            raise ValueError(
+                "OPENWRT_NG_FORCE_SYNC_CHECK=1 requires "
+                "OPENWRT_NG_UPSTREAM_REPOSITORY"
+            )
+        return "", ref or DEFAULT_UPSTREAM_REF
+
+    if not REPOSITORY_RE.fullmatch(repository):
+        raise ValueError(
+            "OPENWRT_NG_UPSTREAM_REPOSITORY must use owner/repository format"
+        )
+    if not ref:
+        raise ValueError("OPENWRT_NG_UPSTREAM_REF must not be empty")
+    return repository, ref
+
+
+def main() -> int:
+    try:
+        upstream_repository, upstream_ref = configured_upstream()
+    except ValueError as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 2
+
+    if not upstream_repository:
+        print("共享代码同步门禁跳过：未配置上游仓库。")
         return 0
 
     workspace = Path(os.environ.get("GITHUB_WORKSPACE", Path.cwd())).resolve()
-    upstream_repository = os.environ.get(
-        "OPENWRT_NG_UPSTREAM_REPOSITORY", DEFAULT_UPSTREAM_REPOSITORY
-    )
-    upstream_ref = os.environ.get("OPENWRT_NG_UPSTREAM_REF", DEFAULT_UPSTREAM_REF)
+    repository = os.environ.get("GITHUB_REPOSITORY", "") or workspace.name
 
     with tempfile.TemporaryDirectory(prefix="openwrt-ng-sync-") as temp_dir:
         upstream = Path(temp_dir) / "upstream"
@@ -94,9 +117,12 @@ def main() -> int:
         current_sha = run("git", "-C", str(workspace), "rev-parse", "HEAD")
 
         if missing or extra or changed:
-            print("ERROR: 测试仓共享代码与主仓最新 main 不一致。", file=sys.stderr)
-            print(f"  upstream: {upstream_repository}@{upstream_ref} {upstream_sha}", file=sys.stderr)
-            print(f"  current : {repository or workspace.name} {current_sha}", file=sys.stderr)
+            print("ERROR: 共享代码与配置的上游仓库不一致。", file=sys.stderr)
+            print(
+                f"  upstream: {upstream_repository}@{upstream_ref} {upstream_sha}",
+                file=sys.stderr,
+            )
+            print(f"  current : {repository} {current_sha}", file=sys.stderr)
             for label, items in (
                 ("缺失", missing),
                 ("额外", extra),
@@ -110,7 +136,7 @@ def main() -> int:
                 if len(items) > 100:
                     print(f"    ... 另有 {len(items) - 100} 项", file=sys.stderr)
             print(
-                "请先把主仓共享代码完整同步到测试仓，再执行验证。",
+                "请先同步共享代码，再执行验证。",
                 file=sys.stderr,
             )
             return 2
