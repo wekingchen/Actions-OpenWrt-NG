@@ -104,13 +104,15 @@ tail -n 200 "$log_file" || true
 echo "::endgroup::"
 
 failed_target="$(
-  sed -nE 's/.*ERROR: ((package|tools|toolchain)\/[^[:space:]]+) failed to build.*/\1\/compile/p' "$log_file" |
-  tail -n 1
+  {
+    sed -nE 's/.*ERROR: ((package|tools|toolchain)\/[^[:space:]]+) \[host\] failed to build.*/\1\/host\/compile/p' "$log_file"
+    sed -nE 's/.*ERROR: ((package|tools|toolchain)\/[^[:space:]]+) failed to build.*/\1\/compile/p' "$log_file"
+  } | tail -n 1
 )"
 
 if [ -z "$failed_target" ]; then
   failed_target="$(
-    grep -Eo '(package|tools|toolchain)/[^[:space:]]+/compile' "$log_file" |
+    grep -Eo '(package|tools|toolchain)/[^[:space:]]+/(host/)?compile' "$log_file" |
     tail -n 1 || true
   )"
 fi
