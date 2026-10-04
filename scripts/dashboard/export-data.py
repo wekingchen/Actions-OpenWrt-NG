@@ -325,12 +325,20 @@ def resolve_git_ref(repo: str, ref: str) -> str | None:
         return None
     candidates = [f"refs/heads/{ref}", f"refs/tags/{ref}^{{}}", f"refs/tags/{ref}"]
     for candidate in candidates:
-        proc = subprocess.run(
-            ["git", "ls-remote", "--exit-code", repo, candidate],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
+        try:
+            proc = subprocess.run(
+                ["git", "ls-remote", "--exit-code", repo, candidate],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            print(
+                f"warning: git ls-remote timed out for {repo} @ {ref}",
+                file=sys.stderr,
+            )
+            return None
         if proc.returncode != 0:
             continue
         for line in proc.stdout.splitlines():
