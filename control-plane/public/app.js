@@ -2732,9 +2732,11 @@ function configStudioPackageChildren(pkg, search) {
 
   const details = document.createElement("details");
   details.className = "config-studio-package-children";
-  const hasModifiedChild = options.some((option) =>
-    configStudioState.modifiedValues.has(option.symbol)
-  );
+  const hasModifiedChild =
+    configStudioState.modifiedValues.has(pkg.symbol) ||
+    options.some((option) =>
+      configStudioState.modifiedValues.has(option.symbol)
+    );
   details.open =
     Boolean(search && configStudioPackageOptionSearch(pkg, search)) ||
     hasModifiedChild;
