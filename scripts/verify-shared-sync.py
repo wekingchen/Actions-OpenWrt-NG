@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -12,6 +13,7 @@ from pathlib import Path
 
 
 DEFAULT_UPSTREAM_REF = "main"
+LOCAL_CONFIG = Path(".openwrt-ng/sync-gate.json")
 EXCLUDED_PREFIXES = (
     "profiles/",
     "dashboard/data/",
@@ -49,40 +51,73 @@ def tracked_index(root: Path) -> dict[str, tuple[str, str]]:
     return result
 
 
-def configured_upstream() -> tuple[str, str]:
-    repository = os.environ.get("OPENWRT_NG_UPSTREAM_REPOSITORY", "").strip()
-    ref = os.environ.get("OPENWRT_NG_UPSTREAM_REF", DEFAULT_UPSTREAM_REF).strip()
+def local_config(workspace: Path) -> dict[str, str]:
+    path = workspace / LOCAL_CONFIG
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"invalid {LOCAL_CONFIG}: {error}") from error
+    if not isinstance(data, dict):
+        raise ValueError(f"{LOCAL_CONFIG} must contain a JSON object")
+    result: dict[str, str] = {}
+    for key in ("upstream_repository", "upstream_ref"):
+        value = data.get(key, "")
+        if value is None:
+            value = ""
+        if not isinstance(value, str):
+            raise ValueError(f"{LOCAL_CONFIG} field {key} must be a string")
+        result[key] = value.strip()
+    return result
+
+
+def configured_upstream(workspace: Path | None = None) -> tuple[str, str]:
+    root = (workspace or Path(
+        os.environ.get("GITHUB_WORKSPACE", Path.cwd())
+    )).resolve()
+    config = local_config(root)
+
+    repository = (
+        os.environ.get("OPENWRT_NG_UPSTREAM_REPOSITORY", "").strip()
+        or config.get("upstream_repository", "")
+    )
+    ref = (
+        os.environ.get("OPENWRT_NG_UPSTREAM_REF", "").strip()
+        or config.get("upstream_ref", "")
+        or DEFAULT_UPSTREAM_REF
+    )
     force = os.environ.get("OPENWRT_NG_FORCE_SYNC_CHECK", "") == "1"
 
     if not repository:
         if force:
             raise ValueError(
-                "OPENWRT_NG_FORCE_SYNC_CHECK=1 requires "
-                "OPENWRT_NG_UPSTREAM_REPOSITORY"
+                "OPENWRT_NG_FORCE_SYNC_CHECK=1 requires an upstream repository"
             )
-        return "", ref or DEFAULT_UPSTREAM_REF
+        return "", ref
 
     if not REPOSITORY_RE.fullmatch(repository):
-        raise ValueError(
-            "OPENWRT_NG_UPSTREAM_REPOSITORY must use owner/repository format"
-        )
+        raise ValueError("upstream repository must use owner/repository format")
     if not ref:
-        raise ValueError("OPENWRT_NG_UPSTREAM_REF must not be empty")
+        raise ValueError("upstream ref must not be empty")
     return repository, ref
 
 
 def main() -> int:
+    workspace = Path(os.environ.get("GITHUB_WORKSPACE", Path.cwd())).resolve()
     try:
-        upstream_repository, upstream_ref = configured_upstream()
+        upstream_repository, upstream_ref = configured_upstream(workspace)
     except ValueError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 2
 
     if not upstream_repository:
-        print("共享代码同步门禁跳过：未配置上游仓库。")
+        print(
+            "共享代码同步门禁跳过：未配置上游仓库 "
+            f"（可用仓库变量或 {LOCAL_CONFIG} 启用）。"
+        )
         return 0
 
-    workspace = Path(os.environ.get("GITHUB_WORKSPACE", Path.cwd())).resolve()
     repository = os.environ.get("GITHUB_REPOSITORY", "") or workspace.name
 
     with tempfile.TemporaryDirectory(prefix="openwrt-ng-sync-") as temp_dir:
@@ -135,10 +170,7 @@ def main() -> int:
                     print(f"    - {path}", file=sys.stderr)
                 if len(items) > 100:
                     print(f"    ... 另有 {len(items) - 100} 项", file=sys.stderr)
-            print(
-                "请先同步共享代码，再执行验证。",
-                file=sys.stderr,
-            )
+            print("请先同步共享代码，再执行验证。", file=sys.stderr)
             return 2
 
         print(

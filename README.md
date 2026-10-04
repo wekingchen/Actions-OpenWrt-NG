@@ -107,7 +107,7 @@ UPLOAD_RELEASE="true"
 
 本仓库的 `main` 只保留第三方可复用能力。
 
-测试仓若需要强制验证共享代码与上游一致，可设置仓库变量 `OPENWRT_NG_SYNC_GATE_UPSTREAM=<owner/repo>`，可选 `OPENWRT_NG_SYNC_GATE_REF=<branch-or-sha>`；普通模板仓不设置时门禁自动跳过。该变量只用于 CI 一致性校验，不会覆盖本地代码。
+测试仓若需要强制验证共享代码与上游一致，可设置仓库变量 `OPENWRT_NG_SYNC_GATE_UPSTREAM=<owner/repo>`（可选 `OPENWRT_NG_SYNC_GATE_REF=<branch-or-sha>`），也可以在测试仓专属的 `.openwrt-ng/sync-gate.json` 中写入 `upstream_repository` / `upstream_ref`。环境变量优先于 marker；两者都未配置时普通模板仓门禁立即跳过，不发生网络访问。门禁只做一致性校验，不覆盖本地代码。
 
 特殊设备、特殊 SDK 或厂商源码的兼容验证，应在独立分支进行，例如：
 
