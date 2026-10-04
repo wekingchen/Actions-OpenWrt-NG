@@ -1188,14 +1188,19 @@ export class GitHubAppClient {
         String(artifact?.name || "") ===
         `OpenWrt_NG_release_bundle_${numericRunId}`
     );
+    const buildJob = jobs.find(
+      (job) => String(job?.name || "") === "编译 OpenWrt 固件"
+    );
+    const buildSucceeded =
+      String(buildJob?.conclusion || "") === "success";
     const releaseRecoveryEligible =
       run.status === "completed" &&
-      run.conclusion === "success" &&
+      buildSucceeded &&
       !release &&
       Boolean(releaseBundle) &&
       !Boolean(releaseBundle?.expired);
     let releaseRecoveryReason = "";
-    if (run.status !== "completed" || run.conclusion !== "success") {
+    if (run.status !== "completed" || !buildSucceeded) {
       releaseRecoveryReason = "build_not_successful";
     } else if (release) {
       releaseRecoveryReason = "release_already_exists";
