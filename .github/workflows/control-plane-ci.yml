@@ -218,6 +218,11 @@ jobs:
         grep -q 'Resource not accessible by integration' .github/workflows/build-openwrt.yml
         grep -q 'default-branch-fallback' .github/workflows/build-openwrt.yml
         grep -q 'target_mode=' .github/workflows/build-openwrt.yml
+        grep -Fq 'group: openwrt-ng-${{ needs.preflight.outputs.profile }}' .github/workflows/build-openwrt.yml
+        ! grep -Fq "github.event.inputs.profile || github.event.client_payload.profile || 'baseline'" .github/workflows/build-openwrt.yml
+        grep -Fq 'group: openwrt-ng-release-existing-${{ inputs.run_id }}' .github/workflows/release-existing.yml
+        grep -q '^  group: openwrt-ng-pages-' .github/workflows/pages-dashboard.yml
+        grep -q "github.event_name == 'pull_request'" .github/workflows/pages-dashboard.yml
         grep -q 'Tag Target 模式' .github/workflows/build-openwrt.yml
         grep -q 'scripts/cleanup-workflow-runs.sh' .github/workflows/build-openwrt.yml
         grep -q 'contents/.github/workflows?ref=' scripts/cleanup-workflow-runs.sh
