@@ -2180,7 +2180,7 @@ export class GitHubAppClient {
     );
   }
 
-  async deleteProfilePullRequest(
+  async setBaselineProfilePullRequest(
     token,
     owner,
     repo,
@@ -2189,9 +2189,6 @@ export class GitHubAppClient {
   ) {
     if (!PROFILE_ID_RE.test(String(profileId || ""))) {
       throw new ProfileWriteError("invalid_profile_id", 400);
-    }
-    if (profileId === "default") {
-      throw new ProfileWriteError("protected_profile", 409);
     }
 
     const baseRefSha = String(payload.baseRefSha || "").trim();
@@ -2202,6 +2199,155 @@ export class GitHubAppClient {
     const current = await this.getProfile(token, owner, repo, profileId);
     if (current.baseRefSha !== baseRefSha) {
       throw new ProfileWriteError("repository_changed", 409);
+    }
+    if (current.profile.baseline) {
+      throw new ProfileWriteError("no_changes", 400);
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const baseCommit = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/commits/${current.baseRefSha}`,
+      token
+    );
+    if (!baseCommit?.tree?.sha) {
+      throw new ProfileWriteError("repository_tree_unavailable", 502);
+    }
+
+    const blob = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/blobs`,
+      token,
+      {
+        method: "POST",
+        body: {
+          content: profileId + "\n",
+          encoding: "utf-8"
+        }
+      }
+    );
+    const tree = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/trees`,
+      token,
+      {
+        method: "POST",
+        body: {
+          base_tree: baseCommit.tree.sha,
+          tree: [{
+            path: "profiles/.baseline",
+            mode: "100644",
+            type: "blob",
+            sha: blob.sha
+          }]
+        }
+      }
+    );
+    const commit = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/commits`,
+      token,
+      {
+        method: "POST",
+        body: {
+          message: `profile(${profileId}): set-baseline via Control Plane`,
+          tree: tree.sha,
+          parents: [current.baseRefSha]
+        }
+      }
+    );
+
+    const branchName =
+      `openwrt-ng/profile-${branchSlug(profileId)}-${Date.now()}-${shortNonce()}`;
+    await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/refs`,
+      token,
+      {
+        method: "POST",
+        body: {
+          ref: `refs/heads/${branchName}`,
+          sha: commit.sha
+        }
+      }
+    );
+
+    try {
+      const pull = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/pulls`,
+        token,
+        {
+          method: "POST",
+          body: {
+            title: `profile(${profileId}): set-baseline via Control Plane`,
+            head: branchName,
+            base: current.defaultBranch,
+            body:
+              "由 OpenWrt NG Control Plane 创建。\n\n" +
+              `将仓库基准 Profile 切换为 \`${profileId}\`：\n` +
+              "- `profiles/.baseline`\n\n" +
+              "未显式指定 Profile 的 Builder / profile.sh 会从该指针解析基准。"
+          }
+        }
+      );
+
+      const finalized = await this.finalizeProfilePullRequest(
+        token,
+        owner,
+        repo,
+        profileId,
+        {
+          defaultBranch: current.defaultBranch,
+          baseRefSha: current.baseRefSha
+        },
+        branchName,
+        commit.sha,
+        "baseline",
+        pull
+      );
+
+      return {
+        branch: branchName,
+        commitSha: commit.sha,
+        changedFiles: ["profiles/.baseline"],
+        action: "baseline",
+        baselineProfileId: profileId,
+        ...finalized
+      };
+    } catch (error) {
+      try {
+        await this.api(
+          `/repos/${safeOwner}/${safeRepo}/git/refs/${refPath(branchName)}`,
+          token,
+          { method: "DELETE" }
+        );
+      } catch (cleanupError) {
+        console.error(
+          "Failed to clean up branch after baseline PR creation error",
+          cleanupError
+        );
+      }
+      throw error;
+    }
+  }
+
+  async deleteProfilePullRequest(
+    token,
+    owner,
+    repo,
+    profileId,
+    payload = {}
+  ) {
+    if (!PROFILE_ID_RE.test(String(profileId || ""))) {
+      throw new ProfileWriteError("invalid_profile_id", 400);
+    }
+    const baseRefSha = String(payload.baseRefSha || "").trim();
+    if (!/^[0-9a-f]{40}$/i.test(baseRefSha)) {
+      throw new ProfileWriteError("invalid_base_ref", 400);
+    }
+
+    const current = await this.getProfile(token, owner, repo, profileId);
+    if (current.baseRefSha !== baseRefSha) {
+      throw new ProfileWriteError("repository_changed", 409);
+    }
+    if (current.profile.baseline) {
+      throw new ProfileWriteError("protected_profile", 409);
     }
 
     const recent = await this.listBuilderRuns(token, owner, repo, {
