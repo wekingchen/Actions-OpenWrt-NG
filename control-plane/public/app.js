@@ -56,6 +56,14 @@ const deleteProfileState = {
   restoreFocus: null
 };
 
+const baselineProfileState = {
+  repo: null,
+  profileId: "",
+  baseRefSha: "",
+  requestVersion: 0,
+  restoreFocus: null
+};
+
 const createState = {
   repo: null,
   previewFiles: [],
@@ -170,6 +178,7 @@ function iconSvg(name) {
     profile: '<path d="M7 4h10l3 3v13H4V7z"/><path d="M8 11h8M8 15h8"/>',
     arrow: '<path d="M5 12h14M14 7l5 5-5 5"/>',
     chevron: '<path d="m7 9 5 5 5-5"/>',
+    star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9z"/>',
     trash: '<path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/>'
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || ""}</svg>`;
@@ -377,7 +386,9 @@ const ERROR_MESSAGES = {
   profile_already_exists:
     "这个 Profile ID 已经存在，请换一个 ID，或直接编辑已有 Profile。",
   protected_profile:
-    "default 是基准 Profile，为避免破坏项目初始配置，Control Plane 不允许删除。",
+    "当前基准 Profile 不能删除。请先把另一套配置设为基准，再删除它。",
+  invalid_baseline_profile:
+    "仓库的基准 Profile 指针无效，请检查 profiles/.baseline 是否指向现有 Profile。",
   profile_build_active:
     "这个 Profile 还有排队或运行中的构建，请等构建结束后再删除。",
   invalid_profile_template:
@@ -955,6 +966,7 @@ function closeBuildDialog() {
 async function openBuildDialog(repo, profileId) {
   showError();
   if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
+  if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
   const requestVersion = buildDialogState.requestVersion + 1;
   buildDialogState.requestVersion = requestVersion;
   buildDialogState.repo = repo;
@@ -1016,6 +1028,96 @@ async function openBuildDialog(repo, profileId) {
   }
 }
 
+function setBaselineProfileStatus(message = "", isError = false) {
+  const node = $("baseline-profile-status");
+  node.hidden = !message;
+  node.textContent = message;
+  node.classList.toggle("error-text", Boolean(isError));
+}
+
+function closeBaselineProfileDialog() {
+  baselineProfileState.requestVersion += 1;
+  const restoreFocus = baselineProfileState.restoreFocus;
+  $("baseline-profile-dialog").hidden = true;
+  document.body.classList.remove("dialog-open");
+  baselineProfileState.repo = null;
+  baselineProfileState.profileId = "";
+  baselineProfileState.baseRefSha = "";
+  baselineProfileState.restoreFocus = null;
+  setBaselineProfileStatus();
+  if (restoreFocus?.isConnected && typeof restoreFocus.focus === "function") {
+    restoreFocus.focus();
+  }
+}
+
+async function openBaselineProfileDialog(repo, profileId) {
+  showError();
+  if (!canWriteRepo(repo)) {
+    showError("需要 Contents 与 Pull requests 写权限才能切换基准 Profile。");
+    return;
+  }
+  if (!$("build-dialog").hidden) closeBuildDialog();
+  if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
+
+  const requestVersion = baselineProfileState.requestVersion + 1;
+  baselineProfileState.requestVersion = requestVersion;
+  baselineProfileState.repo = repo;
+  baselineProfileState.profileId = profileId;
+  baselineProfileState.baseRefSha = "";
+  baselineProfileState.restoreFocus =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+
+  $("baseline-profile-title").textContent = `将 ${profileId} 设为基准`;
+  $("baseline-profile-repo").textContent = repo.fullName;
+  $("baseline-profile-name").textContent = profileId;
+  $("confirm-baseline-profile").disabled = true;
+  $("confirm-baseline-profile").textContent = "正在校验…";
+  setBaselineProfileStatus("正在读取默认分支最新状态…");
+  $("baseline-profile-dialog").hidden = false;
+  document.body.classList.add("dialog-open");
+  $("baseline-profile-close").focus();
+
+  try {
+    const data = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}`,
+      { cache: "no-store" }
+    );
+    if (
+      requestVersion !== baselineProfileState.requestVersion ||
+      baselineProfileState.repo?.fullName !== repo.fullName ||
+      baselineProfileState.profileId !== profileId ||
+      $("baseline-profile-dialog").hidden
+    ) {
+      return;
+    }
+
+    if (data.profile?.baseline) {
+      setBaselineProfileStatus("这套配置已经是当前基准 Profile。");
+      $("confirm-baseline-profile").textContent = "已是基准";
+      return;
+    }
+
+    baselineProfileState.baseRefSha = data.baseRefSha || "";
+    setBaselineProfileStatus(
+      "切换会创建独立 PR；自动合并后，未显式指定 Profile 的入口会使用这套配置。"
+    );
+    $("confirm-baseline-profile").disabled = false;
+    $("confirm-baseline-profile").textContent = "设为基准";
+  } catch (error) {
+    if (
+      requestVersion !== baselineProfileState.requestVersion ||
+      $("baseline-profile-dialog").hidden
+    ) {
+      return;
+    }
+    $("confirm-baseline-profile").disabled = true;
+    $("confirm-baseline-profile").textContent = "设为基准";
+    setBaselineProfileStatus(friendlyError(error), true);
+  }
+}
+
 function setDeleteProfileStatus(message = "", isError = false) {
   const node = $("delete-profile-status");
   node.hidden = !message;
@@ -1040,15 +1142,12 @@ function closeDeleteProfileDialog() {
 
 async function openDeleteProfileDialog(repo, profileId) {
   showError();
-  if (profileId === "default") {
-    showError("protected_profile");
-    return;
-  }
   if (!canWriteRepo(repo)) {
     showError("需要 Contents 与 Pull requests 写权限才能删除 Profile。");
     return;
   }
   if (!$("build-dialog").hidden) closeBuildDialog();
+  if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
 
   const requestVersion = deleteProfileState.requestVersion + 1;
   deleteProfileState.requestVersion = requestVersion;
@@ -1081,6 +1180,13 @@ async function openDeleteProfileDialog(repo, profileId) {
       deleteProfileState.profileId !== profileId ||
       $("delete-profile-dialog").hidden
     ) {
+      return;
+    }
+
+    if (data.profile?.baseline) {
+      setDeleteProfileStatus(friendlyError("protected_profile"), true);
+      $("confirm-delete-profile").disabled = true;
+      $("confirm-delete-profile").textContent = "基准不可删除";
       return;
     }
 
@@ -1575,6 +1681,7 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
   createState.repo = repo;
   if (!$("build-dialog").hidden) closeBuildDialog();
   if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
+  if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
   $("repo-switcher").value = repo.fullName;
   $("workspace-empty").hidden = true;
   $("editor-card").hidden = true;
@@ -1657,11 +1764,20 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
       icon.innerHTML = iconSvg("profile");
       const copy = document.createElement("span");
       copy.className = "list-copy";
+      const nameLine = document.createElement("span");
+      nameLine.className = "profile-name-line";
       const strong = document.createElement("strong");
       strong.textContent = profile.id;
+      nameLine.appendChild(strong);
+      if (profile.baseline) {
+        const badge = document.createElement("span");
+        badge.className = "profile-baseline-badge";
+        badge.textContent = "基准";
+        nameLine.appendChild(badge);
+      }
       const meta = document.createElement("small");
       meta.textContent = profile.path;
-      copy.append(strong, meta);
+      copy.append(nameLine, meta);
       leading.append(icon, copy);
 
       const arrow = document.createElement("span");
@@ -1685,15 +1801,33 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
       actions.className = "profile-row-actions";
       actions.appendChild(buildButton);
 
+      const baselineButton = document.createElement("button");
+      baselineButton.type = "button";
+      baselineButton.className = "profile-baseline-action";
+      baselineButton.innerHTML = iconSvg("star");
+      baselineButton.setAttribute(
+        "aria-label",
+        profile.baseline ? `${profile.id} 已是基准` : `将 ${profile.id} 设为基准`
+      );
+      baselineButton.disabled = Boolean(profile.baseline) || !canWriteRepo(repo);
+      baselineButton.title = profile.baseline
+        ? "当前基准 Profile"
+        : canWriteRepo(repo)
+          ? `将 ${profile.id} 设为基准 Profile`
+          : "需要 Contents 与 Pull requests 写权限";
+      baselineButton.addEventListener("click", () => {
+        openBaselineProfileDialog(repo, profile.id).catch((error) => showError(error));
+      });
+      actions.appendChild(baselineButton);
+
       const deleteButton = document.createElement("button");
       deleteButton.type = "button";
       deleteButton.className = "profile-delete-action";
       deleteButton.innerHTML = iconSvg("trash");
       deleteButton.setAttribute("aria-label", `删除 ${profile.id}`);
-      const protectedProfile = profile.id === "default";
-      deleteButton.disabled = protectedProfile || !canWriteRepo(repo);
-      deleteButton.title = protectedProfile
-        ? "default 是基准 Profile，不可删除"
+      deleteButton.disabled = Boolean(profile.baseline) || !canWriteRepo(repo);
+      deleteButton.title = profile.baseline
+        ? "当前基准 Profile 不可删除，请先切换基准"
         : canWriteRepo(repo)
           ? `删除 ${profile.id}`
           : "需要 Contents 与 Pull requests 写权限";
@@ -3944,6 +4078,7 @@ document.addEventListener("keydown", (event) => {
     $("user-box").setAttribute("aria-expanded", "false");
     if (!$("build-dialog").hidden) closeBuildDialog();
     if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
+    if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
     if (!$("config-studio-dialog").hidden) {
       closeConfigStudio({ cleanup: false }).catch((error) => showError(error));
     }
@@ -4368,6 +4503,62 @@ $("trigger-build").addEventListener("click", async () => {
   }
 });
 
+$("confirm-baseline-profile").addEventListener("click", async () => {
+  const repo = baselineProfileState.repo;
+  const profileId = baselineProfileState.profileId;
+  const baseRefSha = baselineProfileState.baseRefSha;
+  const requestVersion = baselineProfileState.requestVersion;
+  if (!repo || !profileId || !baseRefSha || !canWriteRepo(repo)) return;
+
+  const button = $("confirm-baseline-profile");
+  button.disabled = true;
+  button.textContent = "正在切换…";
+  showError();
+  setBaselineProfileStatus("正在创建基准切换分支与 Pull Request…");
+
+  try {
+    const result = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}/baseline`,
+      {
+        method: "POST",
+        body: JSON.stringify({ baseRefSha })
+      }
+    );
+    const resultMessage = profileWriteResultMessage(
+      result,
+      "基准 Profile " + profileId
+    );
+    const resultUrl = result.pullRequest?.url || "";
+    closeBaselineProfileDialog();
+
+    if (repositoryState.selectedFullName === repo.fullName) {
+      await loadProfiles(repo, repositoryState.selectionVersion, {
+        forceRefresh: true,
+        focusProfileId: profileId,
+        resultMessage,
+        resultUrl
+      });
+    } else {
+      showProfileListResult(resultMessage, resultUrl);
+    }
+  } catch (error) {
+    if (
+      requestVersion === baselineProfileState.requestVersion &&
+      !$("baseline-profile-dialog").hidden
+    ) {
+      setBaselineProfileStatus(friendlyError(error), true);
+      button.disabled = false;
+    }
+  } finally {
+    if (
+      requestVersion === baselineProfileState.requestVersion &&
+      !$("baseline-profile-dialog").hidden
+    ) {
+      button.textContent = "设为基准";
+    }
+  }
+});
+
 $("confirm-delete-profile").addEventListener("click", async () => {
   const repo = deleteProfileState.repo;
   const profileId = deleteProfileState.profileId;
@@ -4436,6 +4627,12 @@ $("build-dialog-close").addEventListener("click", closeBuildDialog);
 $("build-dialog-cancel").addEventListener("click", closeBuildDialog);
 $("build-dialog").addEventListener("click", (event) => {
   if (event.target === $("build-dialog")) closeBuildDialog();
+});
+
+$("baseline-profile-close").addEventListener("click", closeBaselineProfileDialog);
+$("baseline-profile-cancel").addEventListener("click", closeBaselineProfileDialog);
+$("baseline-profile-dialog").addEventListener("click", (event) => {
+  if (event.target === $("baseline-profile-dialog")) closeBaselineProfileDialog();
 });
 
 $("delete-profile-close").addEventListener("click", closeDeleteProfileDialog);
