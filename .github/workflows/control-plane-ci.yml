@@ -81,6 +81,8 @@ jobs:
         node --check control-plane/server-routes.test.mjs
         node --check control-plane/contract.test.mjs
         python3 -m py_compile scripts/verify-shared-sync.py
+        python3 -m py_compile scripts/cleanup-profile-pr-merge.py
+        python3 scripts/test-cleanup-profile-pr-merge.py
         python3 -m py_compile scripts/config-studio.py
         python3 scripts/test-config-studio.py
         python3 scripts/test_detect_failed_target.py

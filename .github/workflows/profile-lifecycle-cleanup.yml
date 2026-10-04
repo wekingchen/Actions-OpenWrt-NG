@@ -1,0 +1,39 @@
+name: Profile Lifecycle Cleanup
+
+run-name: Profile cleanup · #${{ github.event.pull_request.number }}
+
+on:
+  pull_request:
+    types:
+      - closed
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  reconcile:
+    name: 补偿清理 Control Plane Profile 生命周期
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+    - name: 检出仓库
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 测试仓共享代码同步门禁
+      if: github.repository == 'wekingchen/Actions-OpenWrt-NG-Test'
+      run: |
+        set -Eeuo pipefail
+        python3 scripts/verify-shared-sync.py
+
+    - name: 清理人工合并后的临时资源
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        set -Eeuo pipefail
+        python3 scripts/cleanup-profile-pr-merge.py

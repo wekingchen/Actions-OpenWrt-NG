@@ -68,6 +68,8 @@ profiles/
 
 默认示例使用 Lean `master` + x86_64 generic。**基准身份不绑定 `default` 目录名**：在 Control Plane 中可以把任意现有 Profile 设为基准；当前基准不可删除，切换后原基准即可按普通 Profile 删除。手动 Builder 的 Profile 留空、或直接运行 `scripts/profile.sh` 未指定 Profile 时，都会使用当前基准。
 
+Control Plane Profile PR 默认会尝试自动 squash 合并并清理临时资源；若仓库规则要求人工合并，`Profile Lifecycle Cleanup` 会在合并后自动补做分支/旧 PR 清理。对于删除或重命名，还会同步清理该 Profile 的 Config Studio 临时会话与仍在运行的配置 Action。
+
 最简单的使用方式：
 
 1. 使用本仓库作为模板创建自己的仓库。
