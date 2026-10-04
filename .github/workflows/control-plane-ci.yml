@@ -451,7 +451,48 @@ jobs:
             raise SystemExit("ERROR: Artifact 下载不能退回未承诺的 GitHub Web 页面路径")
         PY
 
-    - name: 构建可选自托管容器
+    - name: 构建并启动自托管容器
       run: |
         set -Eeuo pipefail
-        docker build -f control-plane/Dockerfile -t openwrt-ng-control-plane:self-hosted-test .
+
+        image="openwrt-ng-control-plane:self-hosted-test"
+        name="openwrt-ng-control-plane-self-hosted-test"
+
+        docker build -f control-plane/Dockerfile -t "$image" .
+
+        cleanup() {
+          docker logs "$name" >/tmp/control-plane-container.log 2>&1 || true
+          docker rm -f "$name" >/dev/null 2>&1 || true
+        }
+        trap cleanup EXIT
+
+        docker run -d \
+          --name "$name" \
+          -p 127.0.0.1:18787:8787 \
+          -e CONTROL_PLANE_ORIGIN=http://127.0.0.1:8787 \
+          -e CONTROL_PLANE_ALLOW_INSECURE_LOCALHOST=true \
+          -e GITHUB_APP_CLIENT_ID=Iv1.container-test \
+          -e GITHUB_APP_CLIENT_SECRET=container-test-client-secret \
+          -e GITHUB_APP_SLUG=openwrt-ng-container-test \
+          -e TOKEN_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef \
+          "$image"
+
+        for i in $(seq 1 30); do
+          if curl -fsS http://127.0.0.1:18787/api/v1/health >/tmp/container-health.json 2>/dev/null; then
+            break
+          fi
+          if ! docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null | grep -qx true; then
+            docker logs "$name" >&2 || true
+            echo "ERROR: 自托管 Control Plane 容器启动失败" >&2
+            exit 1
+          fi
+          sleep 1
+        done
+
+        jq -e '
+          .ok == true and
+          .runtime == "self-hosted-node" and
+          .configured == true
+        ' /tmp/container-health.json >/dev/null
+
+        echo "自托管容器启动与 /api/v1/health 验证通过"
