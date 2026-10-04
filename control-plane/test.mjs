@@ -745,6 +745,87 @@ assert.equal(
 );
 assert.equal(renamedProfilePr.configStudioCleanup.sessionsFound, 0);
 
+const sessionCleanupCalls = [];
+const sessionCleanupClient = new GitHubAppClient(
+  {
+    clientId: "Iv1.session-cleanup",
+    clientSecret: "session-cleanup-secret",
+    redirectUri: "https://example.test/api/v1/auth/callback"
+  },
+  async (url, options = {}) => {
+    const parsed = new URL(String(url));
+    const path = parsed.pathname.replace(/^\/repos\/acme\/router/, "");
+    const method = String(options.method || "GET").toUpperCase();
+    sessionCleanupCalls.push({ path, method, body: options.body || "" });
+
+    if (
+      method === "GET" &&
+      path.startsWith("/git/matching-refs/heads/openwrt-ng/config-session-")
+    ) {
+      return Response.json([{
+        ref: "refs/heads/openwrt-ng/config-session-aabbccddeeff0011",
+        object: { sha: "1".repeat(40) }
+      }]);
+    }
+    if (
+      method === "GET" &&
+      path === "/contents/.openwrt-ng/config-studio/aabbccddeeff0011/request.json"
+    ) {
+      return Response.json({
+        encoding: "base64",
+        content: Buffer.from(
+          JSON.stringify({ profileId: "deletable" }),
+          "utf8"
+        ).toString("base64")
+      });
+    }
+    if (
+      method === "GET" &&
+      path === "/actions/workflows/config-studio.yml/runs"
+    ) {
+      return Response.json({
+        workflow_runs: [{
+          id: 456,
+          run_number: 3,
+          display_title: "Config · resolve · cs:aabbccddeeff0011",
+          status: "in_progress"
+        }]
+      });
+    }
+    if (method === "POST" && path === "/actions/runs/456/cancel") {
+      return new Response(null, { status: 202 });
+    }
+    if (
+      method === "DELETE" &&
+      path === "/git/refs/heads/openwrt-ng/config-session-aabbccddeeff0011"
+    ) {
+      return new Response(null, { status: 204 });
+    }
+    return profileFetch(url, options);
+  }
+);
+const sessionCleanup =
+  await sessionCleanupClient.cleanupConfigStudioSessionsForProfile(
+    "ghu_profile",
+    "acme",
+    "router",
+    "deletable"
+  );
+assert.equal(sessionCleanup.sessionsFound, 1);
+assert.equal(sessionCleanup.branchesDeleted, 1);
+assert.deepEqual(sessionCleanup.canceledRuns, [456]);
+assert.ok(
+  sessionCleanupCalls.some((call) =>
+    call.method === "POST" && call.path === "/actions/runs/456/cancel"
+  )
+);
+assert.ok(
+  sessionCleanupCalls.some((call) =>
+    call.method === "DELETE" &&
+    call.path.endsWith("/config-session-aabbccddeeff0011")
+  )
+);
+
 const baselineCallStart = profileCalls.length;
 const baselineProfilePr = await profileClient.setBaselineProfilePullRequest(
   "ghu_profile",
