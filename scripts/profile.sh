@@ -32,10 +32,10 @@ resolve_baseline_profile() {
   fi
 
   mapfile -t candidates < <(
-    find "$root/profiles" -mindepth 2 -maxdepth 2 -type f -name profile.env -print 2>/dev/null \
-      | sed -E 's#/profile\.env$##' \
-      | xargs -r -n1 basename \
-      | LC_ALL=C sort
+    for candidate_file in "$root"/profiles/*/profile.env; do
+      [ -f "$candidate_file" ] || continue
+      basename "$(dirname "$candidate_file")"
+    done | LC_ALL=C sort
   )
   [ "${#candidates[@]}" -gt 0 ] || {
     echo "ERROR: no Profile exists; cannot resolve baseline" >&2
