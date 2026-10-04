@@ -87,6 +87,9 @@ jobs:
         bash -n scripts/cleanup-workflow-runs.sh
         bash -n scripts/write-summary.sh
         bash -n scripts/profile.sh
+        grep -q 'OPENWRT_NG_GIT_TIMEOUT' scripts/resolve-update-state.sh
+        grep -q 'timeout --signal=TERM' scripts/resolve-update-state.sh
+        grep -q 'timeout=30' scripts/dashboard/export-data.py
 
         mapfile -t all_shell_files < <(
           find scripts adapters profiles -type f -name '*.sh' -print | sort
