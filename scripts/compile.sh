@@ -103,11 +103,9 @@ echo "build.log 最后 200 行："
 tail -n 200 "$log_file" || true
 echo "::endgroup::"
 
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 failed_target="$(
-  {
-    sed -nE 's/.*ERROR: ((package|tools|toolchain)\/[^[:space:]]+) \[host\] failed to build.*/\1\/host\/compile/p' "$log_file"
-    sed -nE 's/.*ERROR: ((package|tools|toolchain)\/[^[:space:]]+) failed to build.*/\1\/compile/p' "$log_file"
-  } | tail -n 1
+  python3 "$script_dir/detect_failed_target.py" "$log_file"
 )"
 
 if [ -z "$failed_target" ]; then
