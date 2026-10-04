@@ -1830,6 +1830,131 @@ export class GitHubAppClient {
     return result;
   }
 
+  async listConfigStudioSessionsForProfile(
+    token,
+    owner,
+    repo,
+    profileId
+  ) {
+    if (!PROFILE_ID_RE.test(String(profileId || ""))) {
+      throw new ProfileWriteError("invalid_profile_id", 400);
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    let refs;
+    try {
+      refs = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/git/matching-refs/${refPath(CONFIG_STUDIO_BRANCH_PREFIX)}`,
+        token
+      );
+    } catch (error) {
+      if (error?.httpStatus === 404) return [];
+      throw error;
+    }
+
+    const sessions = [];
+    for (const ref of Array.isArray(refs) ? refs : []) {
+      const fullRef = String(ref?.ref || "");
+      const branchName = fullRef.replace(/^refs\/heads\//, "");
+      if (!branchName.startsWith(CONFIG_STUDIO_BRANCH_PREFIX)) continue;
+      const requestId = branchName.slice(CONFIG_STUDIO_BRANCH_PREFIX.length);
+      if (!CONFIG_STUDIO_ID_RE.test(requestId)) continue;
+
+      const root = `.openwrt-ng/config-studio/${requestId}`;
+      let requestText;
+      try {
+        requestText = await this.readBranchTextFile(
+          token, owner, repo, branchName, `${root}/request.json`, true
+        );
+      } catch (error) {
+        console.error("Failed to inspect Config Studio session", error);
+        continue;
+      }
+      if (!requestText) continue;
+      try {
+        const request = JSON.parse(requestText);
+        if (String(request?.profileId || "") === profileId) {
+          sessions.push({ requestId, branch: branchName });
+        }
+      } catch {
+        console.error("Invalid Config Studio request while cleaning profile");
+      }
+    }
+    return sessions;
+  }
+
+  async cleanupConfigStudioSessionsForProfile(
+    token,
+    owner,
+    repo,
+    profileId
+  ) {
+    const sessions = await this.listConfigStudioSessionsForProfile(
+      token, owner, repo, profileId
+    );
+    if (!sessions.length) {
+      return { sessionsFound: 0, branchesDeleted: 0, canceledRuns: [] };
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    let runs = [];
+    try {
+      const body = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/actions/workflows/${CONFIG_STUDIO_WORKFLOW}/runs?event=workflow_dispatch&per_page=100`,
+        token
+      );
+      runs = Array.isArray(body?.workflow_runs) ? body.workflow_runs : [];
+    } catch (error) {
+      console.error("Failed to list Config Studio runs for profile cleanup", error);
+    }
+
+    const canceledRuns = [];
+    let branchesDeleted = 0;
+    for (const session of sessions) {
+      for (const run of runs) {
+        const title = String(run?.display_title || run?.name || "");
+        if (
+          title.includes(`cs:${session.requestId}`) &&
+          ACTIVE_BUILD_STATUSES.has(String(run?.status || ""))
+        ) {
+          const runId = Number(run?.id || 0);
+          if (!Number.isSafeInteger(runId) || runId <= 0) continue;
+          try {
+            await this.api(
+              `/repos/${safeOwner}/${safeRepo}/actions/runs/${runId}/cancel`,
+              token,
+              { method: "POST" }
+            );
+            canceledRuns.push(runId);
+          } catch (error) {
+            if (error?.httpStatus !== 409) {
+              console.error("Failed to cancel Config Studio run", error);
+            }
+          }
+        }
+      }
+
+      try {
+        await this.api(
+          `/repos/${safeOwner}/${safeRepo}/git/refs/${refPath(session.branch)}`,
+          token,
+          { method: "DELETE" }
+        );
+        branchesDeleted += 1;
+      } catch (error) {
+        if (error?.httpStatus === 404) {
+          branchesDeleted += 1;
+        } else {
+          console.error("Failed to delete Config Studio session branch", error);
+        }
+      }
+    }
+
+    return { sessionsFound: sessions.length, branchesDeleted, canceledRuns };
+  }
+
   async deleteProfileBranch(token, owner, repo, branchName) {
     const safeOwner = encodeSegment(owner);
     const safeRepo = encodeSegment(repo);
