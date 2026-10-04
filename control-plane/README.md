@@ -345,6 +345,8 @@ profiles/<id>/feeds.conf
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
 
+0.21.0 将“编辑已有 Profile → 图形配置”升级为完整编辑器快照模式。点击图形配置前，浏览器先把当前正在编辑的文件写回内存，然后把 7 个标准 Profile 文件连同基线 SHA 发送给 Control Plane；服务端校验后把这份快照写入专用 `openwrt-ng/config-session-*` 临时分支，并保留 DIY 脚本的可执行权限。Config Studio workflow 改为 checkout 该 session 分支，因此 `profile.env`、`diy-part1.sh`、`diy-part2.sh`、`feeds.conf` 和当前未保存的 `.config` 都按编辑器中的版本生效，而不是重新读取默认分支旧内容。准备顺序同时与 Builder 进一步对齐：加载 Profile → Profile Preflight → Adapter/源码 → DIY Part 1 → feeds → feeds install → PROFILE_FILES_DIR → DIY Part 2 → `make defconfig` → 图形菜单。图形配置完成后仅以 Kconfig 结果替换 session 快照中的 `.config`，其余 6 个文件按进入图形配置时的编辑器快照一起创建 PR；若默认分支在会话期间发生变化，仍返回 `409 repository_changed`，不会覆盖并发修改。
+
 0.20.2 修复新建 Profile 自动合并后的列表刷新。此前创建接口返回“已通过 PR 自动合并”后，前端只更新新建卡片里的成功提示，没有重新请求默认分支的 `profiles/`，所以新 Profile 要手动刷新页面才出现。现在仅在 PR 确认已合并时，前端用 `cache: no-store` 重新读取 Profile 列表，切回配置列表并保留成功提示，同时短暂高亮刚创建的 Profile；如果 PR 因规则/检查未合并，则仍停留在新建页并保留 PR 链接，因为默认分支此时还没有该 Profile。
 
 0.20.1 简化新建配置的源码接入 UI。当前仓库只有 `direct-openwrt` 一种 Adapter 时，不再把内部技术名词作为普通用户必选字段展示，后台自动使用标准 OpenWrt 源码接入方式；只有未来实际提供两种及以上 Adapter 时，页面才显示“源码接入方式”选择器。这样普通 Lean LEDE、OpenWrt、ImmortalWrt 与标准 fork 的新建流程只需要关注源码、分支、Feeds 与图形配置。
