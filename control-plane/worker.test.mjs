@@ -918,6 +918,7 @@ const rejectedTemplatePreview = await handleControlPlaneRequest(
   deps
 );
 assert.equal(rejectedTemplatePreview.status, 403);
+assert.equal(templateInput.feedPriorityMode, "per-package");
 
 const oversizedTemplatePreview = await handleControlPlaneRequest(
   new Request(

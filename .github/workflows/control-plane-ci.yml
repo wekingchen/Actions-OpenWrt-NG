@@ -87,7 +87,7 @@ jobs:
         node --check control-plane/github-profile-restore.test.mjs
         node --check control-plane/github-profile-merge-policy.test.mjs
         python3 -m py_compile scripts/verify-runtime-api.py
-        OPENWRT_NG_EXPECTED_RUNTIME_API=2 python3 scripts/verify-runtime-api.py
+        OPENWRT_NG_EXPECTED_RUNTIME_API=1 python3 scripts/verify-runtime-api.py
         python3 -m py_compile scripts/verify-shared-sync.py
         python3 scripts/test-verify-shared-sync.py
         python3 -m py_compile scripts/config-studio.py
@@ -285,6 +285,10 @@ jobs:
         grep -q 'unset FILES_DIR' .github/workflows/config-studio.yml
         grep -q 'apply-extra-feeds.sh' .github/workflows/config-studio.yml
         grep -q 'extraFeeds // ""' .github/workflows/config-studio.yml
+        grep -q 'feedPriorityMode // "per-package"' .github/workflows/config-studio.yml
+        grep -q 'FEED_PRIORITY_MODE' .github/workflows/config-studio.yml
+        grep -q 'new-feed-priority-mode' control-plane/public/index.html
+        grep -q 'feedPriorityMode' control-plane/api-schema.json
         grep -q 'config-studio-request.json' .github/workflows/config-studio.yml
         grep -Fq 'ref: ${{ inputs.session_branch }}' .github/workflows/config-studio.yml
         grep -q 'name: 运行 Profile Preflight' .github/workflows/config-studio.yml

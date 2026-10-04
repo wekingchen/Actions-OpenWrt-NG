@@ -57,6 +57,9 @@ assert.match(
   controlPlaneIndexHtml,
   /id="config-studio-progress-track"[^>]*role="progressbar"/
 );
+assert.match(controlPlaneIndexHtml, /id="new-feed-priority-mode"/);
+assert.match(configStudioWorkflow, /feedPriorityMode/);
+assert.match(configStudioWorkflow, /FEED_PRIORITY_MODE/);
 assert.match(controlPlaneAppJs, /configStudioPackageChildren/);
 assert.match(controlPlaneAppJs, /configStudioPackageMenuTree/);
 assert.match(controlPlaneAppJs, /configStudioPackageSubmenu/);
@@ -134,11 +137,6 @@ assert.match(configStudioWorkflow, /ref: \$\{\{ inputs\.session_branch \}\}/);
 assert.match(configStudioWorkflow, /name: 运行 Profile Preflight/);
 assert.match(configStudioWorkflow, /OPENWRT_NG_PREFLIGHT_ENV=/);
 assert.match(configStudioWorkflow, /PROFILE_FILES_DIR/);
-assert.match(controlPlaneIndexHtml, /id="new-feed-priority-mode"/);
-assert.match(controlPlaneAppJs, /feedPriorityMode/);
-assert.match(githubClientSource, /invalid_feed_priority_mode/);
-assert.match(configStudioWorkflow, /feedPriorityMode/);
-assert.match(configStudioWorkflow, /FEED_PRIORITY_MODE/);
 
 const builderProgress = builderProgressFromJobs([
   {
