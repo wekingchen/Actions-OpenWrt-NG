@@ -103,6 +103,8 @@ jobs:
         python3 -m py_compile scripts/resolve-feed-priority.py
         python3 scripts/test-resolve-feed-priority.py
         bash -n scripts/cleanup-workflow-runs.sh
+        python3 -m py_compile scripts/cleanup-actions-caches.py
+        python3 scripts/test-cleanup-actions-caches.py
         bash -n scripts/write-summary.sh
         bash -n scripts/profile.sh
         grep -q 'OPENWRT_NG_GIT_TIMEOUT' scripts/resolve-update-state.sh
