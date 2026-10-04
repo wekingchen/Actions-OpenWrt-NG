@@ -1614,7 +1614,7 @@ const managedWorkflowFetch = async (url, options = {}) => {
       run_attempt: 1,
       display_title: "Build · default · cp:feedfacecafebeef",
       status: "completed",
-      conclusion: "success",
+      conclusion: "failure",
       event: "workflow_dispatch",
       path: ".github/workflows/build-openwrt.yml",
       head_branch: "main",
