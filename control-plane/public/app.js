@@ -606,7 +606,7 @@ function readNewProfileInput() {
     uploadRelease: $("new-upload-release").checked,
     uploadFirmware: $("new-upload-firmware").checked,
     maximizeSpace: $("new-maximize-space").checked,
-    streamLog: $("new-stream-log").checked,
+    streamLog: false,
     requiredPackages: $("new-required-packages").value,
     watchSources: $("new-watch-sources").value,
     extraFeeds: $("new-extra-feeds").value
@@ -660,7 +660,6 @@ function resetNewProfileForm() {
   renderNewAdapterVisibility();
   $("new-upload-release").checked = true;
   $("new-upload-firmware").checked = true;
-  $("new-stream-log").checked = true;
   $("new-config-file").value = "";
   $("new-config-text").value = "";
   $("new-extra-feeds").value = "";
@@ -3969,7 +3968,6 @@ for (const id of [
   "new-upload-release",
   "new-upload-firmware",
   "new-maximize-space",
-  "new-stream-log",
   "new-required-packages",
   "new-watch-sources"
 ]) {
