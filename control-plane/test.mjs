@@ -927,6 +927,177 @@ await assert.rejects(
   }
 );
 
+const deletedProfileCommitSha = "7".repeat(40);
+const deletedProfileParentSha = "6".repeat(40);
+const retiredSnapshot = {
+  ...profileFileContents,
+  ".config": "CONFIG_RETIRED_SNAPSHOT=y\n",
+  "profile.env":
+    "PROFILE_NAME=\"Retired Snapshot\"\n" +
+    "CONFIG_FILE=\"profiles/retired/.config\"\n" +
+    "DIY_PART1=\"profiles/retired/diy-part1.sh\"\n"
+};
+const restoreCalls = [];
+const restoreClient = new GitHubAppClient(
+  {
+    clientId: "Iv1.profile-restore",
+    clientSecret: "profile-restore-secret",
+    redirectUri: "https://example.test/api/v1/auth/callback"
+  },
+  async (url, options = {}) => {
+    const parsed = new URL(String(url));
+    const path = parsed.pathname.replace(/^\/repos\/acme\/router/, "");
+    const method = String(options.method || "GET").toUpperCase();
+    restoreCalls.push({ path, method, body: options.body || "", search: parsed.search });
+
+    if (
+      method === "GET" &&
+      path === "/commits" &&
+      parsed.searchParams.get("per_page") === "100"
+    ) {
+      return Response.json([
+        {
+          sha: deletedProfileCommitSha,
+          html_url:
+            "https://github.com/acme/router/commit/" + deletedProfileCommitSha,
+          commit: {
+            message: "profile(retired): delete via Control Plane (#99)\n\nAudit",
+            committer: { date: "2026-10-04T10:00:00Z" },
+            author: { date: "2026-10-04T09:59:00Z" }
+          }
+        },
+        {
+          sha: "5".repeat(40),
+          html_url: "https://github.com/acme/router/commit/" + "5".repeat(40),
+          commit: {
+            message: "profile(deletable): delete via Control Plane",
+            committer: { date: "2026-10-03T10:00:00Z" }
+          }
+        }
+      ]);
+    }
+
+    if (
+      method === "GET" &&
+      path === "/contents/profiles/retired" &&
+      parsed.searchParams.get("ref") === profileBaseSha
+    ) {
+      return Response.json({ message: "Not Found" }, { status: 404 });
+    }
+
+    if (
+      method === "GET" &&
+      path === "/commits/" + deletedProfileCommitSha
+    ) {
+      return Response.json({
+        sha: deletedProfileCommitSha,
+        commit: {
+          message: "profile(retired): delete via Control Plane (#99)\n\nAudit"
+        },
+        parents: [{ sha: deletedProfileParentSha }]
+      });
+    }
+
+    if (
+      method === "GET" &&
+      path.startsWith("/contents/profiles/retired/") &&
+      parsed.searchParams.get("ref") === deletedProfileParentSha
+    ) {
+      const name = decodeURIComponent(
+        path.slice("/contents/profiles/retired/".length)
+      );
+      if (!Object.hasOwn(retiredSnapshot, name)) {
+        return Response.json({ message: "Not Found" }, { status: 404 });
+      }
+      return Response.json({
+        type: "file",
+        name,
+        path: "profiles/retired/" + name,
+        sha: "retired-" + name,
+        encoding: "base64",
+        content: Buffer.from(retiredSnapshot[name], "utf8").toString("base64")
+      });
+    }
+
+    return profileFetch(url, options);
+  }
+);
+
+const deletedProfiles = await restoreClient.listDeletedProfiles(
+  "ghu_profile",
+  "acme",
+  "router",
+  { limit: 10 }
+);
+assert.deepEqual(
+  deletedProfiles.map((item) => item.id),
+  ["retired"]
+);
+assert.equal(
+  deletedProfiles[0].deletionCommitSha,
+  deletedProfileCommitSha
+);
+assert.equal(
+  deletedProfiles[0].deletedAt,
+  "2026-10-04T10:00:00Z"
+);
+
+const restoreCallStart = restoreCalls.length;
+const restoredProfilePr = await restoreClient.restoreDeletedProfilePullRequest(
+  "ghu_profile",
+  "acme",
+  "router",
+  "retired",
+  { deletionCommitSha: deletedProfileCommitSha }
+);
+assert.equal(restoredProfilePr.action, "restore");
+assert.equal(restoredProfilePr.changedFiles.length, 7);
+assert.equal(restoredProfilePr.pullRequest.merged, true);
+const restoreMutationCalls = restoreCalls.slice(restoreCallStart);
+assert.ok(
+  restoreMutationCalls.some((call) =>
+    call.method === "GET" &&
+    call.path ===
+      "/contents/profiles/retired/.config" &&
+    call.search.includes(encodeURIComponent(deletedProfileParentSha))
+  ),
+  "恢复必须读取删除 commit 的父提交快照"
+);
+assert.ok(
+  restoreMutationCalls
+    .filter((call) => call.method === "POST" && call.path === "/git/blobs")
+    .map((call) => JSON.parse(call.body).content)
+    .includes("CONFIG_RETIRED_SNAPSHOT=y\n"),
+  "恢复写入内容必须来自删除前快照"
+);
+const restoreTreeCall = restoreMutationCalls.find(
+  (call) => call.method === "POST" && call.path === "/git/trees"
+);
+assert.ok(restoreTreeCall);
+const restoreTree = JSON.parse(restoreTreeCall.body).tree;
+assert.equal(
+  restoreTree.filter((entry) =>
+    entry.path.startsWith("profiles/retired/") && entry.sha !== null
+  ).length,
+  7
+);
+
+await assert.rejects(
+  () =>
+    restoreClient.restoreDeletedProfilePullRequest(
+      "ghu_profile",
+      "acme",
+      "router",
+      "retired",
+      { deletionCommitSha: "4".repeat(40) }
+    ),
+  (error) => {
+    assert.equal(error.code, "deletion_commit_mismatch");
+    assert.equal(error.status, 409);
+    return true;
+  }
+);
+
 const switchedBaselineClient = new GitHubAppClient(
   {
     clientId: "Iv1.profile-switched-baseline",
