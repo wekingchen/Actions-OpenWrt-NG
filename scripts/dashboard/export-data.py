@@ -154,6 +154,24 @@ printf '%s\0' \
     return dict(zip(PROFILE_KEYS, values, strict=True))
 
 
+def resolve_baseline_profile(root: Path, profile_ids: list[str]) -> str | None:
+    if not profile_ids:
+        return None
+
+    marker = root / "profiles" / ".baseline"
+    if marker.is_file():
+        baseline = marker.read_text(encoding="utf-8").strip()
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", baseline):
+            raise RuntimeError(f"invalid baseline Profile: {baseline!r}")
+        if baseline not in profile_ids:
+            raise RuntimeError(f"baseline Profile does not exist: {baseline}")
+        return baseline
+
+    if "default" in profile_ids:
+        return "default"
+    return sorted(profile_ids)[0]
+
+
 def load_profiles(root: Path) -> list[dict[str, Any]]:
     profiles = []
     for profile_file in sorted((root / "profiles").glob("*/profile.env")):
@@ -172,6 +190,10 @@ def load_profiles(root: Path) -> list[dict[str, Any]]:
                 "upload_release": env_bool(values["UPLOAD_RELEASE"], True),
             }
         )
+
+    baseline = resolve_baseline_profile(root, [profile["id"] for profile in profiles])
+    for profile in profiles:
+        profile["baseline"] = profile["id"] == baseline
     return profiles
 
 
@@ -475,6 +497,10 @@ def main() -> int:
             "default_branch": repo.get("default_branch"),
             "is_template": repo.get("is_template", False),
             "version": "V1.3",
+            "baseline_profile": next(
+                (profile["id"] for profile in profiles if profile.get("baseline")),
+                None,
+            ),
         },
         "latest_build": latest_build,
         "profiles": profiles,
