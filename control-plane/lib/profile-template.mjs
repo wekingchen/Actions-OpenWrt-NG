@@ -15,7 +15,8 @@ export const PROFILE_TEMPLATE_KEYS = Object.freeze([
   "streamLog",
   "requiredPackages",
   "watchSources",
-  "extraFeeds"
+  "extraFeeds",
+  "feedPriorityMode"
 ]);
 
 const BOOLEAN_KEYS = Object.freeze([
@@ -113,6 +114,9 @@ export function validateProfileTemplateInput(input) {
   const requiredPackages = String(input.requiredPackages ?? "");
   const watchSources = String(input.watchSources ?? "");
   const extraFeeds = String(input.extraFeeds ?? "");
+  const feedPriorityMode = String(
+    input.feedPriorityMode ?? "per-package"
+  ).trim() || "per-package";
 
   if (!PROFILE_ID_RE.test(profileId)) {
     errors.push(
@@ -160,6 +164,10 @@ export function validateProfileTemplateInput(input) {
       errors.push(`Manifest 包名格式不合法：${packageName}`);
       break;
     }
+  }
+
+  if (!["per-package", "feed-order"].includes(feedPriorityMode)) {
+    errors.push("Feed 冲突策略必须是 per-package 或 feed-order。");
   }
 
   if (extraFeeds.length > 256 * 1024) {
@@ -222,6 +230,9 @@ export function buildProfileTemplateFiles(input) {
   const requiredPackages = normalizeLines(input.requiredPackages);
   const watchSources = normalizeLines(input.watchSources);
   const extraFeeds = normalizeFeedLines(input.extraFeeds);
+  const feedPriorityMode = String(
+    input.feedPriorityMode ?? "per-package"
+  ).trim() || "per-package";
 
   const profileEnv = [
     `PROFILE_NAME=${shellQuote(input.profileName.trim())}`,
@@ -242,6 +253,7 @@ export function buildProfileTemplateFiles(input) {
     `MAXIMIZE_BUILD_SPACE=${shellQuote(
       input.maximizeSpace ? "true" : "false"
     )}`,
+    `FEED_PRIORITY_MODE=${shellQuote(feedPriorityMode)}`,
     "STREAM_BUILD_LOG='false'",
     "",
     "UPLOAD_BIN_DIR='false'",

@@ -16,7 +16,14 @@ mkdir -p "$(dirname "$log_file")"
 cd "$build_root"
 
 priority_report="${log_file%.log}-priority.json"
-python3 "$script_dir/resolve-feed-priority.py" "$build_root" --report "$priority_report"
+priority_mode="${FEED_PRIORITY_MODE:-per-package}"
+python3 "$script_dir/resolve-feed-priority.py" "$build_root" \
+  --mode "$priority_mode" \
+  --report "$priority_report"
+
+if [ -n "${GITHUB_ENV:-}" ]; then
+  printf 'FEED_PRIORITY_REPORT_FILE=%s\n' "$priority_report" >> "$GITHUB_ENV"
+fi
 
 set +e
 ./scripts/feeds install -a 2>&1 | tee "$log_file"

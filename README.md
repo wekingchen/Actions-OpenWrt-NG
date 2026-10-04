@@ -340,6 +340,8 @@ V2.0D 补齐新建 Profile：用户只提交结构化参数，服务端按与 Pr
 
 Control Plane 0.21.4 继续补齐操作闭环：Profile 支持安全复制和原子重命名；重命名基准 Profile 时 `.baseline` 同步迁移。Profile 删除/重命名完成后会自动清理关联 Config Studio 会话与活动 Action。Builder 历史支持直接取消运行中构建，以及对已结束构建执行完整重跑；所有操作均校验目标 workflow 身份并保留 GitHub Actions 审计记录。
 
+Control Plane 0.21.10 增加 Profile 级 Feed 冲突策略：默认 `FEED_PRIORITY_MODE=per-package`，按二进制包版本判断同一 source 的优先 feed；若同一 source 内不同二进制包需要不同 feed 胜出，则停止并提示风险。可切换为 `feed-order`，按 `feeds.conf` 中第三方优先 feed 的顺序整源选择。每轮决策、被替换项与跨 feed 依赖告警都会写入 `config-record/feed-priority.json`。
+
 Control Plane 0.21.9 增加可配置的 Profile 合并策略：`PROFILE_MERGE_POLICY=immediate` 保持原有即时 squash 合并；`after-checks` 使用 GitHub Auto-merge 等待仓库必需检查/审核；`manual` 只创建 PR。任何后续实际合并的 Control Plane Profile PR 都由补偿 workflow 清理临时 Profile 分支与被取代的旧 PR，删除/重命名继续额外清理 Config Studio 会话。
 
 Control Plane 0.21.5 补齐剩余恢复与运维入口：已结束的 Builder 只要“编译 OpenWrt 固件”job 成功、仍保留未过期的 `OpenWrt_NG_release_bundle_<run_id>` 且尚无 Release，就能从构建详情直接执行 **Release Existing Build**，全程不重新编译并显示真实 Actions 步骤；Profile 列表可手动触发 **Update Checker**，既支持全部 `AUTO_UPDATE=true` Profile，也支持指定单个 Profile 与 `force`；通过 Control Plane 删除且当前仍不存在的 Profile 会出现在“最近删除”，可从删除 commit 的父提交恢复完整 7 个标准文件，恢复仍走独立分支 → Pull Request → 自动合并，而不是 reset/revert。

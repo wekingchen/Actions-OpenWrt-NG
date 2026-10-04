@@ -57,6 +57,9 @@ assert.match(
   controlPlaneIndexHtml,
   /id="config-studio-progress-track"[^>]*role="progressbar"/
 );
+assert.match(controlPlaneIndexHtml, /id="new-feed-priority-mode"/);
+assert.match(configStudioWorkflow, /feedPriorityMode/);
+assert.match(configStudioWorkflow, /FEED_PRIORITY_MODE/);
 assert.match(controlPlaneAppJs, /configStudioPackageChildren/);
 assert.match(controlPlaneAppJs, /configStudioPackageMenuTree/);
 assert.match(controlPlaneAppJs, /configStudioPackageSubmenu/);
@@ -74,7 +77,7 @@ assert.match(controlPlaneAppJs, /configStudioDependencyConditionMatches/);
 assert.match(controlPlaneAppJs, /configStudioEffectiveModifiedEntries/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-dependency-summary"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-show-dependencies"/);
-assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.9<\/span>/);
+assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.10<\/span>/);
 assert.match(controlPlaneIndexHtml, /id="new-adapter-field" hidden/);
 assert.match(controlPlaneIndexHtml, /id="profile-list-result"/);
 assert.match(controlPlaneAppJs, /showProfileListResult/);
@@ -271,7 +274,8 @@ const templateInput = {
   watchSources: "packages|https://github.com/openwrt/packages|master",
   extraFeeds:
     "src-git --force helloworld https://github.com/fw876/helloworld.git\n" +
-    "src-git --force helloworld https://example.invalid/duplicate.git"
+    "src-git --force helloworld https://example.invalid/duplicate.git",
+  feedPriorityMode: "feed-order"
 };
 
 const controlPlaneTemplateFiles = buildProfileTemplateFiles(templateInput);
@@ -281,6 +285,7 @@ const templateProfileEnv = controlPlaneTemplateFiles.find(
   (file) => file.path.endsWith("/profile.env")
 )?.text || "";
 assert.match(templateProfileEnv, /STREAM_BUILD_LOG='false'/);
+assert.match(templateProfileEnv, /FEED_PRIORITY_MODE='feed-order'/);
 assert.equal(controlPlaneTemplateFiles.length, 7);
 const templateFeeds = controlPlaneTemplateFiles.find(
   (file) => file.path.endsWith("/feeds.conf")

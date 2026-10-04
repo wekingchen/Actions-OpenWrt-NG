@@ -103,6 +103,7 @@ profile=${PROFILE_ID:-unknown}
 profile_name=${PROFILE_NAME:-unknown}
 adapter=${ADAPTER:-unknown}
 feed_fingerprint=${FEED_FINGERPRINT:-unknown}
+feed_priority_mode=${FEED_PRIORITY_MODE:-per-package}
 build_cache_fingerprint=${BUILD_CACHE_FINGERPRINT:-unknown}
 final_config_sha256=$final_sha
 EOF
@@ -117,6 +118,13 @@ if [ -n "$feed_commits_file" ] && [ -s "$feed_commits_file" ]; then
   cp "$feed_commits_file" "$record_dir/feed-commits.txt"
 else
   echo "# feed commit detail unavailable" > "$record_dir/feed-commits.txt"
+fi
+
+feed_priority_report="${FEED_PRIORITY_REPORT_FILE:-}"
+if [ -n "$feed_priority_report" ] && [ -s "$feed_priority_report" ]; then
+  cp "$feed_priority_report" "$record_dir/feed-priority.json"
+else
+  printf '%s\n' '{"mode":"unknown","decisionCount":0,"note":"feed priority report unavailable"}' > "$record_dir/feed-priority.json"
 fi
 
 if [ -n "${MANIFEST_RECORD_FILE:-}" ] && [ -s "$MANIFEST_RECORD_FILE" ]; then
@@ -148,6 +156,9 @@ build-info.txt
 
 feed-commits.txt
   本轮 feeds update 后各真实 Git feed 的实际 HEAD commit。
+
+feed-priority.json
+  本轮第三方优先 feed 的冲突策略、胜出 feed、被替换项、不安全 source 冲突与跨 feed 依赖告警。
 
 排障建议：
   1. 先比较 source_commit。

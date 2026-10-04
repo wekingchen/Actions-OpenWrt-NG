@@ -851,6 +851,14 @@
         "extraFeeds": {
           "type": "string",
           "maxLength": 262144
+        },
+        "feedPriorityMode": {
+          "type": "string",
+          "enum": [
+            "per-package",
+            "feed-order"
+          ],
+          "default": "per-package"
         }
       }
     },
@@ -1046,6 +1054,14 @@
         "extraFeeds": {
           "type": "string",
           "maxLength": 262144
+        },
+        "feedPriorityMode": {
+          "type": "string",
+          "enum": [
+            "per-package",
+            "feed-order"
+          ],
+          "default": "per-package"
         }
       },
       "oneOf": [
@@ -1145,7 +1161,9 @@
         "run",
         "progress",
         "catalog",
-        "result"
+        "result",
+        "extraFeeds",
+        "feedPriorityMode"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1195,6 +1213,17 @@
         },
         "progress": {
           "$ref": "#/$defs/actionProgress"
+        },
+        "extraFeeds": {
+          "type": "string"
+        },
+        "feedPriorityMode": {
+          "type": "string",
+          "enum": [
+            "per-package",
+            "feed-order"
+          ],
+          "default": "per-package"
         }
       }
     },
@@ -1227,7 +1256,9 @@
         "adapter",
         "ref",
         "runId",
-        "runUrl"
+        "runUrl",
+        "extraFeeds",
+        "feedPriorityMode"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1263,6 +1294,17 @@
         },
         "runUrl": {
           "type": "string"
+        },
+        "extraFeeds": {
+          "type": "string"
+        },
+        "feedPriorityMode": {
+          "type": "string",
+          "enum": [
+            "per-package",
+            "feed-order"
+          ],
+          "default": "per-package"
         }
       }
     },
@@ -1312,7 +1354,9 @@
         "run",
         "catalog",
         "result",
-        "progress"
+        "progress",
+        "extraFeeds",
+        "feedPriorityMode"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1391,6 +1435,17 @@
         },
         "progress": {
           "$ref": "#/$defs/actionProgress"
+        },
+        "extraFeeds": {
+          "type": "string"
+        },
+        "feedPriorityMode": {
+          "type": "string",
+          "enum": [
+            "per-package",
+            "feed-order"
+          ],
+          "default": "per-package"
         }
       }
     },

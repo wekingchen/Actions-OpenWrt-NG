@@ -291,6 +291,7 @@ function newConfigStudioFingerprint(repo) {
       sourceBranch: $("new-source-branch")?.value.trim() || "",
       adapter: $("new-adapter")?.value || "",
       extraFeeds: $("new-extra-feeds")?.value || "",
+      feedPriorityMode: $("new-feed-priority-mode")?.value || "per-package",
       baseConfig: $("new-config-text")?.value || ""
     })
   );
@@ -762,7 +763,8 @@ function readNewProfileInput() {
     streamLog: false,
     requiredPackages: $("new-required-packages").value,
     watchSources: $("new-watch-sources").value,
-    extraFeeds: $("new-extra-feeds").value
+    extraFeeds: $("new-extra-feeds").value,
+    feedPriorityMode: $("new-feed-priority-mode").value
   };
 }
 
@@ -816,6 +818,7 @@ function resetNewProfileForm() {
   $("new-config-file").value = "";
   $("new-config-text").value = "";
   $("new-extra-feeds").value = "";
+  $("new-feed-priority-mode").value = "per-package";
   $("new-required-packages").value = "";
   $("new-watch-sources").value = "";
 
@@ -827,6 +830,8 @@ function resetNewProfileForm() {
       draft.sourceBranch || $("new-source-branch").value;
     $("new-adapter").value = draft.adapter || "direct-openwrt";
     $("new-extra-feeds").value = draft.extraFeeds || "";
+    $("new-feed-priority-mode").value =
+      draft.feedPriorityMode || "per-package";
     $("new-config-text").value = draft.baseConfig || "";
     const match = Object.entries(SOURCE_PRESETS).find(([, preset]) =>
       preset.repo === $("new-source-repo").value.trim() &&
@@ -4565,7 +4570,8 @@ async function startConfigStudio(repo, options) {
         sourceBranch: options.sourceBranch,
         adapter: options.adapter,
         baseConfig: options.baseConfig || "",
-        extraFeeds: options.extraFeeds || ""
+        extraFeeds: options.extraFeeds || "",
+        feedPriorityMode: options.feedPriorityMode || "per-package"
       };
 
   resetConfigStudioState();
@@ -4637,6 +4643,7 @@ async function startConfigStudio(repo, options) {
         sourceBranch: options.sourceBranch || "",
         adapter: options.adapter || "direct-openwrt",
         extraFeeds: options.extraFeeds || "",
+        feedPriorityMode: options.feedPriorityMode || "per-package",
         baseConfig: options.baseConfig || ""
       });
       renderNewConfigStudioState();
@@ -4911,6 +4918,7 @@ $("new-config-studio").addEventListener("click", async () => {
   const sourceBranch = $("new-source-branch").value.trim();
   const adapter = $("new-adapter").value;
   const extraFeeds = $("new-extra-feeds").value;
+  const feedPriorityMode = $("new-feed-priority-mode").value || "per-package";
   if (!repo) {
     showError("请先选择仓库。");
     return;
@@ -4947,6 +4955,7 @@ $("new-config-studio").addEventListener("click", async () => {
         adapter,
         baseConfig: $("new-config-text").value,
         extraFeeds,
+        feedPriorityMode,
         fingerprint,
         resumeRequestId: draft.requestId,
         resumeUi: draft.ui || null
@@ -4967,6 +4976,7 @@ $("new-config-studio").addEventListener("click", async () => {
     adapter,
     baseConfig: $("new-config-text").value,
     extraFeeds,
+    feedPriorityMode,
     fingerprint
   }).catch((error) => showError(error));
 });
