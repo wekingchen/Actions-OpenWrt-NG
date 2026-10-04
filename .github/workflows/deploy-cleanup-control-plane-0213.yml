@@ -1,0 +1,56 @@
+name: Deploy and cleanup Control Plane 0.21.3
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-cleanup-control-plane-0213.yml"
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  deploy-cleanup:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: 触发正式 Control Plane 部署
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          gh api \
+            -X POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-control-plane.yml/dispatches" \
+            --input - <<'JSON'
+          {
+            "ref": "main",
+            "inputs": {
+              "apply_github_app_secrets": "false"
+            }
+          }
+          JSON
+
+      - name: 删除已合并开发分支
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          gh api -X DELETE \
+            "repos/${GITHUB_REPOSITORY}/git/refs/heads/feat/configurable-baseline-profile" \
+            --silent || true
+
+      - name: 检出 main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: 删除一次性 Workflow
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm ".github/workflows/deploy-cleanup-control-plane-0213.yml"
+          git commit -m "chore: remove Control Plane 0.21.3 deploy helper"
+          git push origin HEAD:main
