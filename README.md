@@ -51,20 +51,22 @@ Cleanup
 
 ## 快速开始
 
-默认 Profile：
+初始基准 Profile：
 
 ```text
-profiles/default/
-├── profile.env
-├── .config
-├── diy-part1.sh
-├── diy-part2.sh
-├── required-packages.txt
-├── watch-sources.txt
-└── feeds.conf
+profiles/
+├── .baseline          # 内容为当前基准 Profile ID，初始为 default
+└── default/
+    ├── profile.env
+    ├── .config
+    ├── diy-part1.sh
+    ├── diy-part2.sh
+    ├── required-packages.txt
+    ├── watch-sources.txt
+    └── feeds.conf
 ```
 
-默认示例使用 Lean `master` + x86_64 generic，用于提供一个开箱即用的基准。
+默认示例使用 Lean `master` + x86_64 generic。**基准身份不绑定 `default` 目录名**：在 Control Plane 中可以把任意现有 Profile 设为基准；当前基准不可删除，切换后原基准即可按普通 Profile 删除。手动 Builder 的 Profile 留空、或直接运行 `scripts/profile.sh` 未指定 Profile 时，都会使用当前基准。
 
 最简单的使用方式：
 
@@ -73,7 +75,7 @@ profiles/default/
 3. Config Studio 会让 OpenWrt 自己执行 `make defconfig` 解析依赖，并通过 Pull Request 写入 Profile；手工方式则用生成结果替换 `profiles/default/.config`。
 4. 如果源码仓库或分支不同，修改 `profiles/default/profile.env`。
 5. 第一次先保持 `AUTO_UPDATE=false`，手动验证配置能够成功构建。
-6. Actions → **OpenWrt NG Builder** → **Run workflow**。
+6. Actions → **OpenWrt NG Builder** → **Run workflow**；Profile 留空会自动使用当前基准。
 7. 构建成功后从 Artifact 或 Release 下载固件。
 8. 确认稳定后，如果希望自动追新，再把 `AUTO_UPDATE` 改成 `true`。
 
@@ -329,7 +331,7 @@ V2.0B 在此基础上增加在线 Profile 编辑，保存固定走“预览 → 
 
 V2.0C 继续增加 Builder 控制能力：浏览器只能请求固定的 OpenWrt NG Builder，服务端固定使用仓库默认分支并生成请求标识；页面展示 queued / running / completed、Jobs、Artifacts、Release 与 Actions Summary 入口。该链路已在独立 Test 仓完成真实 Actions 调度验证：Run 与 request ID 精确对应，成功完成编译、Manifest 校验、配置留档、固件 Artifact 上传与 Summary 生成；测试时关闭了 Release，因此没有留下测试发布物。
 
-V2.0D 补齐新建 Profile：用户只提交结构化参数，服务端按与 Profile Wizard 一致的规则生成固定 7 个标准文件。预览不会写 GitHub；确认后仍走原子 commit → 独立分支 → Pull Request。浏览器不能指定任意仓库路径，已有同名 Profile 会被拒绝覆盖。该链路已在独立 Test 仓真实验证：PR 恰好包含 7 个标准文件、只有 1 个 commit，head commit 的唯一父提交为测试前 main；DIY 脚本保持 100755，其余文件保持 100644，创建 PR 前后默认分支 SHA 不变。
+V2 Control Plane 0.21.3 进一步补齐 Profile 生命周期：仓库用 `profiles/.baseline` 保存唯一逻辑基准，页面可安全切换基准；创建、编辑、基准切换和删除都沿用独立分支 + Pull Request + 自动合并的审计路径。删除保护跟随当前基准而不是固定 `default`。\n\nV2.0D 补齐新建 Profile：用户只提交结构化参数，服务端按与 Profile Wizard 一致的规则生成固定 7 个标准文件。预览不会写 GitHub；确认后仍走原子 commit → 独立分支 → Pull Request。浏览器不能指定任意仓库路径，已有同名 Profile 会被拒绝覆盖。该链路已在独立 Test 仓真实验证：PR 恰好包含 7 个标准文件、只有 1 个 commit，head commit 的唯一父提交为测试前 main；DIY 脚本保持 100755，其余文件保持 100644，创建 PR 前后默认分支 SHA 不变。
 
 项目提供 **Deploy V2 Control Plane** 手动 Workflow：第一次可以无 GitHub App Secret bootstrap 部署，拿到 workers.dev URL 后再创建 GitHub App 并同步 Secret。当前完整 V2 推荐 GitHub App 一次配置 Metadata read、Contents write、Pull requests write、Actions write；不需要 Administration / Workflows。Node.js + SQLite + Docker 仅保留为可选自托管方式。
 
