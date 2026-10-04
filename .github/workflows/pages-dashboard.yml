@@ -65,6 +65,7 @@ jobs:
         git diff --check
 
     - name: 导出 Dashboard 数据
+      if: github.event_name != 'pull_request'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -78,6 +79,13 @@ jobs:
         python3 scripts/dashboard/validate-data.py \
           --repository "$GITHUB_REPOSITORY" \
           --path dashboard/data/status.json
+
+    - name: Pull Request 安全验证
+      if: github.event_name == 'pull_request'
+      run: |
+        set -Eeuo pipefail
+        echo "Pull Request 不向待审代码暴露 GITHUB_TOKEN；实时 GitHub 数据导出仅在 main / workflow_run 执行。"
+        test -f dashboard/data/status.json
 
     - name: 打包 Pages Artifact
       run: |
