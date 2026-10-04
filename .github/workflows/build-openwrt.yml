@@ -472,9 +472,9 @@ jobs:
         path: |
           openwrt/.ccache
           openwrt/.cache/go-build
-        key: openwrt-ng-build-v2-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-${{ steps.build-cache.outputs.hash }}
+        key: openwrt-ng-build-v3-ubuntu24-${{ runner.os }}-${{ runner.arch }}-${{ needs.preflight.outputs.profile }}-${{ steps.build-cache.outputs.hash }}
         restore-keys: |
-          openwrt-ng-build-v2-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-
+          openwrt-ng-build-v3-ubuntu24-${{ runner.os }}-${{ runner.arch }}-${{ needs.preflight.outputs.profile }}-
 
     - name: 下载软件包源码
       run: |
@@ -518,7 +518,7 @@ jobs:
         path: |
           openwrt/.ccache
           openwrt/.cache/go-build
-        key: openwrt-ng-build-v2-${{ runner.os }}-${{ needs.preflight.outputs.profile }}-${{ steps.build-cache.outputs.hash }}
+        key: openwrt-ng-build-v3-ubuntu24-${{ runner.os }}-${{ runner.arch }}-${{ needs.preflight.outputs.profile }}-${{ steps.build-cache.outputs.hash }}
 
     - name: 校验固件 Manifest
       id: manifest

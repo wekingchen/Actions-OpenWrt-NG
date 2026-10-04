@@ -342,7 +342,7 @@ Core 提供：
 - 180 分钟构建超时。
 - 可选构建空间扩展。
 - `dl` 下载缓存。
-- ccache / Go build cache；Lean/OpenWrt 的 `CONFIG_CCACHE=y` 需要同时启用 `CONFIG_DEVEL=y`，默认缓存目录为源码树内的 `openwrt/.ccache`。Core 会直接持久化这一实际目录，并在 `make defconfig` 后校验 ccache 没有被 Kconfig 静默裁掉；即使本轮编译失败，也会先记录 ccache Hits / Misses / 大小并保存可复用的部分编译缓存，避免后续修复后完全冷启动。
+- ccache / Go build cache；Lean/OpenWrt 的 `CONFIG_CCACHE=y` 需要同时启用 `CONFIG_DEVEL=y`，默认缓存目录为源码树内的 `openwrt/.ccache`。Core 会直接持久化这一实际目录，并在 `make defconfig` 后校验 ccache 没有被 Kconfig 静默裁掉；即使本轮编译失败，也会先记录 ccache Hits / Misses / 大小并保存可复用的部分编译缓存，避免后续修复后完全冷启动。 Ubuntu 24.04 构建缓存使用独立 `build-v3-ubuntu24` 命名空间，不恢复 Ubuntu 22.04 生成的 host/ccache 数据；`dl/` 源码下载缓存继续跨 Runner 版本复用。
 - 可选流式或静默编译日志。
 - 长编译心跳。
 - Builder 固定运行在 Ubuntu 24.04，避免持续追新的 host 工具（例如 helloworld/gn）在 Ubuntu 22.04 的 Clang 14 / libstdc++ 12 上触发 C++23 ranges 兼容失败。
