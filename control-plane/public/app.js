@@ -4821,10 +4821,21 @@ document.addEventListener("keydown", (event) => {
     if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
     if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
     if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
+    if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
+    if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
     if (!$("config-studio-dialog").hidden) {
       closeConfigStudio({ cleanup: false }).catch((error) => showError(error));
     }
   }
+});
+
+$("update-checker-open").addEventListener("click", () => {
+  const repo = currentRepository();
+  if (!repo) {
+    showError("请先选择仓库。");
+    return;
+  }
+  openUpdateCheckerDialog(repo).catch((error) => showError(error));
 });
 
 $("new-profile-open").addEventListener("click", openNewProfileForm);
@@ -5430,6 +5441,134 @@ $("confirm-delete-profile").addEventListener("click", async () => {
   }
 });
 
+$("confirm-update-checker").addEventListener("click", async () => {
+  const repo = updateCheckerState.repo;
+  const generation = updateCheckerState.generation;
+  if (!repo || !canRunRepo(repo)) return;
+
+  const button = $("confirm-update-checker");
+  button.disabled = true;
+  button.textContent = "正在启动…";
+  setUpdateCheckerStatus("正在提交 Update Checker 请求…");
+  renderActionProgressCard(
+    "update-checker-progress",
+    null,
+    null,
+    {
+      force: true,
+      waitingTitle: "正在建立 Update Checker",
+      waitingDetail: "GitHub 建立运行记录后会显示真实步骤。"
+    }
+  );
+
+  try {
+    const result = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/update-checker`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          profileId: $("update-checker-profile").value,
+          force: $("update-checker-force").checked
+        })
+      }
+    );
+    if (
+      generation !== updateCheckerState.generation ||
+      $("update-checker-dialog").hidden
+    ) return;
+    updateCheckerState.runId = Number(result.runId || 0);
+    $("update-checker-run-link").href = result.runUrl || "#";
+    $("update-checker-run-link").hidden = !result.runUrl;
+    setUpdateCheckerStatus("Update Checker 已提交，正在等待真实运行步骤。");
+    button.textContent = "运行中…";
+    if (updateCheckerState.runId) {
+      await pollUpdateCheckerRun(generation);
+    } else {
+      setUpdateCheckerStatus(
+        "GitHub 已接受请求，但暂未返回 Run ID；请通过 Actions 链接查看本次检查。",
+        true
+      );
+      button.disabled = false;
+      button.textContent = "再次检查";
+    }
+  } catch (error) {
+    if (
+      generation === updateCheckerState.generation &&
+      !$("update-checker-dialog").hidden
+    ) {
+      setUpdateCheckerStatus(friendlyError(error), true);
+      button.disabled = false;
+      button.textContent = "开始检查";
+    }
+  }
+});
+
+$("update-checker-profile").addEventListener("change", () => {
+  const profileId = $("update-checker-profile").value;
+  setUpdateCheckerStatus(
+    profileId
+      ? `将检查 ${profileId}；指定 Profile 时不受 AUTO_UPDATE 开关限制。`
+      : "将检查所有 AUTO_UPDATE=true 的 Profile。"
+  );
+});
+
+$("confirm-release-existing").addEventListener("click", async () => {
+  const repo = releaseExistingState.repo;
+  const sourceRunId = releaseExistingState.sourceRunId;
+  const generation = releaseExistingState.generation;
+  if (!repo || !sourceRunId || !canRunRepo(repo)) return;
+
+  const button = $("confirm-release-existing");
+  button.disabled = true;
+  button.textContent = "正在启动…";
+  setReleaseExistingStatus("正在提交 Release Existing Build 请求…");
+  renderActionProgressCard(
+    "release-existing-progress",
+    null,
+    null,
+    {
+      force: true,
+      waitingTitle: "正在建立恢复发布任务",
+      waitingDetail: "GitHub 建立运行记录后会显示真实步骤。"
+    }
+  );
+
+  try {
+    const result = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/builds/${sourceRunId}/release-existing`,
+      { method: "POST", body: "{}" }
+    );
+    if (
+      generation !== releaseExistingState.generation ||
+      $("release-existing-dialog").hidden
+    ) return;
+    releaseExistingState.runId = Number(result.runId || 0);
+    $("release-existing-run-link").href = result.runUrl || "#";
+    $("release-existing-run-link").hidden = !result.runUrl;
+    setReleaseExistingStatus("恢复发布任务已提交，正在等待真实运行步骤。");
+    button.textContent = "发布中…";
+    if (releaseExistingState.runId) {
+      await pollReleaseExistingRun(generation);
+    } else {
+      setReleaseExistingStatus(
+        "GitHub 已接受请求，但暂未返回 Run ID；请通过 Actions 链接查看。",
+        true
+      );
+      button.disabled = false;
+      button.textContent = "重新尝试";
+    }
+  } catch (error) {
+    if (
+      generation === releaseExistingState.generation &&
+      !$("release-existing-dialog").hidden
+    ) {
+      setReleaseExistingStatus(friendlyError(error), true);
+      button.disabled = false;
+      button.textContent = "重新尝试";
+    }
+  }
+});
+
 for (const id of ["refresh-builds", "refresh-recent-builds"]) {
   $(id).addEventListener("click", () => {
     clearBuildPolling();
@@ -5438,6 +5577,18 @@ for (const id of ["refresh-builds", "refresh-recent-builds"]) {
     loadBuildRuns().catch((error) => showError(error));
   });
 }
+
+$("update-checker-close").addEventListener("click", closeUpdateCheckerDialog);
+$("update-checker-cancel").addEventListener("click", closeUpdateCheckerDialog);
+$("update-checker-dialog").addEventListener("click", (event) => {
+  if (event.target === $("update-checker-dialog")) closeUpdateCheckerDialog();
+});
+
+$("release-existing-close").addEventListener("click", closeReleaseExistingDialog);
+$("release-existing-cancel").addEventListener("click", closeReleaseExistingDialog);
+$("release-existing-dialog").addEventListener("click", (event) => {
+  if (event.target === $("release-existing-dialog")) closeReleaseExistingDialog();
+});
 
 $("build-dialog-close").addEventListener("click", closeBuildDialog);
 $("build-dialog-cancel").addEventListener("click", closeBuildDialog);
@@ -5620,6 +5771,8 @@ $("config-studio-dialog").addEventListener("click", (event) => {
 
 $("logout").addEventListener("click", async () => {
   clearBuildPolling();
+  clearUpdateCheckerPolling();
+  clearReleaseExistingPolling();
   clearConfigStudioPolling();
   if (!$("config-studio-dialog").hidden) {
     await closeConfigStudio({ cleanup: true });
