@@ -53,11 +53,11 @@ jobs:
       with:
         node-version: "24"
 
-    - name: 安装 Wrangler
+    - name: 安装 Control Plane 依赖
       working-directory: control-plane
       run: |
         set -Eeuo pipefail
-        npm install --ignore-scripts --no-audit --no-fund
+        npm ci --ignore-scripts --no-audit --no-fund
 
     - name: 静态检查
       run: |
@@ -162,6 +162,9 @@ jobs:
         grep -q 'restoreDeletedProfile' control-plane/public/app.js
         python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
         python3 -m json.tool control-plane/api-schema.json >/dev/null
+        test -f control-plane/package-lock.json
+        grep -q '"lockfileVersion": 3' control-plane/package-lock.json
+        grep -q 'npm ci --omit=dev' control-plane/Dockerfile
 
         grep -q 'control_plane_request_id:' .github/workflows/build-openwrt.yml
         grep -q 'cp:{0}' .github/workflows/build-openwrt.yml
