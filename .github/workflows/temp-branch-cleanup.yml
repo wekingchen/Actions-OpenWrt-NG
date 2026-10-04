@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          for branch in "feature/profile-merge-policy" "sync/control-plane-0219"; do
+          for branch in "feature/profile-merge-policy" "sync/control-plane-0219" "perf/cache-governance"; do
             if git ls-remote --exit-code --heads origin "refs/heads/$branch" >/dev/null 2>&1; then
               git push origin --delete "$branch"
             fi
