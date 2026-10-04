@@ -2222,6 +2222,124 @@ async function openProfile(repo, profileId, options = {}) {
   }
 }
 
+async function restoreDeletedProfile(repo, profile, button) {
+  if (!canWriteRepo(repo)) {
+    showError("需要 Contents 与 Pull requests 写权限才能恢复 Profile。");
+    return;
+  }
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "恢复中…";
+  showError();
+  try {
+    const result = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profile.id)}/restore`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          deletionCommitSha: profile.deletionCommitSha
+        })
+      }
+    );
+    const resultMessage = profileWriteResultMessage(
+      result,
+      "Profile " + profile.id + " 恢复"
+    );
+    if (repositoryState.selectedFullName === repo.fullName) {
+      await loadProfiles(repo, repositoryState.selectionVersion, {
+        forceRefresh: true,
+        focusProfileId: profile.id,
+        resultMessage,
+        resultUrl: result.pullRequest?.url || ""
+      });
+    }
+  } catch (error) {
+    showError(error);
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
+async function loadDeletedProfiles(repo, selectionVersion) {
+  const section = $("deleted-profiles-section");
+  const root = $("deleted-profiles");
+  section.hidden = true;
+  root.replaceChildren();
+
+  let data;
+  try {
+    data = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/deleted?limit=10`,
+      { cache: "no-store" }
+    );
+  } catch (error) {
+    if (
+      selectionVersion !== repositoryState.selectionVersion ||
+      repositoryState.selectedFullName !== repo.fullName
+    ) return;
+    console.warn("Deleted Profile history unavailable", error);
+    return;
+  }
+
+  if (
+    selectionVersion !== repositoryState.selectionVersion ||
+    repositoryState.selectedFullName !== repo.fullName
+  ) return;
+
+  const profiles = Array.isArray(data.profiles) ? data.profiles : [];
+  if (!profiles.length) return;
+
+  for (const profile of profiles) {
+    const row = document.createElement("div");
+    row.className = "profile-item deleted-profile-item";
+
+    const leading = document.createElement("span");
+    leading.className = "list-leading";
+    const icon = document.createElement("span");
+    icon.className = "list-icon deleted-list-icon";
+    icon.innerHTML = iconSvg("restore");
+    const copy = document.createElement("span");
+    copy.className = "list-copy";
+    const strong = document.createElement("strong");
+    strong.textContent = profile.id;
+    const meta = document.createElement("small");
+    meta.textContent =
+      `删除于 ${relativeTime(profile.deletedAt)} · ${String(profile.deletionCommitSha || "").slice(0, 8)}`;
+    copy.append(strong, meta);
+    leading.append(icon, copy);
+
+    const actions = document.createElement("span");
+    actions.className = "profile-row-actions";
+    const restore = document.createElement("button");
+    restore.type = "button";
+    restore.className = "profile-restore-action";
+    restore.textContent = "恢复";
+    restore.disabled = !canWriteRepo(repo);
+    restore.title = restore.disabled
+      ? "需要 Contents 与 Pull requests 写权限"
+      : "从删除前快照恢复 7 个标准文件";
+    restore.addEventListener("click", () => {
+      restoreDeletedProfile(repo, profile, restore)
+        .catch((error) => showError(error));
+    });
+    actions.appendChild(restore);
+
+    if (profile.commitUrl) {
+      const history = document.createElement("a");
+      history.className = "profile-history-link";
+      history.href = profile.commitUrl;
+      history.target = "_blank";
+      history.rel = "noreferrer";
+      history.textContent = "删除记录 ↗";
+      actions.appendChild(history);
+    }
+
+    row.append(leading, actions);
+    root.appendChild(row);
+  }
+  section.hidden = false;
+}
+
 async function loadProfiles(repo, selectionVersion, options = {}) {
   showError();
   clearBuildPolling();
@@ -2350,6 +2468,21 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
       actions.className = "profile-row-actions";
       actions.appendChild(buildButton);
 
+      const updateButton = document.createElement("button");
+      updateButton.type = "button";
+      updateButton.className = "profile-update-action";
+      updateButton.innerHTML = iconSvg("refresh");
+      updateButton.setAttribute("aria-label", `检查 ${profile.id} 上游更新`);
+      updateButton.disabled = !canRunRepo(repo);
+      updateButton.title = updateButton.disabled
+        ? "需要 Actions 写权限"
+        : `手动运行 Update Checker · ${profile.id}`;
+      updateButton.addEventListener("click", () => {
+        openUpdateCheckerDialog(repo, profile.id)
+          .catch((error) => showError(error));
+      });
+      actions.appendChild(updateButton);
+
       const copyButton = document.createElement("button");
       copyButton.type = "button";
       copyButton.className = "profile-copy-action";
@@ -2433,6 +2566,7 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
     );
   }
 
+  await loadDeletedProfiles(repo, selectionVersion);
   await setupBuildHistory(repo);
   return data.profiles;
 }
