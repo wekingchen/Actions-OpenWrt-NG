@@ -211,6 +211,7 @@ export function buildProfileFiles(input) {
     "",
     `AUTO_UPDATE=${shellQuote(input.autoUpdate ? "true" : "false")}`,
     `MAXIMIZE_BUILD_SPACE=${shellQuote(input.maximizeSpace ? "true" : "false")}`,
+    `FEED_PRIORITY_MODE=${shellQuote(feedPriorityMode)}`,
     "STREAM_BUILD_LOG='false'",
     "",
     `UPLOAD_BIN_DIR='false'`,
