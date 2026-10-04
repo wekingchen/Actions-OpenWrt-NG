@@ -94,7 +94,7 @@ EXTRA_FEEDS_FILE="profiles/default/feeds.conf"
 
 AUTO_UPDATE="false"
 MAXIMIZE_BUILD_SPACE="false"
-STREAM_BUILD_LOG="true"
+STREAM_BUILD_LOG="false"
 UPLOAD_BIN_DIR="false"
 UPLOAD_FIRMWARE="true"
 UPLOAD_RELEASE="true"
@@ -345,6 +345,7 @@ Core 提供：
 - ccache / Go build cache；Lean/OpenWrt 的 `CONFIG_CCACHE=y` 需要同时启用 `CONFIG_DEVEL=y`，默认缓存目录为源码树内的 `openwrt/.ccache`。Core 会直接持久化这一实际目录，并在 `make defconfig` 后校验 ccache 没有被 Kconfig 静默裁掉；即使本轮编译失败，也会先记录 ccache Hits / Misses / 大小并保存可复用的部分编译缓存，避免后续修复后完全冷启动。 Ubuntu 24.04 构建缓存使用独立 `build-v3-ubuntu24` 命名空间，不恢复 Ubuntu 22.04 生成的 host/ccache 数据；`dl/` 源码下载缓存继续跨 Runner 版本复用。
 - 可选流式或静默编译日志。
 - 长编译心跳。
+- 默认静默编译：完整 `make -jN` 输出仅保存在 Runner 临时文件，不持续写入 GitHub step；成功时只显示心跳、耗时和 ccache 统计。失败时才自动识别失败目标并从并行日志/单目标诊断日志中提取有限上下文，生成 `build-error-context.log`。失败 Artifact 不再上传整份 `build.log`，避免超长日志触发 GitHub `This step has been truncated...`。
 - Builder 固定运行在 Ubuntu 24.04，避免持续追新的 host 工具（例如 helloworld/gn）在 Ubuntu 22.04 的 Clang 14 / libstdc++ 12 上触发 C++23 ranges 兼容失败。
 - 并行编译失败后的目标识别；`ERROR: ... [host] failed to build` 会直接映射到对应 `/host/compile`。
 - 有限时单目标 / 单线程诊断，避免 host 包失败后误跑整轮全量单线程诊断。
