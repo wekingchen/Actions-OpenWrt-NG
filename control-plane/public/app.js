@@ -1955,15 +1955,43 @@ async function loadBuildDetail(runId) {
     const strong = document.createElement("strong");
     strong.textContent = run.release.name || run.release.tag;
     const span = document.createElement("span");
-    span.textContent = "打开 Release ↗";
+    span.textContent = run.release.recovered
+      ? "恢复发布 · 打开 Release ↗"
+      : "打开 Release ↗";
     link.append(strong, span);
     release.appendChild(link);
+  } else if (run.releaseRecoveryEligible) {
+    const recovery = document.createElement("div");
+    recovery.className = "release-recovery-row";
+    const copy = document.createElement("div");
+    const strong = document.createElement("strong");
+    strong.textContent = "已有构建可直接发布";
+    const span = document.createElement("span");
+    span.textContent = "复用已保留的 Release bundle，不重新编译。";
+    copy.append(strong, span);
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button primary button-compact";
+    button.textContent = "发布现有构建";
+    button.disabled = !canRunRepo(repo);
+    button.addEventListener("click", () => {
+      openReleaseExistingDialog(repo, run);
+    });
+    recovery.append(copy, button);
+    release.appendChild(recovery);
   } else {
     const empty = document.createElement("p");
     empty.className = "muted";
+    const reasons = {
+      release_bundle_missing: "本次构建没有发布 Release，且没有保留可恢复的 Release bundle。",
+      release_bundle_expired: "本次构建的 Release bundle 已过期，不能直接补发。",
+      build_not_successful: "只有成功完成的构建才能补发 Release。",
+      release_already_exists: "本次构建已经有关联 Release。"
+    };
     empty.textContent =
       run.status === "completed"
-        ? "本次构建没有发布 Release。"
+        ? (reasons[run.releaseRecoveryReason] || "本次构建没有发布 Release。")
         : "运行完成后如发布 Release，会在这里显示。";
     release.appendChild(empty);
   }
