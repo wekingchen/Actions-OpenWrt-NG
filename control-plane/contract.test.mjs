@@ -8,17 +8,19 @@ const indexHtml = readFileSync("./public/index.html", "utf8");
 const workerSource = readFileSync("./worker.mjs", "utf8");
 const serverSource = readFileSync("./server.mjs", "utf8");
 
-function githubMethodCalls(source, expression) {
-  const pattern = new RegExp(
-    String.raw`\\b${expression}\\.([A-Za-z][A-Za-z0-9_]*)\\s*\\(`,
-    "g"
-  );
+function githubMethodCalls(source, pattern) {
   return [...new Set([...source.matchAll(pattern)].map((match) => match[1]))]
     .sort();
 }
 
-const workerMethods = githubMethodCalls(workerSource, "deps\\.github");
-const serverMethods = githubMethodCalls(serverSource, "github");
+const workerMethods = githubMethodCalls(
+  workerSource,
+  /\bdeps\.github\.([A-Za-z][A-Za-z0-9_]*)\s*\(/g
+);
+const serverMethods = githubMethodCalls(
+  serverSource,
+  /\bgithub\.([A-Za-z][A-Za-z0-9_]*)\s*\(/g
+);
 assert.deepEqual(
   serverMethods,
   workerMethods,
