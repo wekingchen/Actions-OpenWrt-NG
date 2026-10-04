@@ -54,6 +54,8 @@ GitHub App / GitHub API
 - `public/`：与 API 同源部署的控制面静态 UI。
 - `wrangler.jsonc`：Workers / D1 / Assets 配置。
 - `worker.test.mjs`：Worker OAuth / Session / Repository / Profile 回归。
+- `server-routes.test.mjs`：自托管 Node.js 路由回归，覆盖 Profile 生命周期、Config Studio、Builder 控制、Release Existing 与 Update Checker。
+- `contract.test.mjs`：Worker / 自托管能力对齐、API Schema 与版本标识一致性检查。
 - `server.mjs` + `lib/store.mjs`：可选自托管兼容实现。
 - `Dockerfile`：可选自托管镜像。
 
