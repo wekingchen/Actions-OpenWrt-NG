@@ -8,12 +8,14 @@ on:
     paths:
       - "dashboard/**"
       - "scripts/dashboard/**"
+      - "control-plane/lib/profile-template.mjs"
       - "profiles/**"
       - ".github/workflows/pages-dashboard.yml"
   pull_request:
     paths:
       - "dashboard/**"
       - "scripts/dashboard/**"
+      - "control-plane/lib/profile-template.mjs"
       - "profiles/**"
       - ".github/workflows/pages-dashboard.yml"
   workflow_run:
@@ -29,13 +31,13 @@ permissions:
   actions: read
 
 concurrency:
-  group: openwrt-ng-pages
+  group: openwrt-ng-pages-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
   cancel-in-progress: true
 
 jobs:
   build-site:
     name: 生成 Dashboard 静态站点
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -63,6 +65,7 @@ jobs:
         git diff --check
 
     - name: 导出 Dashboard 数据
+      if: github.event_name != 'pull_request'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -76,6 +79,13 @@ jobs:
         python3 scripts/dashboard/validate-data.py \
           --repository "$GITHUB_REPOSITORY" \
           --path dashboard/data/status.json
+
+    - name: Pull Request 安全验证
+      if: github.event_name == 'pull_request'
+      run: |
+        set -Eeuo pipefail
+        echo "Pull Request 不向待审代码暴露 GITHUB_TOKEN；实时 GitHub 数据导出仅在 main / workflow_run 执行。"
+        test -f dashboard/data/status.json
 
     - name: 打包 Pages Artifact
       run: |
@@ -104,7 +114,7 @@ jobs:
     name: 部署 GitHub Pages
     if: github.ref == 'refs/heads/main'
     needs: build-site
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read

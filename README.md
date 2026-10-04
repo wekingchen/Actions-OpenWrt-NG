@@ -227,7 +227,7 @@ V1.3 提供浏览器本地运行的 **Profile Wizard**：
 
 - 选择常用源码预设，或填写自定义 Git 仓库与分支 / Tag。
 - 上传或粘贴 OpenWrt `.config`。
-- 配置自动追新、Release、固件 Artifact、构建空间和日志策略。
+- 配置自动追新、Release、固件 Artifact 与构建空间。编译日志由 Core 统一使用静默 + 心跳 + 失败上下文策略。
 - 配置 Manifest 必选包与额外 Git 上游。
 - 预览最终 `profile.env` 等文件。
 - 下载标准 `profiles/<id>/` ZIP。
@@ -331,7 +331,9 @@ V2.0B 在此基础上增加在线 Profile 编辑，保存固定走“预览 → 
 
 V2.0C 继续增加 Builder 控制能力：浏览器只能请求固定的 OpenWrt NG Builder，服务端固定使用仓库默认分支并生成请求标识；页面展示 queued / running / completed、Jobs、Artifacts、Release 与 Actions Summary 入口。该链路已在独立 Test 仓完成真实 Actions 调度验证：Run 与 request ID 精确对应，成功完成编译、Manifest 校验、配置留档、固件 Artifact 上传与 Summary 生成；测试时关闭了 Release，因此没有留下测试发布物。
 
-V2 Control Plane 0.21.3 进一步补齐 Profile 生命周期：仓库用 `profiles/.baseline` 保存唯一逻辑基准，页面可安全切换基准；创建、编辑、基准切换和删除都沿用独立分支 + Pull Request + 自动合并的审计路径。删除保护跟随当前基准而不是固定 `default`。\n\nV2.0D 补齐新建 Profile：用户只提交结构化参数，服务端按与 Profile Wizard 一致的规则生成固定 7 个标准文件。预览不会写 GitHub；确认后仍走原子 commit → 独立分支 → Pull Request。浏览器不能指定任意仓库路径，已有同名 Profile 会被拒绝覆盖。该链路已在独立 Test 仓真实验证：PR 恰好包含 7 个标准文件、只有 1 个 commit，head commit 的唯一父提交为测试前 main；DIY 脚本保持 100755，其余文件保持 100644，创建 PR 前后默认分支 SHA 不变。
+V2 Control Plane 0.21.3 进一步补齐 Profile 生命周期：仓库用 `profiles/.baseline` 保存唯一逻辑基准，页面可安全切换基准；创建、编辑、基准切换和删除都沿用独立分支 + Pull Request + 自动合并的审计路径。删除保护跟随当前基准而不是固定 `default`。
+
+V2.0D 补齐新建 Profile：用户只提交结构化参数，服务端按与 Profile Wizard 一致的规则生成固定 7 个标准文件。预览不会写 GitHub；确认后仍走原子 commit → 独立分支 → Pull Request。浏览器不能指定任意仓库路径，已有同名 Profile 会被拒绝覆盖。该链路已在独立 Test 仓真实验证：PR 恰好包含 7 个标准文件、只有 1 个 commit，head commit 的唯一父提交为测试前 main；DIY 脚本保持 100755，其余文件保持 100644，创建 PR 前后默认分支 SHA 不变。
 
 Control Plane 0.21.4 继续补齐操作闭环：Profile 支持安全复制和原子重命名；重命名基准 Profile 时 `.baseline` 同步迁移。Profile 删除/重命名完成后会自动清理关联 Config Studio 会话与活动 Action。Builder 历史支持直接取消运行中构建，以及对已结束构建执行完整重跑；所有操作均校验目标 workflow 身份并保留 GitHub Actions 审计记录。
 
@@ -349,8 +351,7 @@ Core 提供：
 - 可选构建空间扩展。
 - `dl` 下载缓存。
 - ccache / Go build cache；Lean/OpenWrt 的 `CONFIG_CCACHE=y` 需要同时启用 `CONFIG_DEVEL=y`，默认缓存目录为源码树内的 `openwrt/.ccache`。Core 会直接持久化这一实际目录，并在 `make defconfig` 后校验 ccache 没有被 Kconfig 静默裁掉；即使本轮编译失败，也会先记录 ccache Hits / Misses / 大小并保存可复用的部分编译缓存，避免后续修复后完全冷启动。 Ubuntu 24.04 构建缓存使用独立 `build-v3-ubuntu24` 命名空间，不恢复 Ubuntu 22.04 生成的 host/ccache 数据；`dl/` 源码下载缓存继续跨 Runner 版本复用。
-- 可选流式或静默编译日志。
-- 长编译心跳。
+- 默认静默编译并保留长编译心跳；只有 Core 调试变量 `OPENWRT_NG_DEBUG_STREAM_LOG=true` 才临时恢复全量流式输出。
 - 默认静默编译：完整 `make -jN` 输出仅保存在 Runner 临时文件，不持续写入 GitHub step；成功时只显示心跳、耗时和 ccache 统计。失败时才自动识别失败目标并从并行日志/单目标诊断日志中提取有限上下文，生成 `build-error-context.log`。失败 Artifact 不再上传整份 `build.log`，避免超长日志触发 GitHub `This step has been truncated...`。
 - Builder 固定运行在 Ubuntu 24.04，避免持续追新的 host 工具（例如 helloworld/gn）在 Ubuntu 22.04 的 Clang 14 / libstdc++ 12 上触发 C++23 ranges 兼容失败。
 - 并行编译失败后的目标识别；`ERROR: ... [host] failed to build` 会直接映射到对应 `/host/compile`。

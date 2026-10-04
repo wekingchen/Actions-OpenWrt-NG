@@ -13,15 +13,11 @@ on:
       - ".github/workflows/config-studio.yml"
       - ".github/workflows/release-existing.yml"
       - ".github/workflows/update-checker.yml"
-      - "scripts/compile.sh"
-      - "scripts/extract_failure_context.py"
-      - "scripts/test_extract_failure_context.py"
-      - "scripts/config-studio.py"
-      - "scripts/config-studio-kconfig.c"
-      - "scripts/cleanup-workflow-runs.sh"
-      - "scripts/write-summary.sh"
-      - "scripts/profile.sh"
-      - "profiles/.baseline"
+      - ".github/workflows/pages-dashboard.yml"
+      - "scripts/**"
+      - "adapters/**"
+      - "profiles/**"
+      - "dashboard/**"
   pull_request:
     paths:
       - "control-plane/**"
@@ -31,15 +27,11 @@ on:
       - ".github/workflows/config-studio.yml"
       - ".github/workflows/release-existing.yml"
       - ".github/workflows/update-checker.yml"
-      - "scripts/compile.sh"
-      - "scripts/extract_failure_context.py"
-      - "scripts/test_extract_failure_context.py"
-      - "scripts/config-studio.py"
-      - "scripts/config-studio-kconfig.c"
-      - "scripts/cleanup-workflow-runs.sh"
-      - "scripts/write-summary.sh"
-      - "scripts/profile.sh"
-      - "profiles/.baseline"
+      - ".github/workflows/pages-dashboard.yml"
+      - "scripts/**"
+      - "adapters/**"
+      - "profiles/**"
+      - "dashboard/**"
 
 permissions:
   contents: read
@@ -61,11 +53,11 @@ jobs:
       with:
         node-version: "24"
 
-    - name: 安装 Wrangler
+    - name: 安装 Control Plane 依赖
       working-directory: control-plane
       run: |
         set -Eeuo pipefail
-        npm install --ignore-scripts --no-audit --no-fund
+        npm ci --ignore-scripts --no-audit --no-fund
 
     - name: 静态检查
       run: |
@@ -95,6 +87,38 @@ jobs:
         bash -n scripts/cleanup-workflow-runs.sh
         bash -n scripts/write-summary.sh
         bash -n scripts/profile.sh
+        grep -q 'OPENWRT_NG_GIT_TIMEOUT' scripts/resolve-update-state.sh
+        grep -q 'timeout --signal=TERM' scripts/resolve-update-state.sh
+        grep -q 'timeout=30' scripts/dashboard/export-data.py
+        grep -q 'readJsonBody(request, limit = 5 \* 1024 \* 1024)' control-plane/worker.mjs
+        ! grep -q 'await request.json()' control-plane/worker.mjs
+        grep -q "if: github.event_name != 'pull_request'" .github/workflows/pages-dashboard.yml
+        grep -q "if: github.event_name == 'pull_request'" .github/workflows/pages-dashboard.yml
+
+        mapfile -t all_shell_files < <(
+          find scripts adapters profiles -type f -name '*.sh' -print | sort
+        )
+        for file in "${all_shell_files[@]}"; do
+          bash -n "$file"
+        done
+
+        mapfile -t all_python_files < <(
+          find scripts -type f -name '*.py' -print | sort
+        )
+        if [ "${#all_python_files[@]}" -gt 0 ]; then
+          python3 -m py_compile "${all_python_files[@]}"
+        fi
+
+        mapfile -t dashboard_js_files < <(
+          find dashboard/assets -type f -name '*.js' -print | sort
+        )
+        for file in "${dashboard_js_files[@]}"; do
+          node --check "$file"
+        done
+
+        node scripts/dashboard/test-control-plane.mjs
+        bash scripts/dashboard/test-wizard.sh
+
         test "$(scripts/profile.sh resolve)" = "$(tr -d '\r\n[:space:]' < profiles/.baseline)"
         grep -q 'resolve_baseline_profile' scripts/profile.sh
         grep -q 'profiles/.baseline' control-plane/lib/github.mjs
@@ -138,6 +162,9 @@ jobs:
         grep -q 'restoreDeletedProfile' control-plane/public/app.js
         python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
         python3 -m json.tool control-plane/api-schema.json >/dev/null
+        test -f control-plane/package-lock.json
+        grep -q '"lockfileVersion": 3' control-plane/package-lock.json
+        grep -q 'npm ci --omit=dev' control-plane/Dockerfile
 
         grep -q 'control_plane_request_id:' .github/workflows/build-openwrt.yml
         grep -q 'cp:{0}' .github/workflows/build-openwrt.yml
@@ -151,6 +178,15 @@ jobs:
         grep -q 'CCACHE_MAXSIZE: 2G' .github/workflows/build-openwrt.yml
         test "$(grep -c 'runs-on: ubuntu-24.04' .github/workflows/build-openwrt.yml)" -eq 4
         ! grep -q 'runs-on: ubuntu-22.04' .github/workflows/build-openwrt.yml
+        awk '
+          /name: 编译 OpenWrt 固件/ { in_build=1 }
+          in_build && /timeout-minutes:/ {
+            if ($2 != 360) exit 1
+            found=1
+            exit 0
+          }
+          END { if (!found) exit 1 }
+        ' .github/workflows/build-openwrt.yml
         grep -q 'detect_failed_target.py' scripts/compile.sh
         grep -q 'extract_failure_context.py' scripts/compile.sh
         grep -q 'OPENWRT_NG_DEBUG_STREAM_LOG' scripts/compile.sh
@@ -194,6 +230,11 @@ jobs:
         grep -q 'Resource not accessible by integration' .github/workflows/build-openwrt.yml
         grep -q 'default-branch-fallback' .github/workflows/build-openwrt.yml
         grep -q 'target_mode=' .github/workflows/build-openwrt.yml
+        grep -Fq 'group: openwrt-ng-${{ needs.preflight.outputs.profile }}' .github/workflows/build-openwrt.yml
+        ! grep -Fq "github.event.inputs.profile || github.event.client_payload.profile || 'baseline'" .github/workflows/build-openwrt.yml
+        grep -Fq 'group: openwrt-ng-release-existing-${{ inputs.run_id }}' .github/workflows/release-existing.yml
+        grep -q '^  group: openwrt-ng-pages-' .github/workflows/pages-dashboard.yml
+        grep -q "github.event_name == 'pull_request'" .github/workflows/pages-dashboard.yml
         grep -q 'Tag Target 模式' .github/workflows/build-openwrt.yml
         grep -q 'scripts/cleanup-workflow-runs.sh' .github/workflows/build-openwrt.yml
         grep -q 'contents/.github/workflows?ref=' scripts/cleanup-workflow-runs.sh
@@ -451,7 +492,48 @@ jobs:
             raise SystemExit("ERROR: Artifact 下载不能退回未承诺的 GitHub Web 页面路径")
         PY
 
-    - name: 构建可选自托管容器
+    - name: 构建并启动自托管容器
       run: |
         set -Eeuo pipefail
-        docker build -f control-plane/Dockerfile -t openwrt-ng-control-plane:self-hosted-test .
+
+        image="openwrt-ng-control-plane:self-hosted-test"
+        name="openwrt-ng-control-plane-self-hosted-test"
+
+        docker build -f control-plane/Dockerfile -t "$image" .
+
+        cleanup() {
+          docker logs "$name" >/tmp/control-plane-container.log 2>&1 || true
+          docker rm -f "$name" >/dev/null 2>&1 || true
+        }
+        trap cleanup EXIT
+
+        docker run -d \
+          --name "$name" \
+          -p 127.0.0.1:18787:8787 \
+          -e CONTROL_PLANE_ORIGIN=http://127.0.0.1:8787 \
+          -e CONTROL_PLANE_ALLOW_INSECURE_LOCALHOST=true \
+          -e GITHUB_APP_CLIENT_ID=Iv1.container-test \
+          -e GITHUB_APP_CLIENT_SECRET=container-test-client-secret \
+          -e GITHUB_APP_SLUG=openwrt-ng-container-test \
+          -e TOKEN_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef \
+          "$image"
+
+        for i in $(seq 1 30); do
+          if curl -fsS http://127.0.0.1:18787/api/v1/health >/tmp/container-health.json 2>/dev/null; then
+            break
+          fi
+          if ! docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null | grep -qx true; then
+            docker logs "$name" >&2 || true
+            echo "ERROR: 自托管 Control Plane 容器启动失败" >&2
+            exit 1
+          fi
+          sleep 1
+        done
+
+        jq -e '
+          .ok == true and
+          .runtime == "self-hosted-node" and
+          .configured == true
+        ' /tmp/container-health.json >/dev/null
+
+        echo "自托管容器启动与 /api/v1/health 验证通过"

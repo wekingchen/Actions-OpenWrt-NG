@@ -25,10 +25,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: openwrt-ng-${{ github.event.inputs.profile || github.event.client_payload.profile || 'baseline' }}
-  cancel-in-progress: false
-
 env:
   TZ: Asia/Shanghai
   CCACHE_COMPILERCHECK: content
@@ -204,8 +200,11 @@ jobs:
   build:
     name: 编译 OpenWrt 固件
     needs: preflight
+    concurrency:
+      group: openwrt-ng-${{ needs.preflight.outputs.profile }}
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 360
     permissions:
       actions: read
       contents: read

@@ -87,7 +87,7 @@ jobs:
       working-directory: control-plane
       run: |
         set -Eeuo pipefail
-        npm install --ignore-scripts --no-audit --no-fund
+        npm ci --ignore-scripts --no-audit --no-fund
 
     - name: 生成部署配置
       working-directory: control-plane

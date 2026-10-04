@@ -1,5 +1,9 @@
 import { writeFile } from "node:fs/promises";
 import { buildProfileFiles, createZipBytes } from "../../dashboard/assets/wizard-core.js";
+import {
+  buildProfileTemplateFiles,
+  validateProfileTemplateInput
+} from "../../control-plane/lib/profile-template.mjs";
 
 const input = {
   profileId: "test-profile",
@@ -22,6 +26,27 @@ const input = {
 
 const files = buildProfileFiles(input);
 if (files.length !== 7) throw new Error(`expected 7 files, got ${files.length}`);
+
+const controlPlaneErrors = validateProfileTemplateInput(input);
+if (controlPlaneErrors.length) {
+  throw new Error(
+    "Control Plane unexpectedly rejected Wizard fixture: " +
+    controlPlaneErrors.join(" | ")
+  );
+}
+const controlPlaneFiles = buildProfileTemplateFiles(input);
+const simplify = (items) =>
+  items.map((file) => ({
+    path: file.path,
+    text: file.text,
+    mode: file.mode
+  }));
+if (
+  JSON.stringify(simplify(files)) !==
+  JSON.stringify(simplify(controlPlaneFiles))
+) {
+  throw new Error("Pages Wizard and Control Plane generated Profile files diverged");
+}
 const feeds = files.find((file) => file.path.endsWith("/feeds.conf"))?.text || "";
 if (!feeds.includes("src-git --force helloworld ")) {
   throw new Error("feeds.conf missing forced helloworld");
@@ -90,3 +115,24 @@ try {
   invalidConfigRejected = String(error.message).includes("OpenWrt/Kconfig");
 }
 if (!invalidConfigRejected) throw new Error("non-Kconfig input was not rejected");
+
+const invalidAdapter = { ...input, adapter: "../unsafe" };
+let adapterRejected = false;
+try {
+  buildProfileFiles(invalidAdapter);
+} catch (error) {
+  adapterRejected = String(error.message).includes("Adapter");
+}
+if (!adapterRejected) throw new Error("invalid adapter was not rejected by Pages Wizard");
+
+const oversizedConfig = {
+  ...input,
+  configText: "CONFIG_TEST=y\n" + "#".repeat(2 * 1024 * 1024)
+};
+let oversizedRejected = false;
+try {
+  buildProfileFiles(oversizedConfig);
+} catch (error) {
+  oversizedRejected = String(error.message).includes("2 MiB");
+}
+if (!oversizedRejected) throw new Error("oversized .config was not rejected by Pages Wizard");

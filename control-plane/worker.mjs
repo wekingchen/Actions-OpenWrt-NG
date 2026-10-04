@@ -118,6 +118,30 @@ function validMutationRequest(request, origin) {
   );
 }
 
+async function readJsonBody(request, limit = 5 * 1024 * 1024) {
+  const declared = Number(request.headers.get("content-length") || 0);
+  if (Number.isFinite(declared) && declared > limit) {
+    const error = new Error("request_body_too_large");
+    error.status = 413;
+    throw error;
+  }
+
+  const text = await request.text();
+  if (new TextEncoder().encode(text).byteLength > limit) {
+    const error = new Error("request_body_too_large");
+    error.status = 413;
+    throw error;
+  }
+
+  try {
+    return JSON.parse(text || "{}");
+  } catch {
+    const error = new Error("invalid_json");
+    error.status = 400;
+    throw error;
+  }
+}
+
 function createDependencies(request, env, config, overrides = {}) {
   if (overrides.store && overrides.github) return overrides;
   if (!config.configured) return overrides;
@@ -406,9 +430,11 @@ export async function handleControlPlaneRequest(
 
       let payload;
       try {
-        payload = await request.json();
-      } catch {
-        return json(400, { error: "invalid_json" });
+        payload = await readJsonBody(request);
+      } catch (error) {
+        return json(error.status || 400, {
+          error: error.message || "invalid_json"
+        });
       }
 
       try {
@@ -481,9 +507,11 @@ export async function handleControlPlaneRequest(
 
       let payload;
       try {
-        payload = await request.json();
-      } catch {
-        return json(400, { error: "invalid_json" });
+        payload = await readJsonBody(request);
+      } catch (error) {
+        return json(error.status || 400, {
+          error: error.message || "invalid_json"
+        });
       }
 
       const owner = decodeURIComponent(profileMatch[1]);
@@ -591,9 +619,11 @@ export async function handleControlPlaneRequest(
 
       let payload;
       try {
-        payload = await request.json();
-      } catch {
-        return json(400, { error: "invalid_json" });
+        payload = await readJsonBody(request);
+      } catch (error) {
+        return json(error.status || 400, {
+          error: error.message || "invalid_json"
+        });
       }
 
       const owner = decodeURIComponent(profileDetailMatch[1]);
@@ -634,9 +664,11 @@ export async function handleControlPlaneRequest(
       if (!session) return json(401, { error: "authentication_required" });
       let payload;
       try {
-        payload = await request.json();
-      } catch {
-        return json(400, { error: "invalid_json" });
+        payload = await readJsonBody(request);
+      } catch (error) {
+        return json(error.status || 400, {
+          error: error.message || "invalid_json"
+        });
       }
       const owner = decodeURIComponent(profileRestoreMatch[1]);
       const repo = decodeURIComponent(profileRestoreMatch[2]);
@@ -677,9 +709,11 @@ export async function handleControlPlaneRequest(
 
       let payload;
       try {
-        payload = await request.json();
-      } catch {
-        return json(400, { error: "invalid_json" });
+        payload = await readJsonBody(request);
+      } catch (error) {
+        return json(error.status || 400, {
+          error: error.message || "invalid_json"
+        });
       }
 
       const owner = decodeURIComponent(profileLifecycleMatch[1]);
@@ -724,9 +758,11 @@ export async function handleControlPlaneRequest(
 
       let payload;
       try {
-        payload = await request.json();
-      } catch {
-        return json(400, { error: "invalid_json" });
+        payload = await readJsonBody(request);
+      } catch (error) {
+        return json(error.status || 400, {
+          error: error.message || "invalid_json"
+        });
       }
 
       const owner = decodeURIComponent(profileBaselineMatch[1]);
@@ -769,9 +805,11 @@ export async function handleControlPlaneRequest(
       }
       let payload;
       try {
-        payload = await request.json();
-      } catch {
-        return json(400, { error: "invalid_json" });
+        payload = await readJsonBody(request);
+      } catch (error) {
+        return json(error.status || 400, {
+          error: error.message || "invalid_json"
+        });
       }
       const owner = decodeURIComponent(profileWriteMatch[1]);
       const repo = decodeURIComponent(profileWriteMatch[2]);
@@ -811,9 +849,11 @@ export async function handleControlPlaneRequest(
       if (!session) return json(401, { error: "authentication_required" });
       let payload;
       try {
-        payload = await request.json();
-      } catch {
-        return json(400, { error: "invalid_json" });
+        payload = await readJsonBody(request);
+      } catch (error) {
+        return json(error.status || 400, {
+          error: error.message || "invalid_json"
+        });
       }
       const owner = decodeURIComponent(configStudioRootMatch[1]);
       const repo = decodeURIComponent(configStudioRootMatch[2]);
@@ -899,9 +939,11 @@ export async function handleControlPlaneRequest(
       if (!session) return json(401, { error: "authentication_required" });
       let payload;
       try {
-        payload = await request.json();
-      } catch {
-        return json(400, { error: "invalid_json" });
+        payload = await readJsonBody(request);
+      } catch (error) {
+        return json(error.status || 400, {
+          error: error.message || "invalid_json"
+        });
       }
       const owner = decodeURIComponent(configStudioResolveMatch[1]);
       const repo = decodeURIComponent(configStudioResolveMatch[2]);
@@ -1131,9 +1173,11 @@ export async function handleControlPlaneRequest(
       if (!session) return json(401, { error: "authentication_required" });
       let payload;
       try {
-        payload = await request.json();
-      } catch {
-        return json(400, { error: "invalid_json" });
+        payload = await readJsonBody(request);
+      } catch (error) {
+        return json(error.status || 400, {
+          error: error.message || "invalid_json"
+        });
       }
       const owner = decodeURIComponent(updateCheckerMatch[1]);
       const repo = decodeURIComponent(updateCheckerMatch[2]);
@@ -1222,9 +1266,11 @@ export async function handleControlPlaneRequest(
 
       let payload;
       try {
-        payload = await request.json();
-      } catch {
-        return json(400, { error: "invalid_json" });
+        payload = await readJsonBody(request);
+      } catch (error) {
+        return json(error.status || 400, {
+          error: error.message || "invalid_json"
+        });
       }
 
       const owner = decodeURIComponent(buildTriggerMatch[1]);

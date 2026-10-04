@@ -13,6 +13,10 @@ permissions:
   actions: read
   contents: write
 
+concurrency:
+  group: openwrt-ng-release-existing-${{ inputs.run_id }}
+  cancel-in-progress: false
+
 env:
   TZ: Asia/Shanghai
 

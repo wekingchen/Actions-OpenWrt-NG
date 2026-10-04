@@ -1465,7 +1465,10 @@
       "required": [
         "sessionsFound",
         "branchesDeleted",
-        "canceledRuns"
+        "canceledRuns",
+        "cancelFailedRuns",
+        "branchDeleteFailures",
+        "runLookupFailed"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1483,6 +1486,23 @@
             "type": "integer",
             "minimum": 1
           }
+        },
+        "cancelFailedRuns": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "branchDeleteFailures": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{16}$"
+          }
+        },
+        "runLookupFailed": {
+          "type": "boolean"
         }
       }
     },

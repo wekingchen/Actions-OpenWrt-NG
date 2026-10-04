@@ -57,11 +57,11 @@ def main() -> int:
         )
 
     latest_build = data.get("latest_build")
-    if latest_build and latest_build.get("status") == "success":
+    if latest_build and latest_build.get("build_succeeded") is True:
         source_commit = latest_build.get("commit")
         if not SHA_RE.fullmatch(source_commit or ""):
             raise SystemExit(
-                f"successful latest build is missing source commit: {source_commit!r}"
+                f"compile-success latest build is missing source commit: {source_commit!r}"
             )
 
     profile_ids = {profile.get("id") for profile in data["profiles"]}
@@ -87,6 +87,16 @@ def main() -> int:
         profile_id = build.get("profile")
         if profile_ids and profile_id not in profile_ids and profile_id != "unknown":
             raise SystemExit(f"build references unknown profile: {profile_id!r}")
+
+        if not isinstance(build.get("build_succeeded"), bool):
+            raise SystemExit(
+                f"build_succeeded must be boolean for run {build.get('run_id')!r}"
+            )
+        conclusion = build.get("build_conclusion")
+        if conclusion is not None and not isinstance(conclusion, str):
+            raise SystemExit(
+                f"build_conclusion must be string/null for run {build.get('run_id')!r}"
+            )
 
     for release in data["latest_releases"]:
         for asset in release.get("assets", []):

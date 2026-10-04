@@ -2327,12 +2327,20 @@ export class GitHubAppClient {
       token, owner, repo, profileId
     );
     if (!sessions.length) {
-      return { sessionsFound: 0, branchesDeleted: 0, canceledRuns: [] };
+      return {
+        sessionsFound: 0,
+        branchesDeleted: 0,
+        canceledRuns: [],
+        cancelFailedRuns: [],
+        branchDeleteFailures: [],
+        runLookupFailed: false
+      };
     }
 
     const safeOwner = encodeSegment(owner);
     const safeRepo = encodeSegment(repo);
     let runs = [];
+    let runLookupFailed = false;
     try {
       const body = await this.api(
         `/repos/${safeOwner}/${safeRepo}/actions/workflows/${CONFIG_STUDIO_WORKFLOW}/runs?event=workflow_dispatch&per_page=100`,
@@ -2340,10 +2348,13 @@ export class GitHubAppClient {
       );
       runs = Array.isArray(body?.workflow_runs) ? body.workflow_runs : [];
     } catch (error) {
+      runLookupFailed = true;
       console.error("Failed to list Config Studio runs for profile cleanup", error);
     }
 
     const canceledRuns = [];
+    const cancelFailedRuns = [];
+    const branchDeleteFailures = [];
     let branchesDeleted = 0;
     for (const session of sessions) {
       for (const run of runs) {
@@ -2363,6 +2374,7 @@ export class GitHubAppClient {
             canceledRuns.push(runId);
           } catch (error) {
             if (error?.httpStatus !== 409) {
+              cancelFailedRuns.push(runId);
               console.error("Failed to cancel Config Studio run", error);
             }
           }
@@ -2380,12 +2392,20 @@ export class GitHubAppClient {
         if (error?.httpStatus === 404) {
           branchesDeleted += 1;
         } else {
+          branchDeleteFailures.push(session.requestId);
           console.error("Failed to delete Config Studio session branch", error);
         }
       }
     }
 
-    return { sessionsFound: sessions.length, branchesDeleted, canceledRuns };
+    return {
+      sessionsFound: sessions.length,
+      branchesDeleted,
+      canceledRuns,
+      cancelFailedRuns,
+      branchDeleteFailures,
+      runLookupFailed
+    };
   }
 
   async deleteProfileBranch(token, owner, repo, branchName) {
@@ -3057,7 +3077,12 @@ export class GitHubAppClient {
       );
 
       let configStudioCleanup = {
-        sessionsFound: 0, branchesDeleted: 0, canceledRuns: []
+        sessionsFound: 0,
+        branchesDeleted: 0,
+        canceledRuns: [],
+        cancelFailedRuns: [],
+        branchDeleteFailures: [],
+        runLookupFailed: false
       };
       if (finalized.pullRequest?.merged) {
         configStudioCleanup = await this.cleanupConfigStudioSessionsForProfile(
@@ -3296,7 +3321,10 @@ export class GitHubAppClient {
     let configStudioCleanup = {
       sessionsFound: 0,
       branchesDeleted: 0,
-      canceledRuns: []
+      canceledRuns: [],
+      cancelFailedRuns: [],
+      branchDeleteFailures: [],
+      runLookupFailed: false
     };
     if (result.pullRequest?.merged) {
       configStudioCleanup =

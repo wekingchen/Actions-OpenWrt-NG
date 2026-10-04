@@ -622,6 +622,38 @@ function showProfileListResult(message = "", url = "") {
   }
 }
 
+function configStudioCleanupNote(cleanup) {
+  const found = Number(cleanup?.sessionsFound || 0);
+  if (found <= 0) return "";
+
+  const deleted = Number(cleanup?.branchesDeleted || 0);
+  const cancelFailed = Array.isArray(cleanup?.cancelFailedRuns)
+    ? cleanup.cancelFailedRuns.length
+    : 0;
+  const branchFailed = Array.isArray(cleanup?.branchDeleteFailures)
+    ? cleanup.branchDeleteFailures.length
+    : Math.max(0, found - deleted);
+  const lookupFailed = cleanup?.runLookupFailed === true;
+
+  if (
+    deleted >= found &&
+    cancelFailed === 0 &&
+    branchFailed === 0 &&
+    !lookupFailed
+  ) {
+    return `；已清理 ${found} 个关联图形配置会话`;
+  }
+
+  const details = [
+    `发现 ${found} 个关联图形配置会话`,
+    `已删除 ${deleted} 个会话分支`
+  ];
+  if (lookupFailed) details.push("活动 Action 查询失败");
+  if (cancelFailed) details.push(`${cancelFailed} 个 Action 取消失败`);
+  if (branchFailed) details.push(`${branchFailed} 个会话分支删除失败`);
+  return "；" + details.join("，") + "，请检查 Actions / 临时分支";
+}
+
 function profileWriteResultMessage(result, subject = "Profile") {
   const pull = result?.pullRequest || {};
   const number = Number(pull.number || 0);
@@ -5302,10 +5334,7 @@ $("confirm-profile-lifecycle").addEventListener("click", async () => {
         ? `Profile ${profileId} → ${targetProfileId} 复制`
         : `Profile ${profileId} → ${targetProfileId} 重命名`
     );
-    const cleaned = Number(result.configStudioCleanup?.sessionsFound || 0);
-    if (cleaned > 0) {
-      resultMessage += `；已清理 ${cleaned} 个关联图形配置会话`;
-    }
+    resultMessage += configStudioCleanupNote(result.configStudioCleanup);
     const resultUrl = result.pullRequest?.url || "";
     closeProfileLifecycleDialog();
 
@@ -5418,12 +5447,7 @@ $("confirm-delete-profile").addEventListener("click", async () => {
       result,
       "Profile " + profileId + " 删除"
     );
-    const cleanedSessions = Number(
-      result.configStudioCleanup?.sessionsFound || 0
-    );
-    if (cleanedSessions > 0) {
-      resultMessage += `；已清理 ${cleanedSessions} 个关联图形配置会话`;
-    }
+    resultMessage += configStudioCleanupNote(result.configStudioCleanup);
     const resultUrl = result.pullRequest?.url || "";
     closeDeleteProfileDialog();
 

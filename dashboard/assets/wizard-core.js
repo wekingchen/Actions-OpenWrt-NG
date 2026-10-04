@@ -1,4 +1,28 @@
 const encoder = new TextEncoder();
+const ADAPTER_RE = /^[A-Za-z0-9._-]+$/;
+const PROFILE_TEMPLATE_KEYS = new Set([
+  "profileId",
+  "profileName",
+  "sourceRepo",
+  "sourceBranch",
+  "adapter",
+  "configText",
+  "autoUpdate",
+  "uploadRelease",
+  "uploadFirmware",
+  "maximizeSpace",
+  "streamLog",
+  "requiredPackages",
+  "watchSources",
+  "extraFeeds"
+]);
+const BOOLEAN_KEYS = [
+  "autoUpdate",
+  "uploadRelease",
+  "uploadFirmware",
+  "maximizeSpace",
+  "streamLog"
+];
 
 export function shellQuote(value) {
   const text = String(value ?? "");
@@ -41,25 +65,63 @@ export function normalizeFeedLines(value) {
 
 export function validateProfileInput(input) {
   const errors = [];
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return ["Profile 模板请求格式无效。"];
+  }
+
+  const unknown = Object.keys(input).filter(
+    (key) => !PROFILE_TEMPLATE_KEYS.has(key)
+  );
+  if (unknown.length) {
+    errors.push("Profile 模板包含不允许的字段。");
+  }
+  for (const key of BOOLEAN_KEYS) {
+    if (typeof input[key] !== "boolean") {
+      errors.push(`${key} 必须是布尔值。`);
+    }
+  }
+
   const profileId = String(input.profileId ?? "");
+  const profileName = String(input.profileName ?? "");
+  const sourceRepo = String(input.sourceRepo ?? "");
+  const sourceBranch = String(input.sourceBranch ?? "");
+  const adapter = String(input.adapter ?? "");
+  const configText = String(input.configText ?? "");
+  const requiredPackages = String(input.requiredPackages ?? "");
+  const watchSources = String(input.watchSources ?? "");
+  const extraFeeds = String(input.extraFeeds ?? "");
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(profileId)) {
     errors.push("Profile ID 必须以字母或数字开头，仅包含字母、数字、点、下划线和短横线，且最多 64 个字符。");
   }
-  if (!(input.profileName || "").trim()) errors.push("请填写显示名称。");
-  if (/\r|\n/.test(input.profileName || "")) errors.push("显示名称不能包含换行。");
-  if (!(input.sourceRepo || "").trim()) errors.push("请填写源码仓库。");
-  if (/\r|\n/.test(input.sourceRepo || "")) errors.push("源码仓库不能包含换行。");
-  if (!(input.sourceBranch || "").trim()) errors.push("请填写分支或 Tag。");
-  if (/\r|\n/.test(input.sourceBranch || "")) errors.push("分支或 Tag 不能包含换行。");
-  const configText = String(input.configText ?? "");
+  if (!profileName.trim()) errors.push("请填写显示名称。");
+  if (/\r|\n/.test(profileName)) errors.push("显示名称不能包含换行。");
+  if (profileName.length > 200) errors.push("显示名称不能超过 200 个字符。");
+
+  if (!sourceRepo.trim()) errors.push("请填写源码仓库。");
+  if (/\r|\n/.test(sourceRepo)) errors.push("源码仓库不能包含换行。");
+  if (sourceRepo.length > 1000) errors.push("源码仓库地址过长。");
+
+  if (!sourceBranch.trim()) errors.push("请填写分支或 Tag。");
+  if (/\r|\n/.test(sourceBranch)) errors.push("分支或 Tag 不能包含换行。");
+  if (sourceBranch.length > 255) errors.push("分支或 Tag 过长。");
+
+  if (!adapter.trim() || !ADAPTER_RE.test(adapter)) {
+    errors.push("Adapter 只能包含字母、数字、点、下划线和短横线。");
+  }
   if (!configText.trim()) {
     errors.push("请上传或粘贴 .config。");
   } else if (!/^(?:CONFIG_[A-Za-z0-9_]+=|# CONFIG_[A-Za-z0-9_]+ is not set$)/m.test(configText)) {
     errors.push("输入内容看起来不是有效的 OpenWrt/Kconfig .config。");
   }
   if (configText.includes("\0")) errors.push(".config 包含非法 NUL 字符。");
+  if (encoder.encode(configText).byteLength > 2 * 1024 * 1024) {
+    errors.push(".config 不能超过 2 MiB。");
+  }
 
-  const required = normalizeLines(input.requiredPackages);
+  if (requiredPackages.length > 256 * 1024) {
+    errors.push("Manifest 必选包清单过大。");
+  }
+  const required = normalizeLines(requiredPackages);
   for (const raw of required ? required.split("\n") : []) {
     const packageName = raw.split("#", 1)[0].trim();
     if (!packageName) continue;
@@ -69,7 +131,10 @@ export function validateProfileInput(input) {
     }
   }
 
-  const feeds = normalizeLines(input.extraFeeds);
+  if (extraFeeds.length > 256 * 1024) {
+    errors.push("额外 feeds 清单过大。");
+  }
+  const feeds = normalizeLines(extraFeeds);
   for (const line of feeds ? feeds.split("\n") : []) {
     if (line.startsWith("#")) continue;
     const match = line.match(
@@ -81,8 +146,11 @@ export function validateProfileInput(input) {
     }
   }
 
+  if (watchSources.length > 256 * 1024) {
+    errors.push("额外 Git 上游清单过大。");
+  }
   const labels = new Set(["source"]);
-  const watch = normalizeLines(input.watchSources);
+  const watch = normalizeLines(watchSources);
   for (const line of watch ? watch.split("\n") : []) {
     const parts = line.split("|");
     if (parts.length !== 3 || parts.some((part) => !part.trim())) {
@@ -121,7 +189,7 @@ export function buildProfileFiles(input) {
     `PROFILE_NAME=${shellQuote(input.profileName.trim())}`,
     `SOURCE_REPO=${shellQuote(input.sourceRepo.trim())}`,
     `SOURCE_BRANCH=${shellQuote(input.sourceBranch.trim())}`,
-    `ADAPTER=${shellQuote(input.adapter || "direct-openwrt")}`,
+    `ADAPTER=${shellQuote(input.adapter.trim())}`,
     "",
     `CONFIG_FILE=${shellQuote(`${base}/.config`)}`,
     `DIY_PART1=${shellQuote(`${base}/diy-part1.sh`)}`,

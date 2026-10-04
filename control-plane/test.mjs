@@ -74,7 +74,7 @@ assert.match(controlPlaneAppJs, /configStudioDependencyConditionMatches/);
 assert.match(controlPlaneAppJs, /configStudioEffectiveModifiedEntries/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-dependency-summary"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-show-dependencies"/);
-assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.5<\/span>/);
+assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.6<\/span>/);
 assert.match(controlPlaneIndexHtml, /id="new-adapter-field" hidden/);
 assert.match(controlPlaneIndexHtml, /id="profile-list-result"/);
 assert.match(controlPlaneAppJs, /showProfileListResult/);
@@ -769,6 +769,10 @@ assert.equal(
   7
 );
 assert.equal(renamedProfilePr.configStudioCleanup.sessionsFound, 0);
+assert.equal(renamedProfilePr.configStudioCleanup.branchesDeleted, 0);
+assert.deepEqual(renamedProfilePr.configStudioCleanup.cancelFailedRuns, []);
+assert.deepEqual(renamedProfilePr.configStudioCleanup.branchDeleteFailures, []);
+assert.equal(renamedProfilePr.configStudioCleanup.runLookupFailed, false);
 
 const sessionCleanupCalls = [];
 const sessionCleanupClient = new GitHubAppClient(
@@ -839,6 +843,9 @@ const sessionCleanup =
 assert.equal(sessionCleanup.sessionsFound, 1);
 assert.equal(sessionCleanup.branchesDeleted, 1);
 assert.deepEqual(sessionCleanup.canceledRuns, [456]);
+assert.deepEqual(sessionCleanup.cancelFailedRuns, []);
+assert.deepEqual(sessionCleanup.branchDeleteFailures, []);
+assert.equal(sessionCleanup.runLookupFailed, false);
 assert.ok(
   sessionCleanupCalls.some((call) =>
     call.method === "POST" && call.path === "/actions/runs/456/cancel"
