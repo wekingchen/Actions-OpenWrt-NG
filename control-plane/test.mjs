@@ -30,6 +30,14 @@ const configStudioWorkflow = readFileSync(
   "../.github/workflows/config-studio.yml",
   "utf8"
 );
+const releaseExistingWorkflow = readFileSync(
+  "../.github/workflows/release-existing.yml",
+  "utf8"
+);
+const updateCheckerWorkflow = readFileSync(
+  "../.github/workflows/update-checker.yml",
+  "utf8"
+);
 const referencedDomIds = [
   ...new Set(
     [...controlPlaneAppJs.matchAll(/\$\("([^"]+)"\)/g)].map((match) => match[1])
@@ -66,7 +74,7 @@ assert.match(controlPlaneAppJs, /configStudioDependencyConditionMatches/);
 assert.match(controlPlaneAppJs, /configStudioEffectiveModifiedEntries/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-dependency-summary"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-show-dependencies"/);
-assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.4<\/span>/);
+assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.5<\/span>/);
 assert.match(controlPlaneIndexHtml, /id="new-adapter-field" hidden/);
 assert.match(controlPlaneIndexHtml, /id="profile-list-result"/);
 assert.match(controlPlaneAppJs, /showProfileListResult/);
@@ -95,6 +103,23 @@ assert.match(githubClientSource, /renameProfilePullRequest/);
 assert.match(githubClientSource, /cleanupConfigStudioSessionsForProfile/);
 assert.match(githubClientSource, /cancelBuilderRun/);
 assert.match(githubClientSource, /rerunBuilderRun/);
+assert.match(githubClientSource, /listDeletedProfiles/);
+assert.match(githubClientSource, /restoreDeletedProfilePullRequest/);
+assert.match(githubClientSource, /triggerReleaseExisting/);
+assert.match(githubClientSource, /triggerUpdateChecker/);
+assert.match(controlPlaneIndexHtml, /id="deleted-profiles-section"/);
+assert.match(controlPlaneIndexHtml, /id="update-checker-dialog"/);
+assert.match(controlPlaneIndexHtml, /id="release-existing-dialog"/);
+assert.match(controlPlaneAppJs, /loadDeletedProfiles/);
+assert.match(controlPlaneAppJs, /restoreDeletedProfile/);
+assert.match(controlPlaneAppJs, /openUpdateCheckerDialog/);
+assert.match(controlPlaneAppJs, /openReleaseExistingDialog/);
+assert.match(releaseExistingWorkflow, /run-name: Release Existing/);
+assert.match(releaseExistingWorkflow, /source_workflow_path/);
+assert.match(releaseExistingWorkflow, /\.github\/workflows\/build-openwrt\.yml/);
+assert.match(updateCheckerWorkflow, /run-name: Update Checker/);
+assert.doesNotMatch(releaseExistingWorkflow, /runs-on: ubuntu-22\.04/);
+assert.doesNotMatch(updateCheckerWorkflow, /runs-on: ubuntu-22\.04/);
 assert.match(controlPlaneAppJs, /renderNewAdapterVisibility/);
 assert.match(controlPlaneIndexHtml, />标准 OpenWrt 源码<\/option>/);
 assert.doesNotMatch(controlPlaneIndexHtml, /id="new-stream-log"/);
