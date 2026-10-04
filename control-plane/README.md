@@ -40,6 +40,7 @@ GitHub App / GitHub API
 - 对当前完整 V2 功能的新部署，推荐一次配置最终权限：Metadata read、Contents write、Pull requests write、Actions write；不需要 Administration / Workflows。
 - V2.0B 创建、修改与删除都严格限定在 `profiles/<id>/` 的标准文件，默认分支永不由控制面直接修改。仓库通过 `profiles/.baseline` 记录唯一基准 Profile；基准身份可以切换，不与 `default` 目录名绑定，当前基准不可删除。
 - V2.0B 使用 Git Database API 原子创建 commit，再创建独立分支与 Pull Request；Control Plane 默认立即 squash 合并，成功后删除临时分支。
+- 若仓库规则阻止即时自动合并，人工后续合并 Control Plane 生成的删除/重命名 PR 后，`profile-post-merge-cleanup.yml` 会补偿清理关联 Config Studio 会话、仍在运行的配置 Action、本次临时分支及被合并结果取代的旧 Control Plane PR。
 - 所有状态变更请求同时校验精确 Origin 与 `X-OpenWrt-NG-CSRF` 请求头。
 - 保存前携带默认分支基线 SHA；若仓库已变化，返回 `409 repository_changed`，要求重新加载后再编辑。
 - V2.0C 只允许调度固定的 `.github/workflows/build-openwrt.yml`，不接受浏览器传入任意 workflow、ref 或额外 inputs。

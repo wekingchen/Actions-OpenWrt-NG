@@ -14,6 +14,7 @@ on:
       - ".github/workflows/release-existing.yml"
       - ".github/workflows/update-checker.yml"
       - ".github/workflows/pages-dashboard.yml"
+      - ".github/workflows/profile-post-merge-cleanup.yml"
       - "scripts/**"
       - "adapters/**"
       - "profiles/**"
@@ -28,6 +29,7 @@ on:
       - ".github/workflows/release-existing.yml"
       - ".github/workflows/update-checker.yml"
       - ".github/workflows/pages-dashboard.yml"
+      - ".github/workflows/profile-post-merge-cleanup.yml"
       - "scripts/**"
       - "adapters/**"
       - "profiles/**"
@@ -86,6 +88,8 @@ jobs:
         python3 scripts/test_detect_failed_target.py
         python3 -m py_compile scripts/extract_failure_context.py
         python3 scripts/test_extract_failure_context.py
+        python3 -m py_compile scripts/profile-post-merge-cleanup.py
+        python3 scripts/test-profile-post-merge-cleanup.py
         bash -n scripts/compile.sh
         bash -n scripts/apply-extra-feeds.sh
         python3 -m py_compile scripts/merge-feeds.py
