@@ -331,7 +331,9 @@ V2.0B 在此基础上增加在线 Profile 编辑，保存固定走“预览 → 
 
 V2.0C 继续增加 Builder 控制能力：浏览器只能请求固定的 OpenWrt NG Builder，服务端固定使用仓库默认分支并生成请求标识；页面展示 queued / running / completed、Jobs、Artifacts、Release 与 Actions Summary 入口。该链路已在独立 Test 仓完成真实 Actions 调度验证：Run 与 request ID 精确对应，成功完成编译、Manifest 校验、配置留档、固件 Artifact 上传与 Summary 生成；测试时关闭了 Release，因此没有留下测试发布物。
 
-V2 Control Plane 0.21.3 进一步补齐 Profile 生命周期：仓库用 `profiles/.baseline` 保存唯一逻辑基准，页面可安全切换基准；创建、编辑、基准切换和删除都沿用独立分支 + Pull Request + 自动合并的审计路径。删除保护跟随当前基准而不是固定 `default`。\n\nV2.0D 补齐新建 Profile：用户只提交结构化参数，服务端按与 Profile Wizard 一致的规则生成固定 7 个标准文件。预览不会写 GitHub；确认后仍走原子 commit → 独立分支 → Pull Request。浏览器不能指定任意仓库路径，已有同名 Profile 会被拒绝覆盖。该链路已在独立 Test 仓真实验证：PR 恰好包含 7 个标准文件、只有 1 个 commit，head commit 的唯一父提交为测试前 main；DIY 脚本保持 100755，其余文件保持 100644，创建 PR 前后默认分支 SHA 不变。
+V2 Control Plane 0.21.3 进一步补齐 Profile 生命周期：仓库用 `profiles/.baseline` 保存唯一逻辑基准，页面可安全切换基准；创建、编辑、基准切换和删除都沿用独立分支 + Pull Request + 自动合并的审计路径。删除保护跟随当前基准而不是固定 `default`。
+
+V2.0D 补齐新建 Profile：用户只提交结构化参数，服务端按与 Profile Wizard 一致的规则生成固定 7 个标准文件。预览不会写 GitHub；确认后仍走原子 commit → 独立分支 → Pull Request。浏览器不能指定任意仓库路径，已有同名 Profile 会被拒绝覆盖。该链路已在独立 Test 仓真实验证：PR 恰好包含 7 个标准文件、只有 1 个 commit，head commit 的唯一父提交为测试前 main；DIY 脚本保持 100755，其余文件保持 100644，创建 PR 前后默认分支 SHA 不变。
 
 Control Plane 0.21.4 继续补齐操作闭环：Profile 支持安全复制和原子重命名；重命名基准 Profile 时 `.baseline` 同步迁移。Profile 删除/重命名完成后会自动清理关联 Config Studio 会话与活动 Action。Builder 历史支持直接取消运行中构建，以及对已结束构建执行完整重跑；所有操作均校验目标 workflow 身份并保留 GitHub Actions 审计记录。
 
