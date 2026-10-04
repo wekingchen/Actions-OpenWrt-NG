@@ -1049,6 +1049,97 @@ async function openBuildDialog(repo, profileId) {
   }
 }
 
+function setProfileLifecycleStatus(message = "", isError = false) {
+  const node = $("profile-lifecycle-status");
+  node.hidden = !message;
+  node.textContent = message;
+  node.classList.toggle("error-text", Boolean(isError));
+}
+
+function closeProfileLifecycleDialog() {
+  profileLifecycleState.requestVersion += 1;
+  const restoreFocus = profileLifecycleState.restoreFocus;
+  $("profile-lifecycle-dialog").hidden = true;
+  document.body.classList.remove("dialog-open");
+  profileLifecycleState.repo = null;
+  profileLifecycleState.profileId = "";
+  profileLifecycleState.mode = "copy";
+  profileLifecycleState.baseRefSha = "";
+  profileLifecycleState.restoreFocus = null;
+  $("profile-lifecycle-target").value = "";
+  setProfileLifecycleStatus();
+  if (restoreFocus?.isConnected && typeof restoreFocus.focus === "function") {
+    restoreFocus.focus();
+  }
+}
+
+async function openProfileLifecycleDialog(repo, profileId, mode) {
+  showError();
+  if (!canWriteRepo(repo)) {
+    showError("需要 Contents 与 Pull requests 写权限才能管理 Profile。");
+    return;
+  }
+  if (!["copy", "rename"].includes(mode)) return;
+  if (!$("build-dialog").hidden) closeBuildDialog();
+  if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
+  if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
+
+  const requestVersion = profileLifecycleState.requestVersion + 1;
+  profileLifecycleState.requestVersion = requestVersion;
+  profileLifecycleState.repo = repo;
+  profileLifecycleState.profileId = profileId;
+  profileLifecycleState.mode = mode;
+  profileLifecycleState.baseRefSha = "";
+  profileLifecycleState.restoreFocus =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+  const copying = mode === "copy";
+  $("profile-lifecycle-eyebrow").textContent = copying ? "复制配置" : "重命名配置";
+  $("profile-lifecycle-title").textContent =
+    copying ? `复制 ${profileId}` : `重命名 ${profileId}`;
+  $("profile-lifecycle-repo").textContent = repo.fullName;
+  $("profile-lifecycle-source").textContent = profileId;
+  $("profile-lifecycle-target-label").textContent =
+    copying ? "新 Profile ID" : "新的 Profile ID";
+  $("profile-lifecycle-target").value = copying ? `${profileId}-copy` : profileId;
+  $("confirm-profile-lifecycle").disabled = true;
+  $("confirm-profile-lifecycle").textContent = "正在校验…";
+  setProfileLifecycleStatus("正在读取默认分支最新状态…");
+  $("profile-lifecycle-dialog").hidden = false;
+  document.body.classList.add("dialog-open");
+
+  try {
+    const data = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}`,
+      { cache: "no-store" }
+    );
+    if (
+      requestVersion !== profileLifecycleState.requestVersion ||
+      $("profile-lifecycle-dialog").hidden
+    ) return;
+
+    profileLifecycleState.baseRefSha = data.baseRefSha || "";
+    setProfileLifecycleStatus(
+      copying
+        ? "复制会保留 7 个标准文件内容，并把内部 profiles/<旧ID>/ 路径改为新 ID。"
+        : data.profile?.baseline
+          ? "这是当前基准 Profile；重命名会在同一个 commit 中同步更新 profiles/.baseline。"
+          : "重命名会在同一个 commit 中写入新目录并删除旧目录。"
+    );
+    $("confirm-profile-lifecycle").disabled = false;
+    $("confirm-profile-lifecycle").textContent = copying ? "创建副本" : "重命名";
+    $("profile-lifecycle-target").focus();
+    $("profile-lifecycle-target").select();
+  } catch (error) {
+    if (
+      requestVersion !== profileLifecycleState.requestVersion ||
+      $("profile-lifecycle-dialog").hidden
+    ) return;
+    $("confirm-profile-lifecycle").disabled = true;
+    setProfileLifecycleStatus(friendlyError(error), true);
+  }
+}
+
 function setBaselineProfileStatus(message = "", isError = false) {
   const node = $("baseline-profile-status");
   node.hidden = !message;
