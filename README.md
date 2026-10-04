@@ -335,6 +335,8 @@ V2 Control Plane 0.21.3 进一步补齐 Profile 生命周期：仓库用 `profil
 
 Control Plane 0.21.4 继续补齐操作闭环：Profile 支持安全复制和原子重命名；重命名基准 Profile 时 `.baseline` 同步迁移。Profile 删除/重命名完成后会自动清理关联 Config Studio 会话与活动 Action。Builder 历史支持直接取消运行中构建，以及对已结束构建执行完整重跑；所有操作均校验目标 workflow 身份并保留 GitHub Actions 审计记录。
 
+Control Plane 0.21.5 补齐剩余恢复与运维入口：成功 Builder 只要仍保留未过期的 `OpenWrt_NG_release_bundle_<run_id>` 且尚无 Release，就能从构建详情直接执行 **Release Existing Build**，全程不重新编译并显示真实 Actions 步骤；Profile 列表可手动触发 **Update Checker**，既支持全部 `AUTO_UPDATE=true` Profile，也支持指定单个 Profile 与 `force`；通过 Control Plane 删除且当前仍不存在的 Profile 会出现在“最近删除”，可从删除 commit 的父提交恢复完整 7 个标准文件，恢复仍走独立分支 → Pull Request → 自动合并，而不是 reset/revert。
+
 项目提供 **Deploy V2 Control Plane** 手动 Workflow：第一次可以无 GitHub App Secret bootstrap 部署，拿到 workers.dev URL 后再创建 GitHub App 并同步 Secret。当前完整 V2 推荐 GitHub App 一次配置 Metadata read、Contents write、Pull requests write、Actions write；不需要 Administration / Workflows。Node.js + SQLite + Docker 仅保留为可选自托管方式。
 
 作为公共模板，`dashboard/data/control-plane.json` 在本仓库 `main` 中**刻意保持 `enabled=false` 且不绑定维护者个人 Worker / GitHub App**。使用者从模板创建自己的仓库后，完成自己的 Control Plane 部署与真实验证，再在自己的仓库中启用入口。Pages 的 Control Plane 页面会明确显示“模板默认关闭”，并提供当前完整能力、最终权限与启用顺序。详细步骤见 `control-plane/README.md`。
@@ -455,24 +457,22 @@ luci|https://github.com/openwrt/luci|master
 6. 首次启用 `AUTO_UPDATE=true` 时，因为还没有已记录状态，会触发一次基线构建。
 7. 如果下游构建失败，同一个上游状态不会自动无限重试；可以手动运行 Builder，或在 Update Checker 中勾选 `force` 再触发一次。
 
-手动运行 Update Checker 时，可以：
+手动运行 Update Checker 时，可以直接从 Control Plane 顶部点击“检查更新”，或从某个 Profile 行点击更新图标：
 
-- 指定某个 Profile，即使它的 `AUTO_UPDATE=false` 也可以检查。
+- 顶部入口默认检查全部 `AUTO_UPDATE=true` Profile。
+- 指定某个 Profile 时，即使它的 `AUTO_UPDATE=false` 也可以检查。
 - 勾选 `force`，忽略已记录状态并强制触发一次构建。
+- Control Plane 会持续显示 Update Checker 的真实 Actions 步骤，不需要另开日志页面猜进度。
 
 ## Release 失败恢复
 
 如果 Build 已经成功，但 Release 因 GitHub 上传接口或临时故障失败，不需要重新编译。
 
-使用：
-
-**Actions → Release Existing Build**
-
-输入原构建的 workflow `run_id`。
+可以直接在 Control Plane 的成功构建详情中点击 **发布现有构建**；只有来源 Build 成功、尚无 Release、并且对应 Release bundle 仍存在且未过期时才显示入口。也仍可使用 **Actions → Release Existing Build**，输入原构建的 workflow `run_id`。
 
 恢复工作流会：
 
-1. 确认来源 Run 的 build job 为 success。
+1. 确认来源 Run 确实属于 `build-openwrt.yml`、整个 Run 已成功完成，并再次确认 build job 为 success。
 2. 下载来源 Run 的 `OpenWrt_NG_release_bundle_<run_id>`。
 3. 校验 Release 附件。
 4. 对“配置完全无变化”导致的空差异文件进行受控修复。
