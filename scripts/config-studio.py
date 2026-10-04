@@ -351,6 +351,27 @@ def attach_package_config_options(
         option["name"] = config_name[len(owner) + 1 :]
         option["choicePrompt"] = str(option.get("choicePrompt") or "")
         option["choiceValue"] = bool(option.get("choiceValue"))
+
+        package_path = [
+            str(part)
+            for part in (by_name[owner].get("menuPath") or [])
+            if str(part).strip()
+        ]
+        option_trail = list(option.get("menuTrail") or [])
+        prefix = 0
+        while (
+            prefix < len(package_path)
+            and prefix < len(option_trail)
+            and str(option_trail[prefix].get("prompt") or "")
+            == package_path[prefix]
+        ):
+            prefix += 1
+        option["relativeMenuTrail"] = option_trail[prefix:]
+        option["relativeMenuPath"] = [
+            str(node.get("prompt") or "")
+            for node in option["relativeMenuTrail"]
+            if str(node.get("prompt") or "").strip()
+        ]
         potential = [
             str(value)
             for value in (option.get("potentialAssignable") or [])
@@ -474,6 +495,15 @@ def kconfig_features(root: Path) -> tuple[list[dict[str, Any]], dict[str, dict[s
                 for part in (item.get("menuPath") or [])
                 if str(part).strip()
             ][-8:]
+            item["menuTrail"] = [
+                {
+                    "prompt": str(node.get("prompt") or "").strip(),
+                    "kind": str(node.get("kind") or "menu").strip() or "menu",
+                }
+                for node in (item.get("menuTrail") or [])
+                if isinstance(node, dict)
+                and str(node.get("prompt") or "").strip()
+            ][-8:]
             item["assignable"] = [
                 str(value)
                 for value in (item.get("assignable") or [])
@@ -532,6 +562,7 @@ def command_catalog(args: argparse.Namespace) -> None:
             package["changeable"] = state["changeable"]
             package["assignable"] = state["assignable"]
             package["menuPath"] = state["menuPath"]
+            package["menuTrail"] = state.get("menuTrail") or []
         elif feature_error:
             # Degraded metadata-only fallback. A real Config Studio run should
             # normally have the native OpenWrt exporter available, but keeping
@@ -540,11 +571,13 @@ def command_catalog(args: argparse.Namespace) -> None:
             package["visible"] = True
             package["changeable"] = True
             package["menuPath"] = []
+            package["menuTrail"] = []
         else:
             package["visible"] = False
             package["changeable"] = False
             package["assignable"] = []
             package["menuPath"] = []
+            package["menuTrail"] = []
 
     attach_package_config_options(packages, package_states)
 
@@ -565,7 +598,7 @@ def command_catalog(args: argparse.Namespace) -> None:
         key=str.casefold,
     )
     payload = {
-        "version": 3,
+        "version": 4,
         "targets": parse_targetinfo(targetinfo, config),
         "packages": packages,
         "packageCategories": categories,
@@ -577,6 +610,16 @@ def command_catalog(args: argparse.Namespace) -> None:
             "packages": len(packages),
             "packageOptions": sum(
                 len(package.get("configOptions") or [])
+                for package in packages
+            ),
+            "packageSubmenus": sum(
+                len(
+                    {
+                        tuple(option.get("relativeMenuPath") or [])
+                        for option in (package.get("configOptions") or [])
+                        if option.get("relativeMenuPath")
+                    }
+                )
                 for package in packages
             ),
             "dependencyRules": sum(
