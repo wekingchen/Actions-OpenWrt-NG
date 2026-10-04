@@ -232,6 +232,33 @@ const github = {
       release: null
     };
   },
+  async cancelBuilderRun(token, owner, repo, runId) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(String(runId), "123");
+    return {
+      accepted: true,
+      action: "cancel",
+      runId: 123,
+      runNumber: 9,
+      url: "https://github.com/acme/router/actions/runs/123"
+    };
+  },
+  async rerunBuilderRun(token, owner, repo, runId) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(String(runId), "123");
+    return {
+      accepted: true,
+      action: "rerun",
+      runId: 123,
+      runNumber: 9,
+      nextAttempt: 2,
+      url: "https://github.com/acme/router/actions/runs/123"
+    };
+  },
   async getBuilderArtifactDownloadUrl(token, owner, repo, runId, artifactId) {
     assert.equal(token, "ghu_worker_access");
     assert.equal(owner, "acme");
@@ -381,6 +408,61 @@ const github = {
         branchDeleted: true,
         supersededPullRequests: []
       }
+    };
+  },
+  async copyProfilePullRequest(token, owner, repo, profileId, payload) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(profileId, "default");
+    assert.equal(payload.baseRefSha, "a".repeat(40));
+    assert.equal(payload.targetProfileId, "default-copy");
+    return {
+      branch: "openwrt-ng/profile-default-copy",
+      commitSha: "2".repeat(40),
+      changedFiles: [".config", "profile.env"],
+      action: "copy",
+      sourceProfileId: "default",
+      targetProfileId: "default-copy",
+      baselineProfileId: "default",
+      pullRequest: {
+        number: 12,
+        url: "https://github.com/acme/router/pull/12",
+        merged: true,
+        mergeCommitSha: "2".repeat(40),
+        mergeReason: ""
+      },
+      cleanup: { branchDeleted: true, supersededPullRequests: [] }
+    };
+  },
+  async renameProfilePullRequest(token, owner, repo, profileId, payload) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(profileId, "default");
+    assert.equal(payload.baseRefSha, "a".repeat(40));
+    assert.equal(payload.targetProfileId, "default-renamed");
+    return {
+      branch: "openwrt-ng/profile-default-rename",
+      commitSha: "3".repeat(40),
+      changedFiles: ["profiles/default/.config", "profiles/default-renamed/.config"],
+      action: "rename",
+      sourceProfileId: "default",
+      targetProfileId: "default-renamed",
+      baselineProfileId: "default-renamed",
+      configStudioCleanup: {
+        sessionsFound: 1,
+        branchesDeleted: 1,
+        canceledRuns: [456]
+      },
+      pullRequest: {
+        number: 13,
+        url: "https://github.com/acme/router/pull/13",
+        merged: true,
+        mergeCommitSha: "3".repeat(40),
+        mergeReason: ""
+      },
+      cleanup: { branchDeleted: true, supersededPullRequests: [] }
     };
   },
   async setBaselineProfilePullRequest(token, owner, repo, profileId, payload) {
