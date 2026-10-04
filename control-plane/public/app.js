@@ -4225,6 +4225,7 @@ document.addEventListener("keydown", (event) => {
     if (!$("build-dialog").hidden) closeBuildDialog();
     if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
     if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
+    if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
     if (!$("config-studio-dialog").hidden) {
       closeConfigStudio({ cleanup: false }).catch((error) => showError(error));
     }
@@ -4649,6 +4650,74 @@ $("trigger-build").addEventListener("click", async () => {
   }
 });
 
+$("confirm-profile-lifecycle").addEventListener("click", async () => {
+  const repo = profileLifecycleState.repo;
+  const profileId = profileLifecycleState.profileId;
+  const mode = profileLifecycleState.mode;
+  const baseRefSha = profileLifecycleState.baseRefSha;
+  const targetProfileId = $("profile-lifecycle-target").value.trim();
+  const requestVersion = profileLifecycleState.requestVersion;
+  if (!repo || !profileId || !baseRefSha || !canWriteRepo(repo)) return;
+
+  const button = $("confirm-profile-lifecycle");
+  button.disabled = true;
+  button.textContent = mode === "copy" ? "正在复制…" : "正在重命名…";
+  showError();
+  setProfileLifecycleStatus(
+    mode === "copy"
+      ? "正在创建复制分支与 Pull Request…"
+      : "正在创建原子重命名分支与 Pull Request…"
+  );
+
+  try {
+    const result = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}/${mode}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ baseRefSha, targetProfileId })
+      }
+    );
+    let resultMessage = profileWriteResultMessage(
+      result,
+      mode === "copy"
+        ? `Profile ${profileId} → ${targetProfileId} 复制`
+        : `Profile ${profileId} → ${targetProfileId} 重命名`
+    );
+    const cleaned = Number(result.configStudioCleanup?.sessionsFound || 0);
+    if (cleaned > 0) {
+      resultMessage += `；已清理 ${cleaned} 个关联图形配置会话`;
+    }
+    const resultUrl = result.pullRequest?.url || "";
+    closeProfileLifecycleDialog();
+
+    if (repositoryState.selectedFullName === repo.fullName) {
+      await loadProfiles(repo, repositoryState.selectionVersion, {
+        forceRefresh: true,
+        focusProfileId: targetProfileId,
+        resultMessage,
+        resultUrl
+      });
+    } else {
+      showProfileListResult(resultMessage, resultUrl);
+    }
+  } catch (error) {
+    if (
+      requestVersion === profileLifecycleState.requestVersion &&
+      !$("profile-lifecycle-dialog").hidden
+    ) {
+      setProfileLifecycleStatus(friendlyError(error), true);
+      button.disabled = false;
+    }
+  } finally {
+    if (
+      requestVersion === profileLifecycleState.requestVersion &&
+      !$("profile-lifecycle-dialog").hidden
+    ) {
+      button.textContent = mode === "copy" ? "创建副本" : "重命名";
+    }
+  }
+});
+
 $("confirm-baseline-profile").addEventListener("click", async () => {
   const repo = baselineProfileState.repo;
   const profileId = baselineProfileState.profileId;
@@ -4726,10 +4795,16 @@ $("confirm-delete-profile").addEventListener("click", async () => {
         body: JSON.stringify({ baseRefSha })
       }
     );
-    const resultMessage = profileWriteResultMessage(
+    let resultMessage = profileWriteResultMessage(
       result,
       "Profile " + profileId + " 删除"
     );
+    const cleanedSessions = Number(
+      result.configStudioCleanup?.sessionsFound || 0
+    );
+    if (cleanedSessions > 0) {
+      resultMessage += `；已清理 ${cleanedSessions} 个关联图形配置会话`;
+    }
     const resultUrl = result.pullRequest?.url || "";
     closeDeleteProfileDialog();
 
@@ -4773,6 +4848,12 @@ $("build-dialog-close").addEventListener("click", closeBuildDialog);
 $("build-dialog-cancel").addEventListener("click", closeBuildDialog);
 $("build-dialog").addEventListener("click", (event) => {
   if (event.target === $("build-dialog")) closeBuildDialog();
+});
+
+$("profile-lifecycle-close").addEventListener("click", closeProfileLifecycleDialog);
+$("profile-lifecycle-cancel").addEventListener("click", closeProfileLifecycleDialog);
+$("profile-lifecycle-dialog").addEventListener("click", (event) => {
+  if (event.target === $("profile-lifecycle-dialog")) closeProfileLifecycleDialog();
 });
 
 $("baseline-profile-close").addEventListener("click", closeBaselineProfileDialog);
