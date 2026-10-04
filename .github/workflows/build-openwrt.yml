@@ -37,7 +37,7 @@ env:
 jobs:
   preflight:
     name: 构建前快速预检
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -202,7 +202,7 @@ jobs:
   build:
     name: 编译 OpenWrt 固件
     needs: preflight
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     permissions:
       actions: read
@@ -623,7 +623,7 @@ jobs:
     name: 发布 OpenWrt 固件
     needs: build
     if: needs.build.result == 'success' && needs.build.outputs.release_ready == 'success'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       actions: read
@@ -836,7 +836,7 @@ jobs:
     name: 清理旧 Workflow 运行记录
     needs: [build, release]
     if: always() && !cancelled()
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       actions: write
