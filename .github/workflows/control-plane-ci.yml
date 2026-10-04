@@ -95,7 +95,7 @@ jobs:
         test "$(grep -c 'runs-on: ubuntu-24.04' .github/workflows/build-openwrt.yml)" -eq 4
         ! grep -q 'runs-on: ubuntu-22.04' .github/workflows/build-openwrt.yml
         grep -q 'detect_failed_target.py' scripts/compile.sh
-        grep -Fq '\[host\]' scripts/detect_failed_target.py
+        grep -Fq '[host]' scripts/detect_failed_target.py
         grep -Fq '/host/compile' scripts/test_detect_failed_target.py
         grep -q 'CCACHE_DIR="$PWD/.ccache"' scripts/compile.sh
         grep -q 'ccache 本轮 Hits' scripts/write-summary.sh
