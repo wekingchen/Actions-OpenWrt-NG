@@ -253,7 +253,8 @@
             "diy-part1.sh",
             "diy-part2.sh",
             "required-packages.txt",
-            "watch-sources.txt"
+            "watch-sources.txt",
+            "feeds.conf"
           ],
           "additionalProperties": false,
           "properties": {
@@ -274,6 +275,9 @@
             },
             "watch-sources.txt": {
               "type": "string"
+            },
+            "feeds.conf": {
+              "type": "string"
             }
           }
         }
@@ -285,6 +289,7 @@
         "branch",
         "commitSha",
         "changedFiles",
+        "action",
         "pullRequest",
         "cleanup"
       ],
@@ -370,6 +375,12 @@
               }
             }
           }
+        },
+        "action": {
+          "enum": [
+            "update",
+            "delete"
+          ]
         }
       }
     },
@@ -1381,6 +1392,19 @@
           "items": {
             "$ref": "#/$defs/actionProgressStep"
           }
+        }
+      }
+    },
+    "profileDeleteRequest": {
+      "type": "object",
+      "required": [
+        "baseRefSha"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "baseRefSha": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{40}$"
         }
       }
     }

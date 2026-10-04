@@ -543,6 +543,49 @@ export async function handleControlPlaneRequest(
       }
     }
 
+    if (request.method === "DELETE" && profileDetailMatch) {
+      if (!validMutationRequest(request, config.origin)) {
+        return json(403, { error: "csrf_validation_failed" });
+      }
+      const session = await authenticatedSession();
+      if (!session) {
+        return json(401, { error: "authentication_required" });
+      }
+
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return json(400, { error: "invalid_json" });
+      }
+
+      const owner = decodeURIComponent(profileDetailMatch[1]);
+      const repo = decodeURIComponent(profileDetailMatch[2]);
+      const profileId = decodeURIComponent(profileDetailMatch[3]);
+      try {
+        const result = await deps.github.deleteProfilePullRequest(
+          session.accessToken,
+          owner,
+          repo,
+          profileId,
+          payload
+        );
+        return json(201, result);
+      } catch (error) {
+        if (error instanceof ProfileWriteError) {
+          return json(error.status, { error: error.code });
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_profile_delete_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
+    }
+
+
     const profileWriteMatch = url.pathname.match(
       /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/([^/]+)\/pull-request$/
     );

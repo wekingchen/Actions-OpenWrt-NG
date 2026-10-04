@@ -48,6 +48,14 @@ const buildDialogState = {
   restoreFocus: null
 };
 
+const deleteProfileState = {
+  repo: null,
+  profileId: "",
+  baseRefSha: "",
+  requestVersion: 0,
+  restoreFocus: null
+};
+
 const createState = {
   repo: null,
   previewFiles: [],
@@ -161,7 +169,8 @@ function iconSvg(name) {
     repo: '<path d="M4 5.5h6l1.5 2H20v11H4z"/><path d="M4 9h16"/>',
     profile: '<path d="M7 4h10l3 3v13H4V7z"/><path d="M8 11h8M8 15h8"/>',
     arrow: '<path d="M5 12h14M14 7l5 5-5 5"/>',
-    chevron: '<path d="m7 9 5 5 5-5"/>'
+    chevron: '<path d="m7 9 5 5 5-5"/>',
+    trash: '<path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/>'
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || ""}</svg>`;
 }
@@ -367,6 +376,10 @@ const ERROR_MESSAGES = {
     "该 Profile 不存在、已移动，或当前默认分支中不可用。",
   profile_already_exists:
     "这个 Profile ID 已经存在，请换一个 ID，或直接编辑已有 Profile。",
+  protected_profile:
+    "default 是基准 Profile，为避免破坏项目初始配置，Control Plane 不允许删除。",
+  profile_build_active:
+    "这个 Profile 还有排队或运行中的构建，请等构建结束后再删除。",
   invalid_profile_template:
     "新 Profile 参数没有通过服务端校验。",
   repository_head_unavailable:
@@ -383,6 +396,8 @@ const ERROR_MESSAGES = {
     "本次 Profile 变更总大小过大，已拒绝提交。",
   github_profile_write_failed:
     "GitHub 未能完成 Profile 分支 / Pull Request 写入。",
+  github_profile_delete_failed:
+    "GitHub 未能完成 Profile 删除分支 / Pull Request 写入。",
   github_build_status_failed:
     "暂时无法从 GitHub 读取 Builder 状态。",
   github_builder_dispatch_failed:
@@ -939,6 +954,7 @@ function closeBuildDialog() {
 
 async function openBuildDialog(repo, profileId) {
   showError();
+  if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
   const requestVersion = buildDialogState.requestVersion + 1;
   buildDialogState.requestVersion = requestVersion;
   buildDialogState.repo = repo;
@@ -997,6 +1013,93 @@ async function openBuildDialog(repo, profileId) {
     }
     $("trigger-build").disabled = true;
     setBuildDialogStatus(friendlyError(error), true);
+  }
+}
+
+function setDeleteProfileStatus(message = "", isError = false) {
+  const node = $("delete-profile-status");
+  node.hidden = !message;
+  node.textContent = message;
+  node.classList.toggle("error-text", Boolean(isError));
+}
+
+function closeDeleteProfileDialog() {
+  deleteProfileState.requestVersion += 1;
+  const restoreFocus = deleteProfileState.restoreFocus;
+  $("delete-profile-dialog").hidden = true;
+  document.body.classList.remove("dialog-open");
+  deleteProfileState.repo = null;
+  deleteProfileState.profileId = "";
+  deleteProfileState.baseRefSha = "";
+  deleteProfileState.restoreFocus = null;
+  setDeleteProfileStatus();
+  if (restoreFocus?.isConnected && typeof restoreFocus.focus === "function") {
+    restoreFocus.focus();
+  }
+}
+
+async function openDeleteProfileDialog(repo, profileId) {
+  showError();
+  if (profileId === "default") {
+    showError("protected_profile");
+    return;
+  }
+  if (!canWriteRepo(repo)) {
+    showError("需要 Contents 与 Pull requests 写权限才能删除 Profile。");
+    return;
+  }
+  if (!$("build-dialog").hidden) closeBuildDialog();
+
+  const requestVersion = deleteProfileState.requestVersion + 1;
+  deleteProfileState.requestVersion = requestVersion;
+  deleteProfileState.repo = repo;
+  deleteProfileState.profileId = profileId;
+  deleteProfileState.baseRefSha = "";
+  deleteProfileState.restoreFocus =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+
+  $("delete-profile-title").textContent = `删除 ${profileId}`;
+  $("delete-profile-repo").textContent = repo.fullName;
+  $("delete-profile-name").textContent = profileId;
+  $("confirm-delete-profile").disabled = true;
+  $("confirm-delete-profile").textContent = "正在校验…";
+  setDeleteProfileStatus("正在读取默认分支最新状态…");
+  $("delete-profile-dialog").hidden = false;
+  document.body.classList.add("dialog-open");
+  $("delete-profile-close").focus();
+
+  try {
+    const data = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}`,
+      { cache: "no-store" }
+    );
+    if (
+      requestVersion !== deleteProfileState.requestVersion ||
+      deleteProfileState.repo?.fullName !== repo.fullName ||
+      deleteProfileState.profileId !== profileId ||
+      $("delete-profile-dialog").hidden
+    ) {
+      return;
+    }
+
+    deleteProfileState.baseRefSha = data.baseRefSha || "";
+    setDeleteProfileStatus(
+      "删除会创建独立 PR；自动合并成功后此 Profile 将从默认分支移除。"
+    );
+    $("confirm-delete-profile").disabled = false;
+    $("confirm-delete-profile").textContent = "创建删除 PR";
+  } catch (error) {
+    if (
+      requestVersion !== deleteProfileState.requestVersion ||
+      $("delete-profile-dialog").hidden
+    ) {
+      return;
+    }
+    $("confirm-delete-profile").disabled = true;
+    $("confirm-delete-profile").textContent = "创建删除 PR";
+    setDeleteProfileStatus(friendlyError(error), true);
   }
 }
 
@@ -1471,6 +1574,7 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
   editorState.loadVersion += 1;
   createState.repo = repo;
   if (!$("build-dialog").hidden) closeBuildDialog();
+  if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
   $("repo-switcher").value = repo.fullName;
   $("workspace-empty").hidden = true;
   $("editor-card").hidden = true;
@@ -1577,7 +1681,28 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
         openBuildDialog(repo, profile.id).catch((error) => showError(error));
       });
 
-      row.append(openButton, buildButton);
+      const actions = document.createElement("span");
+      actions.className = "profile-row-actions";
+      actions.appendChild(buildButton);
+
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "profile-delete-action";
+      deleteButton.innerHTML = iconSvg("trash");
+      deleteButton.setAttribute("aria-label", `删除 ${profile.id}`);
+      const protectedProfile = profile.id === "default";
+      deleteButton.disabled = protectedProfile || !canWriteRepo(repo);
+      deleteButton.title = protectedProfile
+        ? "default 是基准 Profile，不可删除"
+        : canWriteRepo(repo)
+          ? `删除 ${profile.id}`
+          : "需要 Contents 与 Pull requests 写权限";
+      deleteButton.addEventListener("click", () => {
+        openDeleteProfileDialog(repo, profile.id).catch((error) => showError(error));
+      });
+      actions.appendChild(deleteButton);
+
+      row.append(openButton, actions);
       root.appendChild(row);
     }
   }
@@ -3818,6 +3943,7 @@ document.addEventListener("keydown", (event) => {
     $("account-dropdown").hidden = true;
     $("user-box").setAttribute("aria-expanded", "false");
     if (!$("build-dialog").hidden) closeBuildDialog();
+    if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
     if (!$("config-studio-dialog").hidden) {
       closeConfigStudio({ cleanup: false }).catch((error) => showError(error));
     }
@@ -4242,6 +4368,61 @@ $("trigger-build").addEventListener("click", async () => {
   }
 });
 
+$("confirm-delete-profile").addEventListener("click", async () => {
+  const repo = deleteProfileState.repo;
+  const profileId = deleteProfileState.profileId;
+  const baseRefSha = deleteProfileState.baseRefSha;
+  const requestVersion = deleteProfileState.requestVersion;
+  if (!repo || !profileId || !baseRefSha || !canWriteRepo(repo)) return;
+
+  const button = $("confirm-delete-profile");
+  button.disabled = true;
+  button.textContent = "正在删除…";
+  showError();
+  setDeleteProfileStatus("正在创建删除分支与 Pull Request…");
+
+  try {
+    const result = await request(
+      `/api/v1/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/profiles/${encodeURIComponent(profileId)}`,
+      {
+        method: "DELETE",
+        body: JSON.stringify({ baseRefSha })
+      }
+    );
+    const resultMessage = profileWriteResultMessage(
+      result,
+      "Profile " + profileId + " 删除"
+    );
+    const resultUrl = result.pullRequest?.url || "";
+    closeDeleteProfileDialog();
+
+    if (repositoryState.selectedFullName === repo.fullName) {
+      await loadProfiles(repo, repositoryState.selectionVersion, {
+        forceRefresh: true,
+        resultMessage,
+        resultUrl
+      });
+    } else {
+      showProfileListResult(resultMessage, resultUrl);
+    }
+  } catch (error) {
+    if (
+      requestVersion === deleteProfileState.requestVersion &&
+      !$("delete-profile-dialog").hidden
+    ) {
+      setDeleteProfileStatus(friendlyError(error), true);
+      button.disabled = false;
+    }
+  } finally {
+    if (
+      requestVersion === deleteProfileState.requestVersion &&
+      !$("delete-profile-dialog").hidden
+    ) {
+      button.textContent = "创建删除 PR";
+    }
+  }
+});
+
 for (const id of ["refresh-builds", "refresh-recent-builds"]) {
   $(id).addEventListener("click", () => {
     clearBuildPolling();
@@ -4255,6 +4436,12 @@ $("build-dialog-close").addEventListener("click", closeBuildDialog);
 $("build-dialog-cancel").addEventListener("click", closeBuildDialog);
 $("build-dialog").addEventListener("click", (event) => {
   if (event.target === $("build-dialog")) closeBuildDialog();
+});
+
+$("delete-profile-close").addEventListener("click", closeDeleteProfileDialog);
+$("delete-profile-cancel").addEventListener("click", closeDeleteProfileDialog);
+$("delete-profile-dialog").addEventListener("click", (event) => {
+  if (event.target === $("delete-profile-dialog")) closeDeleteProfileDialog();
 });
 
 $("config-studio-target").addEventListener("change", () => {

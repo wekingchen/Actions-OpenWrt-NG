@@ -379,6 +379,38 @@ const github = {
         supersededPullRequests: []
       }
     };
+  },
+  async deleteProfilePullRequest(token, owner, repo, profileId, payload) {
+    assert.equal(token, "ghu_worker_access");
+    assert.equal(owner, "acme");
+    assert.equal(repo, "router");
+    assert.equal(profileId, "old-profile");
+    assert.equal(payload.baseRefSha, "a".repeat(40));
+    return {
+      branch: "openwrt-ng/profile-old-profile-delete",
+      commitSha: "d".repeat(40),
+      changedFiles: [
+        ".config",
+        "profile.env",
+        "diy-part1.sh",
+        "diy-part2.sh",
+        "required-packages.txt",
+        "watch-sources.txt",
+        "feeds.conf"
+      ],
+      action: "delete",
+      pullRequest: {
+        number: 9,
+        url: "https://github.com/acme/router/pull/9",
+        merged: true,
+        mergeCommitSha: "e".repeat(40),
+        mergeReason: ""
+      },
+      cleanup: {
+        branchDeleted: true,
+        supersededPullRequests: []
+      }
+    };
   }
 };
 
@@ -755,6 +787,49 @@ assert.equal(write.status, 201);
 const writeBody = await write.json();
 assert.equal(writeBody.pullRequest.number, 7);
 assert.equal(writeBody.pullRequest.merged, true);
+
+const rejectedDelete = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/old-profile",
+    {
+      method: "DELETE",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ baseRefSha: "a".repeat(40) })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(rejectedDelete.status, 403);
+assert.deepEqual(await rejectedDelete.json(), {
+  error: "csrf_validation_failed"
+});
+
+const deleteProfile = await handleControlPlaneRequest(
+  new Request(
+    "https://worker.example/api/v1/repositories/acme/router/profiles/old-profile",
+    {
+      method: "DELETE",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: "https://worker.example",
+        "X-OpenWrt-NG-CSRF": "1",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ baseRefSha: "a".repeat(40) })
+    }
+  ),
+  configuredEnv,
+  deps
+);
+assert.equal(deleteProfile.status, 201);
+const deleteProfileBody = await deleteProfile.json();
+assert.equal(deleteProfileBody.action, "delete");
+assert.equal(deleteProfileBody.pullRequest.number, 9);
+assert.equal(deleteProfileBody.pullRequest.merged, true);
 
 const rejectedConfigStudio = await handleControlPlaneRequest(
   new Request(

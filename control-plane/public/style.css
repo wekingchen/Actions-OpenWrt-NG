@@ -535,6 +535,15 @@ a { color: inherit; }
 .button.primary:hover:not(:disabled) {
   box-shadow: 0 10px 26px rgba(10,159,110,.26);
 }
+.button.danger {
+  color: #fff;
+  background: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 78%, #7d2020);
+}
+.button.danger:hover:not(:disabled) {
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--danger) 24%, transparent);
+  filter: brightness(.96);
+}
 .button.ghost {
   color: var(--text);
   background: var(--panel-soft);
@@ -1873,6 +1882,44 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   background: var(--accent-strong);
   transform: translateY(-1px);
 }
+.profile-row-actions {
+  flex: 0 0 auto;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.profile-delete-action {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger-soft) 46%, var(--panel-strong));
+  color: var(--danger);
+  cursor: pointer;
+  transition: .16s ease;
+}
+.profile-delete-action svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.profile-delete-action:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--danger) 50%, var(--border));
+  background: var(--danger-soft);
+  transform: translateY(-1px);
+}
+.profile-delete-action:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--danger) 22%, transparent);
+  outline-offset: 2px;
+}
 .profile-item.selected .profile-build-action {
   box-shadow: 0 5px 14px color-mix(in srgb, var(--accent) 14%, transparent);
 }
@@ -2009,6 +2056,13 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   .profile-build-action {
     min-height: 34px;
     padding: 0 11px;
+  }
+  .profile-row-actions {
+    gap: 4px;
+  }
+  .profile-delete-action {
+    width: 34px;
+    height: 34px;
   }
   .panel-header {
     align-items: center;
@@ -2318,6 +2372,33 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 .build-dialog-actions .button {
   flex: 0 0 auto;
   min-width: 100px;
+}
+.delete-profile-dialog-panel {
+  width: min(500px, 100%);
+}
+.danger-eyebrow {
+  color: var(--danger);
+}
+.delete-profile-target {
+  border-color: color-mix(in srgb, var(--danger) 18%, var(--border));
+  background: color-mix(in srgb, var(--danger-soft) 30%, var(--panel-soft));
+}
+.delete-profile-warning {
+  display: grid;
+  gap: 6px;
+  padding: 13px 14px;
+  border: 1px solid color-mix(in srgb, var(--danger) 24%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--danger-soft) 54%, var(--panel-strong));
+}
+.delete-profile-warning strong {
+  color: var(--danger);
+  font-size: 11px;
+}
+.delete-profile-warning span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
 }
 
 #profile-card,

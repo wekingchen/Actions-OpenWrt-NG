@@ -473,6 +473,51 @@ export function createControlPlaneHandler({ config, store, github }) {
         }
       }
 
+      if (req.method === "DELETE" && profileDetailMatch) {
+        if (!validMutationRequest(req, config.origin)) {
+          return json(res, 403, { error: "csrf_validation_failed" });
+        }
+        const session = await authenticatedSession(req);
+        if (!session) {
+          return json(res, 401, { error: "authentication_required" });
+        }
+
+        let payload;
+        try {
+          payload = await readJsonBody(req);
+        } catch (error) {
+          return json(res, error.status || 400, {
+            error: error.message || "invalid_json"
+          });
+        }
+
+        const owner = decodeURIComponent(profileDetailMatch[1]);
+        const repo = decodeURIComponent(profileDetailMatch[2]);
+        const profileId = decodeURIComponent(profileDetailMatch[3]);
+        try {
+          const result = await github.deleteProfilePullRequest(
+            session.accessToken,
+            owner,
+            repo,
+            profileId,
+            payload
+          );
+          return json(res, 201, result);
+        } catch (error) {
+          if (error instanceof ProfileWriteError) {
+            return json(res, error.status, { error: error.code });
+          }
+          if (error?.name === "GitHubRequestError") {
+            return json(res, 502, {
+              error: "github_profile_delete_failed",
+              reason: githubErrorReason(error)
+            });
+          }
+          throw error;
+        }
+      }
+
+
       const profileWriteMatch = url.pathname.match(
         /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/([^/]+)\/pull-request$/
       );

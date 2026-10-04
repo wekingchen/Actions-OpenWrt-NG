@@ -378,6 +378,12 @@ function validateProfileFilesPayload(submitted) {
   }
 }
 
+function profileActionLabel(action) {
+  if (action === "create") return "create";
+  if (action === "delete") return "delete";
+  return "update";
+}
+
 function branchSlug(profileId) {
   const slug = String(profileId)
     .replace(/[^A-Za-z0-9_-]+/g, "-")
@@ -1782,7 +1788,7 @@ export class GitHubAppClient {
               "profile(" +
               profileId +
               "): " +
-              (action === "create" ? "create" : "update") +
+              profileActionLabel(action) +
               " via Control Plane",
             commit_message:
               "由 OpenWrt NG Control Plane 自动合并；原始 Pull Request 保留用于审计。"
@@ -1857,6 +1863,16 @@ export class GitHubAppClient {
 
     const treeEntries = [];
     for (const name of changedFiles) {
+      if (action === "delete") {
+        treeEntries.push({
+          path: `profiles/${profileId}/${name}`,
+          mode: PROFILE_FILE_MODES[name],
+          type: "blob",
+          sha: null
+        });
+        continue;
+      }
+
       const blob = await this.api(
         `/repos/${safeOwner}/${safeRepo}/git/blobs`,
         token,
@@ -1888,7 +1904,7 @@ export class GitHubAppClient {
       }
     );
 
-    const actionLabel = action === "create" ? "create" : "update";
+    const actionLabel = profileActionLabel(action);
     const commit = await this.api(
       `/repos/${safeOwner}/${safeRepo}/git/commits`,
       token,
@@ -1918,7 +1934,7 @@ export class GitHubAppClient {
     );
 
     try {
-      const titleAction = action === "create" ? "create" : "update";
+      const titleAction = profileActionLabel(action);
       const pull = await this.api(
         `/repos/${safeOwner}/${safeRepo}/pulls`,
         token,
@@ -1933,7 +1949,9 @@ export class GitHubAppClient {
               "由 OpenWrt NG Control Plane 创建。\n\n" +
               (action === "create"
                 ? "新增标准 Profile 文件：\n"
-                : "变更文件：\n") +
+                : action === "delete"
+                  ? "删除标准 Profile 文件：\n"
+                  : "变更文件：\n") +
               changedFiles
                 .map(
                   (name) =>
@@ -2072,6 +2090,62 @@ export class GitHubAppClient {
         files,
         changedFiles: [...PROFILE_FILES],
         action: "create"
+      }
+    );
+  }
+
+  async deleteProfilePullRequest(
+    token,
+    owner,
+    repo,
+    profileId,
+    payload = {}
+  ) {
+    if (!PROFILE_ID_RE.test(String(profileId || ""))) {
+      throw new ProfileWriteError("invalid_profile_id", 400);
+    }
+    if (profileId === "default") {
+      throw new ProfileWriteError("protected_profile", 409);
+    }
+
+    const baseRefSha = String(payload.baseRefSha || "").trim();
+    if (!/^[0-9a-f]{40}$/i.test(baseRefSha)) {
+      throw new ProfileWriteError("invalid_base_ref", 400);
+    }
+
+    const current = await this.getProfile(token, owner, repo, profileId);
+    if (current.baseRefSha !== baseRefSha) {
+      throw new ProfileWriteError("repository_changed", 409);
+    }
+
+    const recent = await this.listBuilderRuns(token, owner, repo, {
+      profileId,
+      limit: 20
+    });
+    if (recent.some((run) => ACTIVE_BUILD_STATUSES.has(run.status))) {
+      throw new ProfileWriteError("profile_build_active", 409);
+    }
+
+    const changedFiles = PROFILE_FILES.filter(
+      (name) => current.profile.files[name]?.exists
+    );
+    if (!changedFiles.length) {
+      throw new ProfileWriteError("profile_not_found", 404);
+    }
+
+    return this.createProfileFilesPullRequest(
+      token,
+      owner,
+      repo,
+      {
+        profileId,
+        state: {
+          defaultBranch: current.defaultBranch,
+          baseRefSha: current.baseRefSha
+        },
+        files: {},
+        changedFiles,
+        action: "delete"
       }
     );
   }
