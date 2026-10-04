@@ -25,6 +25,8 @@ const PROFILE_FILE_MODES = Object.freeze({
 
 const PROFILE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const BUILDER_WORKFLOW = "build-openwrt.yml";
+const RELEASE_EXISTING_WORKFLOW = "release-existing.yml";
+const UPDATE_CHECKER_WORKFLOW = "update-checker.yml";
 const CONFIG_STUDIO_WORKFLOW = "config-studio.yml";
 const CONFIG_STUDIO_ID_RE = /^[0-9a-f]{16}$/;
 const CONFIG_STUDIO_BRANCH_PREFIX = "openwrt-ng/config-session-";
@@ -261,6 +263,71 @@ export function selectConfigStudioRun(
   });
 }
 
+function managedWorkflowProgressFromJobs(jobs) {
+  const safeJobs = Array.isArray(jobs) ? jobs : [];
+  const ignored = /^(Set up job|Complete job|Post |检出仓库$)/;
+  const steps = [];
+
+  for (const job of safeJobs) {
+    const rawSteps = Array.isArray(job?.steps) ? job.steps : [];
+    const visible = rawSteps.filter(
+      (step) => step?.name && !ignored.test(String(step.name))
+    );
+    if (visible.length) {
+      for (const step of visible) {
+        steps.push({
+          name: String(step.name || ""),
+          detail: String(job?.name || ""),
+          status: String(step.status || "pending"),
+          conclusion: String(step.conclusion || "")
+        });
+      }
+      continue;
+    }
+    steps.push({
+      name: String(job?.name || "Workflow"),
+      detail: String(job?.name || ""),
+      status: String(job?.status || "pending"),
+      conclusion: String(job?.conclusion || "")
+    });
+  }
+
+  return summarizeActionSteps(steps);
+}
+
+function basicWorkflowRun(run, jobs = []) {
+  return {
+    id: Number(run?.id || 0),
+    runNumber: Number(run?.run_number || 0),
+    runAttempt: Number(run?.run_attempt || 1),
+    displayTitle: run?.display_title || run?.name || "",
+    status: run?.status || "unknown",
+    conclusion: run?.conclusion || "",
+    event: run?.event || "",
+    headBranch: run?.head_branch || "",
+    headSha: run?.head_sha || "",
+    createdAt: run?.created_at || "",
+    updatedAt: run?.updated_at || "",
+    runStartedAt: run?.run_started_at || "",
+    url: run?.html_url || "",
+    progress: managedWorkflowProgressFromJobs(jobs),
+    jobs: (Array.isArray(jobs) ? jobs : []).map((job) => ({
+      id: Number(job?.id || 0),
+      name: job?.name || "",
+      status: job?.status || "unknown",
+      conclusion: job?.conclusion || "",
+      startedAt: job?.started_at || "",
+      completedAt: job?.completed_at || "",
+      url: job?.html_url || "",
+      steps: (Array.isArray(job?.steps) ? job.steps : []).map((step) => ({
+        name: step?.name || "",
+        status: step?.status || "unknown",
+        conclusion: step?.conclusion || ""
+      }))
+    }))
+  };
+}
+
 export function githubErrorReason(error) {
   const code =
     error && typeof error.githubError === "string"
@@ -382,6 +449,7 @@ function profileActionLabel(action) {
   if (action === "create") return "create";
   if (action === "copy") return "copy";
   if (action === "rename") return "rename";
+  if (action === "restore") return "restore";
   if (action === "delete") return "delete";
   if (action === "baseline") return "set-baseline";
   return "update";
