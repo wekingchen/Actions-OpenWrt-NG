@@ -379,7 +379,7 @@ const github = {
         supersededPullRequests: []
       }
     };
-  ,
+  },
   async deleteProfilePullRequest(token, owner, repo, profileId, payload) {
     assert.equal(token, "ghu_worker_access");
     assert.equal(owner, "acme");
