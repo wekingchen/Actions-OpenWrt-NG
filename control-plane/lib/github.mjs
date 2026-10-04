@@ -381,6 +381,7 @@ function validateProfileFilesPayload(submitted) {
 function profileActionLabel(action) {
   if (action === "create") return "create";
   if (action === "delete") return "delete";
+  if (action === "baseline") return "set-baseline";
   return "update";
 }
 
@@ -582,13 +583,76 @@ export class GitHubAppClient {
     );
   }
 
+  async resolveBaselineProfileId(
+    token,
+    owner,
+    repo,
+    profiles = null,
+    state = null
+  ) {
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const currentState = state || await this.repositoryState(token, owner, repo);
+    let items = profiles;
+
+    if (!Array.isArray(items)) {
+      let body;
+      try {
+        body = await this.api(
+          `/repos/${safeOwner}/${safeRepo}/contents/profiles?ref=${encodeSegment(currentState.defaultBranch)}`,
+          token
+        );
+      } catch (error) {
+        if (error?.httpStatus === 404) return "";
+        throw error;
+      }
+      items = Array.isArray(body)
+        ? body
+            .filter(
+              (item) =>
+                item?.type === "dir" &&
+                PROFILE_ID_RE.test(item.name || "")
+            )
+            .map((item) => ({ id: item.name }))
+        : [];
+    }
+
+    const ids = items
+      .map((item) => String(item?.id || ""))
+      .filter((id) => PROFILE_ID_RE.test(id))
+      .sort((a, b) => a.localeCompare(b));
+    if (!ids.length) return "";
+
+    try {
+      const marker = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/contents/profiles/.baseline?ref=${encodeSegment(currentState.defaultBranch)}`,
+        token
+      );
+      if (marker?.encoding !== "base64" || typeof marker.content !== "string") {
+        throw new ProfileWriteError("invalid_baseline_profile", 409);
+      }
+      const baseline = decodeBase64Utf8(marker.content).trim();
+      if (!PROFILE_ID_RE.test(baseline) || !ids.includes(baseline)) {
+        throw new ProfileWriteError("invalid_baseline_profile", 409);
+      }
+      return baseline;
+    } catch (error) {
+      if (error instanceof ProfileWriteError) throw error;
+      if (error?.httpStatus !== 404) throw error;
+    }
+
+    if (ids.includes("default")) return "default";
+    return ids[0];
+  }
+
   async listProfiles(token, owner, repo) {
     const safeOwner = encodeSegment(owner);
     const safeRepo = encodeSegment(repo);
+    const state = await this.repositoryState(token, owner, repo);
     let body;
     try {
       body = await this.api(
-        `/repos/${safeOwner}/${safeRepo}/contents/profiles`,
+        `/repos/${safeOwner}/${safeRepo}/contents/profiles?ref=${encodeSegment(state.defaultBranch)}`,
         token
       );
     } catch (error) {
@@ -597,7 +661,7 @@ export class GitHubAppClient {
     }
 
     if (!Array.isArray(body)) return [];
-    return body
+    const profiles = body
       .filter(
         (item) =>
           item?.type === "dir" &&
@@ -609,6 +673,18 @@ export class GitHubAppClient {
         sha: item.sha || ""
       }))
       .sort((a, b) => a.id.localeCompare(b.id));
+
+    const baselineProfileId = await this.resolveBaselineProfileId(
+      token,
+      owner,
+      repo,
+      profiles,
+      state
+    );
+    return profiles.map((profile) => ({
+      ...profile,
+      baseline: profile.id === baselineProfileId
+    }));
   }
 
   async repositoryState(token, owner, repo) {
@@ -692,14 +768,24 @@ export class GitHubAppClient {
       };
     }
 
+    const baselineProfileId = await this.resolveBaselineProfileId(
+      token,
+      owner,
+      repo,
+      null,
+      state
+    );
+
     return {
       owner,
       repo,
       defaultBranch: state.defaultBranch,
       baseRefSha: state.baseRefSha,
+      baselineProfileId,
       profile: {
         id: profileId,
         path: `profiles/${profileId}`,
+        baseline: profileId === baselineProfileId,
         files
       }
     };
@@ -2094,7 +2180,7 @@ export class GitHubAppClient {
     );
   }
 
-  async deleteProfilePullRequest(
+  async setBaselineProfilePullRequest(
     token,
     owner,
     repo,
@@ -2103,9 +2189,6 @@ export class GitHubAppClient {
   ) {
     if (!PROFILE_ID_RE.test(String(profileId || ""))) {
       throw new ProfileWriteError("invalid_profile_id", 400);
-    }
-    if (profileId === "default") {
-      throw new ProfileWriteError("protected_profile", 409);
     }
 
     const baseRefSha = String(payload.baseRefSha || "").trim();
@@ -2116,6 +2199,155 @@ export class GitHubAppClient {
     const current = await this.getProfile(token, owner, repo, profileId);
     if (current.baseRefSha !== baseRefSha) {
       throw new ProfileWriteError("repository_changed", 409);
+    }
+    if (current.profile.baseline) {
+      throw new ProfileWriteError("no_changes", 400);
+    }
+
+    const safeOwner = encodeSegment(owner);
+    const safeRepo = encodeSegment(repo);
+    const baseCommit = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/commits/${current.baseRefSha}`,
+      token
+    );
+    if (!baseCommit?.tree?.sha) {
+      throw new ProfileWriteError("repository_tree_unavailable", 502);
+    }
+
+    const blob = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/blobs`,
+      token,
+      {
+        method: "POST",
+        body: {
+          content: profileId + "\n",
+          encoding: "utf-8"
+        }
+      }
+    );
+    const tree = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/trees`,
+      token,
+      {
+        method: "POST",
+        body: {
+          base_tree: baseCommit.tree.sha,
+          tree: [{
+            path: "profiles/.baseline",
+            mode: "100644",
+            type: "blob",
+            sha: blob.sha
+          }]
+        }
+      }
+    );
+    const commit = await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/commits`,
+      token,
+      {
+        method: "POST",
+        body: {
+          message: `profile(${profileId}): set-baseline via Control Plane`,
+          tree: tree.sha,
+          parents: [current.baseRefSha]
+        }
+      }
+    );
+
+    const branchName =
+      `openwrt-ng/profile-${branchSlug(profileId)}-${Date.now()}-${shortNonce()}`;
+    await this.api(
+      `/repos/${safeOwner}/${safeRepo}/git/refs`,
+      token,
+      {
+        method: "POST",
+        body: {
+          ref: `refs/heads/${branchName}`,
+          sha: commit.sha
+        }
+      }
+    );
+
+    try {
+      const pull = await this.api(
+        `/repos/${safeOwner}/${safeRepo}/pulls`,
+        token,
+        {
+          method: "POST",
+          body: {
+            title: `profile(${profileId}): set-baseline via Control Plane`,
+            head: branchName,
+            base: current.defaultBranch,
+            body:
+              "由 OpenWrt NG Control Plane 创建。\n\n" +
+              `将仓库基准 Profile 切换为 \`${profileId}\`：\n` +
+              "- `profiles/.baseline`\n\n" +
+              "未显式指定 Profile 的 Builder / profile.sh 会从该指针解析基准。"
+          }
+        }
+      );
+
+      const finalized = await this.finalizeProfilePullRequest(
+        token,
+        owner,
+        repo,
+        profileId,
+        {
+          defaultBranch: current.defaultBranch,
+          baseRefSha: current.baseRefSha
+        },
+        branchName,
+        commit.sha,
+        "baseline",
+        pull
+      );
+
+      return {
+        branch: branchName,
+        commitSha: commit.sha,
+        changedFiles: ["profiles/.baseline"],
+        action: "baseline",
+        baselineProfileId: profileId,
+        ...finalized
+      };
+    } catch (error) {
+      try {
+        await this.api(
+          `/repos/${safeOwner}/${safeRepo}/git/refs/${refPath(branchName)}`,
+          token,
+          { method: "DELETE" }
+        );
+      } catch (cleanupError) {
+        console.error(
+          "Failed to clean up branch after baseline PR creation error",
+          cleanupError
+        );
+      }
+      throw error;
+    }
+  }
+
+  async deleteProfilePullRequest(
+    token,
+    owner,
+    repo,
+    profileId,
+    payload = {}
+  ) {
+    if (!PROFILE_ID_RE.test(String(profileId || ""))) {
+      throw new ProfileWriteError("invalid_profile_id", 400);
+    }
+    const baseRefSha = String(payload.baseRefSha || "").trim();
+    if (!/^[0-9a-f]{40}$/i.test(baseRefSha)) {
+      throw new ProfileWriteError("invalid_base_ref", 400);
+    }
+
+    const current = await this.getProfile(token, owner, repo, profileId);
+    if (current.baseRefSha !== baseRefSha) {
+      throw new ProfileWriteError("repository_changed", 409);
+    }
+    if (current.profile.baseline) {
+      throw new ProfileWriteError("protected_profile", 409);
     }
 
     const recent = await this.listBuilderRuns(token, owner, repo, {

@@ -1882,6 +1882,25 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   background: var(--accent-strong);
   transform: translateY(-1px);
 }
+.profile-name-line {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.profile-baseline-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 19px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .02em;
+}
 .profile-row-actions {
   flex: 0 0 auto;
   align-self: center;
@@ -1889,6 +1908,7 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   align-items: center;
   gap: 6px;
 }
+.profile-baseline-action,
 .profile-delete-action {
   width: 36px;
   height: 36px;
@@ -1902,6 +1922,12 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   cursor: pointer;
   transition: .16s ease;
 }
+.profile-baseline-action {
+  border: 1px solid color-mix(in srgb, var(--amber) 30%, var(--border));
+  background: color-mix(in srgb, var(--amber-soft) 52%, var(--panel-strong));
+  color: var(--amber);
+}
+.profile-baseline-action svg,
 .profile-delete-action svg {
   width: 15px;
   height: 15px;
@@ -1911,10 +1937,19 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.profile-baseline-action:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--amber) 52%, var(--border));
+  background: var(--amber-soft);
+  transform: translateY(-1px);
+}
 .profile-delete-action:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--danger) 50%, var(--border));
   background: var(--danger-soft);
   transform: translateY(-1px);
+}
+.profile-baseline-action:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--amber) 22%, transparent);
+  outline-offset: 2px;
 }
 .profile-delete-action:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--danger) 22%, transparent);
@@ -2060,6 +2095,7 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   .profile-row-actions {
     gap: 4px;
   }
+  .profile-baseline-action,
   .profile-delete-action {
     width: 34px;
     height: 34px;
@@ -2373,8 +2409,30 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   flex: 0 0 auto;
   min-width: 100px;
 }
+.baseline-profile-dialog-panel,
 .delete-profile-dialog-panel {
   width: min(500px, 100%);
+}
+.baseline-profile-target {
+  border-color: color-mix(in srgb, var(--amber) 20%, var(--border));
+  background: color-mix(in srgb, var(--amber-soft) 34%, var(--panel-soft));
+}
+.baseline-profile-note {
+  display: grid;
+  gap: 6px;
+  padding: 13px 14px;
+  border: 1px solid color-mix(in srgb, var(--amber) 24%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--amber-soft) 52%, var(--panel-strong));
+}
+.baseline-profile-note strong {
+  color: var(--amber);
+  font-size: 11px;
+}
+.baseline-profile-note span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
 }
 .danger-eyebrow {
   color: var(--danger);

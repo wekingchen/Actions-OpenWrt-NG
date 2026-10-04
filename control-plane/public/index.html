@@ -37,7 +37,7 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.21.2</small>
+        <small>Control Plane 0.21.3</small>
       </div>
     </aside>
 
@@ -65,7 +65,7 @@
         </div>
 
         <div class="topbar-actions">
-          <span class="mobile-version-badge" aria-label="Control Plane 版本">0.21.2</span>
+          <span class="mobile-version-badge" aria-label="Control Plane 版本">0.21.3</span>
           <div class="connection-badge" title="Control Plane 服务可用">
             <span class="status-dot"></span>
             <span>服务正常</span>
@@ -125,7 +125,7 @@
               <div class="panel-header">
                 <div>
                   <h2 id="profile-title">配置</h2>
-                  <p class="panel-description">管理 Profile；点击行查看配置，也可直接构建或删除不再需要的配置。</p>
+                  <p class="panel-description">管理 Profile；可查看、构建、切换基准，或删除不再需要的配置。</p>
                 </div>
                 <button class="button ghost secondary-action" id="new-profile-open" type="button">
                   <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -605,6 +605,38 @@
           <div class="form-actions build-dialog-actions">
             <button class="button ghost" id="build-dialog-cancel" type="button">取消</button>
             <button class="button primary" id="trigger-build" type="button">开始构建</button>
+          </div>
+        </section>
+      </div>
+
+      <div class="build-dialog-backdrop" id="baseline-profile-dialog" hidden>
+        <section class="build-dialog baseline-profile-dialog-panel" role="dialog" aria-modal="true"
+                 aria-labelledby="baseline-profile-title" aria-describedby="baseline-profile-description">
+          <div class="build-dialog-handle" aria-hidden="true"></div>
+          <div class="panel-header build-dialog-header">
+            <div>
+              <p class="eyebrow">基准配置</p>
+              <h2 id="baseline-profile-title">设为基准 Profile</h2>
+              <p class="panel-description" id="baseline-profile-repo"></p>
+            </div>
+            <button class="icon-button" id="baseline-profile-close" type="button" aria-label="关闭基准配置确认">×</button>
+          </div>
+
+          <div class="build-target baseline-profile-target">
+            <span>新的基准 Profile</span>
+            <strong id="baseline-profile-name">—</strong>
+          </div>
+
+          <div class="baseline-profile-note" id="baseline-profile-description">
+            <strong>仓库始终只有一个基准 Profile。</strong>
+            <span>切换后，手动 Builder 未指定 Profile、以及 profile.sh 未指定 Profile 时，都会使用新的基准。原基准不会被删除，只是取消基准身份。</span>
+          </div>
+
+          <p class="build-dialog-status" id="baseline-profile-status" aria-live="polite" hidden></p>
+
+          <div class="form-actions build-dialog-actions">
+            <button class="button ghost" id="baseline-profile-cancel" type="button">取消</button>
+            <button class="button primary" id="confirm-baseline-profile" type="button" disabled>设为基准</button>
           </div>
         </section>
       </div>

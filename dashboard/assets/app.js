@@ -104,7 +104,9 @@
       node.querySelector(".profile-meta").innerHTML = rows.map(([k, v]) =>
         `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>`
       ).join("");
-      node.querySelector(".update-badge").textContent = profile.auto_update ? "Auto update · On" : "Auto update · Off";
+      node.querySelector(".update-badge").textContent =
+        (profile.baseline ? "基准 Profile · " : "") +
+        (profile.auto_update ? "Auto update · On" : "Auto update · Off");
       node.querySelector(".profile-run-link").href = profile.last_build_url || "#";
       grid.appendChild(node);
     });

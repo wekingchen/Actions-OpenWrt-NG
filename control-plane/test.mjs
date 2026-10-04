@@ -66,7 +66,7 @@ assert.match(controlPlaneAppJs, /configStudioDependencyConditionMatches/);
 assert.match(controlPlaneAppJs, /configStudioEffectiveModifiedEntries/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-dependency-summary"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-show-dependencies"/);
-assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.2<\/span>/);
+assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.3<\/span>/);
 assert.match(controlPlaneIndexHtml, /id="new-adapter-field" hidden/);
 assert.match(controlPlaneIndexHtml, /id="profile-list-result"/);
 assert.match(controlPlaneAppJs, /showProfileListResult/);
@@ -75,6 +75,12 @@ assert.match(controlPlaneAppJs, /cache: "no-store"/);
 assert.match(controlPlaneAppJs, /profile-item-refreshed/);
 assert.match(controlPlaneIndexHtml, /id="delete-profile-dialog"/);
 assert.match(controlPlaneIndexHtml, /id="confirm-delete-profile"/);
+assert.match(controlPlaneIndexHtml, /id="baseline-profile-dialog"/);
+assert.match(controlPlaneIndexHtml, /id="confirm-baseline-profile"/);
+assert.match(controlPlaneAppJs, /openBaselineProfileDialog/);
+assert.match(controlPlaneAppJs, /profile\.baseline/);
+assert.match(githubClientSource, /setBaselineProfilePullRequest/);
+assert.match(githubClientSource, /profiles\/\.baseline/);
 assert.match(controlPlaneAppJs, /method: "DELETE"/);
 assert.match(controlPlaneAppJs, /protected_profile/);
 assert.match(githubClientSource, /deleteProfilePullRequest/);
@@ -402,6 +408,30 @@ const profileFetch = async (url, options = {}) => {
   }
   if (
     method === "GET" &&
+    path === "/contents/profiles" &&
+    parsed.searchParams.get("ref") === "main"
+  ) {
+    return Response.json([
+      { type: "dir", name: "default", path: "profiles/default", sha: "dir-default" },
+      { type: "dir", name: "deletable", path: "profiles/deletable", sha: "dir-deletable" }
+    ]);
+  }
+  if (
+    method === "GET" &&
+    path === "/contents/profiles/.baseline" &&
+    parsed.searchParams.get("ref") === "main"
+  ) {
+    return Response.json({
+      type: "file",
+      name: ".baseline",
+      path: "profiles/.baseline",
+      sha: "baseline-sha",
+      encoding: "base64",
+      content: Buffer.from("default\n", "utf8").toString("base64")
+    });
+  }
+  if (
+    method === "GET" &&
     path === "/contents/profiles/default" &&
     parsed.searchParams.get("ref") === "main"
   ) {
@@ -568,6 +598,8 @@ assert.equal(
   loadedProfile.profile.files[".config"].content,
   "CONFIG_TEST=y\n"
 );
+assert.equal(loadedProfile.baselineProfileId, "default");
+assert.equal(loadedProfile.profile.baseline, true);
 
 const changedProfileFiles = {
   ...profileFileContents,
@@ -620,6 +652,32 @@ assert.equal(
   "100755"
 );
 
+const baselineCallStart = profileCalls.length;
+const baselineProfilePr = await profileClient.setBaselineProfilePullRequest(
+  "ghu_profile",
+  "acme",
+  "router",
+  "deletable",
+  { baseRefSha: profileBaseSha }
+);
+assert.equal(baselineProfilePr.action, "baseline");
+assert.equal(baselineProfilePr.baselineProfileId, "deletable");
+assert.deepEqual(baselineProfilePr.changedFiles, ["profiles/.baseline"]);
+assert.equal(baselineProfilePr.pullRequest.merged, true);
+const baselineCalls = profileCalls.slice(baselineCallStart);
+const baselineTreeCall = baselineCalls.find(
+  (call) => call.method === "POST" && call.path === "/git/trees"
+);
+assert.ok(baselineTreeCall);
+const baselineTreeBody = JSON.parse(baselineTreeCall.body);
+assert.equal(baselineTreeBody.tree.length, 1);
+assert.equal(baselineTreeBody.tree[0].path, "profiles/.baseline");
+assert.notEqual(baselineTreeBody.tree[0].sha, null);
+const baselinePullCall = baselineCalls.find(
+  (call) => call.method === "POST" && call.path === "/pulls"
+);
+assert.match(JSON.parse(baselinePullCall.body).body, /基准 Profile/);
+
 const deleteCallStart = profileCalls.length;
 const deletedProfilePr = await profileClient.deleteProfilePullRequest(
   "ghu_profile",
@@ -661,6 +719,58 @@ await assert.rejects(
       "acme",
       "router",
       "default",
+      { baseRefSha: profileBaseSha }
+    ),
+  (error) => {
+    assert.equal(error.code, "protected_profile");
+    assert.equal(error.status, 409);
+    return true;
+  }
+);
+
+const switchedBaselineClient = new GitHubAppClient(
+  {
+    clientId: "Iv1.profile-switched-baseline",
+    clientSecret: "profile-switched-baseline-secret",
+    redirectUri: "https://example.test/api/v1/auth/callback"
+  },
+  async (url, options = {}) => {
+    const parsed = new URL(String(url));
+    if (
+      String(options.method || "GET").toUpperCase() === "GET" &&
+      parsed.pathname === "/repos/acme/router/contents/profiles/.baseline" &&
+      parsed.searchParams.get("ref") === "main"
+    ) {
+      return Response.json({
+        type: "file",
+        name: ".baseline",
+        path: "profiles/.baseline",
+        sha: "baseline-switched",
+        encoding: "base64",
+        content: Buffer.from("deletable\n", "utf8").toString("base64")
+      });
+    }
+    return profileFetch(url, options);
+  }
+);
+
+const deleteFormerBaseline = await switchedBaselineClient.deleteProfilePullRequest(
+  "ghu_profile",
+  "acme",
+  "router",
+  "default",
+  { baseRefSha: profileBaseSha }
+);
+assert.equal(deleteFormerBaseline.action, "delete");
+assert.equal(deleteFormerBaseline.pullRequest.merged, true);
+
+await assert.rejects(
+  () =>
+    switchedBaselineClient.deleteProfilePullRequest(
+      "ghu_profile",
+      "acme",
+      "router",
+      "deletable",
       { baseRefSha: profileBaseSha }
     ),
   (error) => {
@@ -1102,7 +1212,18 @@ const fakeFetch = async (url, options = {}) => {
     });
   }
 
-  if (String(url).endsWith("/repos/acme/router/contents/profiles")) {
+  if (String(url).includes("/repos/acme/router/contents/profiles/.baseline?ref=main")) {
+    return Response.json({
+      type: "file",
+      name: ".baseline",
+      path: "profiles/.baseline",
+      sha: "baseline-server",
+      encoding: "base64",
+      content: Buffer.from("default\n", "utf8").toString("base64")
+    });
+  }
+
+  if (String(url).includes("/repos/acme/router/contents/profiles?ref=main")) {
     return Response.json([
       { type: "dir", name: "default", path: "profiles/default", sha: "abc" },
       { type: "file", name: "README.md", path: "profiles/README.md", sha: "def" }
@@ -1391,8 +1512,9 @@ try {
     { headers: { Cookie: cookie } }
   );
   const profilesBody = await profiles.json();
+  assert.equal(profilesBody.baselineProfileId, "default");
   assert.deepEqual(profilesBody.profiles, [
-    { id: "default", path: "profiles/default", sha: "abc" }
+    { id: "default", path: "profiles/default", sha: "abc", baseline: true }
   ]);
 
   const previewProfileTemplate = await fetch(

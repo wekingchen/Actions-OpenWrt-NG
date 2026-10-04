@@ -68,6 +68,21 @@ def main() -> int:
     if None in profile_ids or "" in profile_ids:
         raise SystemExit("profile id must not be empty")
 
+    baseline_profiles = [
+        profile.get("id")
+        for profile in data["profiles"]
+        if profile.get("baseline") is True
+    ]
+    if profile_ids and len(baseline_profiles) != 1:
+        raise SystemExit(
+            f"exactly one baseline Profile is required, got: {baseline_profiles!r}"
+        )
+    repository_baseline = data["repository"].get("baseline_profile")
+    if profile_ids and repository_baseline != baseline_profiles[0]:
+        raise SystemExit(
+            "repository.baseline_profile must match the baseline Profile"
+        )
+
     for build in data["latest_builds"]:
         profile_id = build.get("profile")
         if profile_ids and profile_id not in profile_ids and profile_id != "unknown":

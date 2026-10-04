@@ -2,9 +2,58 @@
 set -Eeuo pipefail
 
 command_name="${1:-validate}"
-profile_id="${2:-default}"
+requested_profile="${2:-}"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+resolve_baseline_profile() {
+  local marker="$root/profiles/.baseline"
+  local baseline=""
+
+  if [ -f "$marker" ]; then
+    baseline="$(tr -d '\r\n[:space:]' < "$marker")"
+    [[ "$baseline" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || {
+      echo "ERROR: invalid baseline profile in profiles/.baseline: $baseline" >&2
+      exit 1
+    }
+    [ -f "$root/profiles/$baseline/profile.env" ] || {
+      echo "ERROR: baseline profile does not exist: $baseline" >&2
+      exit 1
+    }
+    printf '%s\n' "$baseline"
+    return 0
+  fi
+
+  # 兼容旧仓库：尚未创建显式指针时，优先沿用 default；
+  # 若没有 default，则选择字典序第一项，保证始终存在一个有效基准。
+  if [ -f "$root/profiles/default/profile.env" ]; then
+    printf '%s\n' "default"
+    return 0
+  fi
+
+  mapfile -t candidates < <(
+    for candidate_file in "$root"/profiles/*/profile.env; do
+      [ -f "$candidate_file" ] || continue
+      basename "$(dirname "$candidate_file")"
+    done | LC_ALL=C sort
+  )
+  [ "${#candidates[@]}" -gt 0 ] || {
+    echo "ERROR: no Profile exists; cannot resolve baseline" >&2
+    exit 1
+  }
+  printf '%s\n' "${candidates[0]}"
+}
+
+resolve_profile_id() {
+  local requested="${1:-}"
+  if [ -n "$requested" ]; then
+    printf '%s\n' "$requested"
+  else
+    resolve_baseline_profile
+  fi
+}
+
+profile_id="$(resolve_profile_id "$requested_profile")"
 
 [[ "$profile_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || {
   echo "ERROR: invalid profile name: $profile_id" >&2
@@ -122,6 +171,10 @@ emit_env() {
 }
 
 case "$command_name" in
+  resolve)
+    printf '%s\n' "$profile_id"
+    ;;
+
   validate)
     echo "Profile 校验通过：$profile_id"
     echo "  名称：$PROFILE_NAME"
@@ -158,7 +211,7 @@ case "$command_name" in
     ;;
 
   *)
-    echo "Usage: $0 {validate|export} [profile]" >&2
+    echo "Usage: $0 {resolve|validate|export} [profile]" >&2
     exit 2
     ;;
 esac

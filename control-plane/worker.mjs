@@ -461,7 +461,13 @@ export async function handleControlPlaneRequest(
         owner,
         repo
       );
-      return json(200, { owner, repo, profiles });
+      return json(200, {
+        owner,
+        repo,
+        baselineProfileId:
+          profiles.find((profile) => profile.baseline)?.id || "",
+        profiles
+      });
     }
 
     if (request.method === "POST" && profileMatch) {
@@ -578,6 +584,52 @@ export async function handleControlPlaneRequest(
         if (error?.name === "GitHubRequestError") {
           return json(502, {
             error: "github_profile_delete_failed",
+            reason: githubErrorReason(error)
+          });
+        }
+        throw error;
+      }
+    }
+
+
+    const profileBaselineMatch = url.pathname.match(
+      /^\/api\/v1\/repositories\/([^/]+)\/([^/]+)\/profiles\/([^/]+)\/baseline$/
+    );
+    if (request.method === "POST" && profileBaselineMatch) {
+      if (!validMutationRequest(request, config.origin)) {
+        return json(403, { error: "csrf_validation_failed" });
+      }
+      const session = await authenticatedSession();
+      if (!session) {
+        return json(401, { error: "authentication_required" });
+      }
+
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return json(400, { error: "invalid_json" });
+      }
+
+      const owner = decodeURIComponent(profileBaselineMatch[1]);
+      const repo = decodeURIComponent(profileBaselineMatch[2]);
+      const profileId = decodeURIComponent(profileBaselineMatch[3]);
+      try {
+        const result = await deps.github.setBaselineProfilePullRequest(
+          session.accessToken,
+          owner,
+          repo,
+          profileId,
+          payload
+        );
+        return json(201, result);
+      } catch (error) {
+        if (error instanceof ProfileWriteError) {
+          return json(error.status, { error: error.code });
+        }
+        if (error?.name === "GitHubRequestError") {
+          return json(502, {
+            error: "github_profile_write_failed",
             reason: githubErrorReason(error)
           });
         }
