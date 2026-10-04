@@ -1236,6 +1236,30 @@ const builderFetch = async (url, options = {}) => {
       html_url: "https://github.com/acme/router/actions/runs/123"
     });
   }
+  if (method === "POST" && path === "/actions/runs/123/rerun") {
+    return new Response(null, { status: 201 });
+  }
+  if (method === "GET" && path === "/actions/runs/124") {
+    return Response.json({
+      id: 124,
+      run_number: 10,
+      run_attempt: 1,
+      display_title: "Build · default · cp:0011223344556677",
+      status: "in_progress",
+      conclusion: null,
+      event: "workflow_dispatch",
+      path: ".github/workflows/build-openwrt.yml",
+      head_branch: "main",
+      head_sha: "e".repeat(40),
+      created_at: "2026-10-02T01:00:00Z",
+      updated_at: "2026-10-02T01:05:00Z",
+      run_started_at: "2026-10-02T01:00:10Z",
+      html_url: "https://github.com/acme/router/actions/runs/124"
+    });
+  }
+  if (method === "POST" && path === "/actions/runs/124/cancel") {
+    return new Response(null, { status: 202 });
+  }
   if (method === "GET" && path === "/actions/runs/123/jobs") {
     return Response.json({
       jobs: [{
@@ -1329,6 +1353,36 @@ const artifactDownloadUrl = await builderClient.getBuilderArtifactDownloadUrl(
 assert.equal(
   artifactDownloadUrl,
   "https://downloads.example.test/artifacts/77.zip"
+);
+
+const rerunResult = await builderClient.rerunBuilderRun(
+  "ghu_builder",
+  "acme",
+  "router",
+  123
+);
+assert.equal(rerunResult.accepted, true);
+assert.equal(rerunResult.action, "rerun");
+assert.equal(rerunResult.nextAttempt, 2);
+assert.ok(
+  builderCalls.some((call) =>
+    call.method === "POST" && call.path === "/actions/runs/123/rerun"
+  )
+);
+
+const cancelResult = await builderClient.cancelBuilderRun(
+  "ghu_builder",
+  "acme",
+  "router",
+  124
+);
+assert.equal(cancelResult.accepted, true);
+assert.equal(cancelResult.action, "cancel");
+assert.equal(cancelResult.runId, 124);
+assert.ok(
+  builderCalls.some((call) =>
+    call.method === "POST" && call.path === "/actions/runs/124/cancel"
+  )
 );
 
 const calls = [];
