@@ -99,6 +99,18 @@ jobs:
         grep -q 'profileBaselineMatch' control-plane/server.mjs
         grep -q 'id="baseline-profile-dialog"' control-plane/public/index.html
         grep -q 'openBaselineProfileDialog' control-plane/public/app.js
+        grep -q 'copyProfilePullRequest' control-plane/lib/github.mjs
+        grep -q 'renameProfilePullRequest' control-plane/lib/github.mjs
+        grep -q 'cleanupConfigStudioSessionsForProfile' control-plane/lib/github.mjs
+        grep -q 'cancelBuilderRun' control-plane/lib/github.mjs
+        grep -q 'rerunBuilderRun' control-plane/lib/github.mjs
+        grep -q 'profileLifecycleMatch' control-plane/worker.mjs
+        grep -q 'profileLifecycleMatch' control-plane/server.mjs
+        grep -q 'buildControlMatch' control-plane/worker.mjs
+        grep -q 'buildControlMatch' control-plane/server.mjs
+        grep -q 'id="profile-lifecycle-dialog"' control-plane/public/index.html
+        grep -q 'openProfileLifecycleDialog' control-plane/public/app.js
+        grep -q 'controlBuilderRun' control-plane/public/app.js
         python3 -m json.tool control-plane/wrangler.jsonc >/dev/null
         python3 -m json.tool control-plane/api-schema.json >/dev/null
 
@@ -317,6 +329,9 @@ jobs:
         grep -q 'buildDialogState.requestVersion' /tmp/control-plane-app.js
         grep -q 'result.requestId' /tmp/control-plane-app.js
         grep -q 'build_already_active' /tmp/control-plane-app.js
+        grep -q 'profile-copy-action' /tmp/control-plane-app.js
+        grep -q 'profile-rename-action' /tmp/control-plane-app.js
+        grep -q 'controlBuilderRun' /tmp/control-plane-app.js
         grep -q 'readNewProfileInput' /tmp/control-plane-app.js
         grep -q '/api/v1/profile-templates/preview' /tmp/control-plane-app.js
         grep -q 'profile_already_exists' /tmp/control-plane-app.js
@@ -333,6 +348,7 @@ jobs:
         grep -q 'aria-controls="build-card"' /tmp/control-plane-index.html
         grep -q 'id="build-dialog"' /tmp/control-plane-index.html
         grep -q 'id="baseline-profile-dialog"' /tmp/control-plane-index.html
+        grep -q 'id="profile-lifecycle-dialog"' /tmp/control-plane-index.html
         grep -q 'id="recent-build-runs"' /tmp/control-plane-index.html
         grep -q 'id="publish-release-help"' /tmp/control-plane-index.html
         grep -q 'account-dropdown' /tmp/control-plane-app.js
