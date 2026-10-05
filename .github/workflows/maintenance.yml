@@ -1,7 +1,11 @@
 name: Repository Maintenance
-run-name: 仓库维护 · ${{ inputs.operation }} · dry-run=${{ inputs.dry_run }}
+run-name: 仓库维护 · ${{ github.event_name == 'push' && 'cleanup-merged-helper-branches' || inputs.operation }} · dry-run=${{ github.event_name == 'push' && 'false' || inputs.dry_run }}
 
 on:
+  push:
+    branches: [main]
+    paths:
+    - ".github/workflows/maintenance.yml"
   workflow_dispatch:
     inputs:
       operation:
@@ -12,6 +16,7 @@ on:
         options:
         - cleanup-non-main-runs
         - cleanup-workflow-history
+        - cleanup-merged-helper-branches
       dry_run:
         description: 仅预览，不实际删除
         required: true
@@ -27,7 +32,8 @@ jobs:
     timeout-minutes: 15
     permissions:
       actions: write
-      contents: read
+      contents: write
+      pull-requests: read
 
     steps:
     - name: 检出维护脚本
@@ -107,3 +113,61 @@ jobs:
         echo "保留 Profile PR 记录：$skipped_profile 条"
         echo "跳过仍在运行：$skipped_active 条"
         echo "跳过默认分支/无分支：$skipped_default 条"
+
+    - name: 清理已合并的辅助分支
+      if: github.event_name == 'push' || inputs.operation == 'cleanup-merged-helper-branches'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        DRY_RUN: ${{ github.event_name == 'push' && 'false' || inputs.dry_run }}
+      run: |
+        set -Eeuo pipefail
+
+        default_branch="$(gh api "repos/$GITHUB_REPOSITORY" --jq '.default_branch')"
+        owner="${GITHUB_REPOSITORY%%/*}"
+        deleted=0
+        kept=0
+
+        mapfile -t branches < <(
+          gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" --jq '.[].name'
+        )
+
+        for branch in "${branches[@]}"; do
+          [ "$branch" != "$default_branch" ] || continue
+          case "$branch" in
+            openwrt-ng/profile-*)
+              echo "保留 Profile 审计分支：$branch"
+              kept=$((kept + 1))
+              continue
+              ;;
+            fix/*|sync/*)
+              ;;
+            *)
+              continue
+              ;;
+          esac
+
+          merged_count="$(
+            gh api --method GET "repos/$GITHUB_REPOSITORY/pulls"               -f state=closed               -f head="$owner:$branch"               --jq '[.[] | select(.merged_at != null)] | length'
+          )"
+
+          if [ "$merged_count" -eq 0 ]; then
+            echo "保留未确认合并的辅助分支：$branch"
+            kept=$((kept + 1))
+            continue
+          fi
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "计划删除已合并辅助分支：$branch"
+          else
+            echo "删除已合并辅助分支：$branch"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch" --silent
+          fi
+          deleted=$((deleted + 1))
+        done
+
+        echo
+        if [ "$DRY_RUN" = "true" ]; then
+          echo "辅助分支清理预览完成：计划删除 $deleted 条，保留 $kept 条。"
+        else
+          echo "辅助分支清理完成：删除 $deleted 条，保留 $kept 条。"
+        fi
