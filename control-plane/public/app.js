@@ -655,7 +655,7 @@ function configStudioCleanupNote(cleanup) {
   return "；" + details.join("，") + "，请检查 GitHub Actions 和临时分支";
 }
 
-function profileWriteResultMessage(result, subject = "Profile") {
+function profileWriteResultMessage(result, subject = "配置方案") {
   const pull = result?.pullRequest || {};
   const number = Number(pull.number || 0);
   if (pull.merged) {
@@ -854,7 +854,7 @@ function openNewProfileForm() {
   resetNewProfileForm();
   $("editor-card").hidden = true;
   $("new-profile-card").hidden = false;
-  $("new-profile-title").textContent = repo.fullName + " · 新建配置";
+  $("new-profile-title").textContent = repo.fullName + " · 新建配置方案";
   showControlPlaneView("profiles");
   setActiveNavigation("profiles");
   scrollToPanel($("new-profile-card"));
@@ -2460,7 +2460,7 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
     : "需要 Actions 写权限";
 
   $("profile-card").hidden = false;
-  $("profile-title").textContent = "配置";
+  $("profile-title").textContent = "配置方案";
   const root = $("profiles");
   showProfileListResult();
   root.replaceChildren(
@@ -3779,7 +3779,7 @@ function configStudioPackageChoice(pkg, prompt, options) {
 
   const meta = document.createElement("small");
   meta.textContent =
-    "与传统 menuconfig 的 choice 一致：同组只能选择一个值。";
+    "与 OpenWrt 配置菜单的单选组一致：同一组只能选择一个值。";
   copy.append(title, meta);
 
   const select = document.createElement("select");
@@ -3936,7 +3936,7 @@ function renderConfigStudioPackages() {
     const empty = document.createElement("div");
     empty.className = "config-studio-empty config-studio-menu-hint";
     empty.textContent =
-      "像传统 menuconfig 一样，先选择一级分类，再按二级菜单缩小范围；也可以直接搜索全部软件包。";
+      "和 OpenWrt 配置菜单一样，可以先选一级分类，再用二级菜单缩小范围；也可以直接搜索全部软件包。";
     root.appendChild(empty);
     return;
   }
@@ -4589,7 +4589,7 @@ async function startConfigStudio(repo, options) {
   setConfigStudioError();
   $("config-studio-title").textContent = existing
     ? "图形配置 · " + options.profileId
-    : "新 配置方案 · 图形 Menuconfig";
+    : "新配置方案 · 图形配置";
   $("config-studio-context").textContent = existing
     ? repo.fullName + " · 从当前编辑器 配置方案 快照开始"
     : repo.fullName + " · " + options.sourceRepo + " @ " + options.sourceBranch;
