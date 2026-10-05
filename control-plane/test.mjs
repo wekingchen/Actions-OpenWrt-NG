@@ -77,7 +77,7 @@ assert.match(controlPlaneAppJs, /configStudioDependencyConditionMatches/);
 assert.match(controlPlaneAppJs, /configStudioEffectiveModifiedEntries/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-dependency-summary"/);
 assert.match(controlPlaneIndexHtml, /id="config-studio-show-dependencies"/);
-assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.10<\/span>/);
+assert.match(controlPlaneIndexHtml, /class="mobile-version-badge"[^>]*>0\.21\.11<\/span>/);
 assert.match(controlPlaneIndexHtml, /id="new-adapter-field" hidden/);
 assert.match(controlPlaneIndexHtml, /id="profile-list-result"/);
 assert.match(controlPlaneAppJs, /showProfileListResult/);
@@ -126,7 +126,6 @@ assert.doesNotMatch(updateCheckerWorkflow, /runs-on: ubuntu-22\.04/);
 assert.match(controlPlaneAppJs, /renderNewAdapterVisibility/);
 assert.match(controlPlaneIndexHtml, />标准 OpenWrt 源码<\/option>/);
 assert.doesNotMatch(controlPlaneIndexHtml, /id="new-stream-log"/);
-assert.match(controlPlaneAppJs, /streamLog: false/);
 assert.match(controlPlaneAppJs, /baseRefSha: editorState\.baseRefSha/);
 assert.match(controlPlaneAppJs, /profileFiles: Object\.fromEntries/);
 assert.match(controlPlaneAppJs, /saveCurrentEditorFile\(\);[\s\S]*profileFiles:/);
@@ -284,8 +283,16 @@ assert.deepEqual(controlPlaneTemplateFiles, wizardTemplateFiles);
 const templateProfileEnv = controlPlaneTemplateFiles.find(
   (file) => file.path.endsWith("/profile.env")
 )?.text || "";
-assert.match(templateProfileEnv, /STREAM_BUILD_LOG='false'/);
+assert.doesNotMatch(templateProfileEnv, /STREAM_BUILD_LOG/);
 assert.match(templateProfileEnv, /FEED_PRIORITY_MODE='feed-order'/);
+const streamlessTemplateInput = { ...templateInput };
+delete streamlessTemplateInput.streamLog;
+const streamlessFiles = buildProfileTemplateFiles(streamlessTemplateInput);
+assert.equal(streamlessFiles.length, 7);
+assert.doesNotMatch(
+  streamlessFiles.find((file) => file.path.endsWith("/profile.env"))?.text || "",
+  /STREAM_BUILD_LOG/
+);
 assert.equal(controlPlaneTemplateFiles.length, 7);
 const templateFeeds = controlPlaneTemplateFiles.find(
   (file) => file.path.endsWith("/feeds.conf")

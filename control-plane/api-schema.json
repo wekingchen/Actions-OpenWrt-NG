@@ -793,7 +793,6 @@
         "uploadRelease",
         "uploadFirmware",
         "maximizeSpace",
-        "streamLog",
         "requiredPackages",
         "watchSources",
         "extraFeeds"
@@ -840,7 +839,9 @@
           "type": "boolean"
         },
         "streamLog": {
-          "type": "boolean"
+          "type": "boolean",
+          "deprecated": true,
+          "description": "已废弃并忽略；完整流式编译日志仅可通过 Core 调试变量 OPENWRT_NG_DEBUG_STREAM_LOG=true 临时启用。"
         },
         "requiredPackages": {
           "type": "string"
