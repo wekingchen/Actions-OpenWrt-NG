@@ -26,7 +26,7 @@
         <div class="card-heading">
           <div>
             <p class="section-kicker">连接状态</p>
-            <h2>控制面连接</h2>
+            <h2>管理中心连接</h2>
           </div>
           <span class="status-pill neutral" id="control-state">检查中</span>
         </div>
@@ -39,7 +39,7 @@
 
       <section class="control-card">
         <p class="section-kicker">可用功能</p>
-        <h2>当前已完成能力</h2>
+        <h2>能做什么</h2>
         <ul class="control-list">
           <li><strong>配置方案：</strong>查看、在线编辑、新建、复制、重命名、删除和恢复，并在保存前预览变更。</li>
           <li><strong>安全保存：</strong>修改先写到独立分支，再通过合并请求（PR）进入默认分支，不直接覆盖主分支。</li>
@@ -77,11 +77,11 @@
         <h2>模板实例启用顺序</h2>
         <ol class="control-list">
           <li>创建 Cloudflare D1 数据库，并配置部署所需的 GitHub Actions 密钥和变量。</li>
-          <li>运行 <strong>Deploy V2 Control Plane</strong>，先完成首次空配置部署。</li>
+          <li>运行 <strong>Deploy V2 Control Plane</strong>（部署管理中心），先完成首次空配置部署。</li>
           <li>按上面的权限创建 GitHub App，再把 App 密钥同步到部署环境。</li>
           <li>确认登录、仓库读取和一次实际操作都正常后，再在自己的仓库启用 <code>dashboard/data/control-plane.json</code>。</li>
         </ol>
-        <p class="muted">公共模板的 main 会刻意保持连接配置关闭，避免模板实例误连到维护者自己的 Worker。</p>
+        <p class="muted">公共模板的默认分支会刻意保持连接配置关闭，避免使用模板创建的新仓库误连到维护者自己的服务。</p>
       </section>
     </main>
 
