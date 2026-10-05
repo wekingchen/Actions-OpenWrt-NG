@@ -2030,7 +2030,7 @@ async function loadBuildDetail(runId) {
     const strong = document.createElement("strong");
     strong.textContent = "已有构建可直接发布";
     const span = document.createElement("span");
-    span.textContent = "复用已保留的 发布包，不重新编译。";
+    span.textContent = "复用已保留的发布包，不重新编译。";
     copy.append(strong, span);
 
     const button = document.createElement("button");
@@ -2368,7 +2368,7 @@ async function loadDeletedProfiles(repo, selectionVersion) {
       selectionVersion !== repositoryState.selectionVersion ||
       repositoryState.selectedFullName !== repo.fullName
     ) return;
-    console.warn("Deleted 配置方案 history unavailable", error);
+    console.warn("Deleted profile history unavailable", error);
     return;
   }
 
@@ -2504,7 +2504,7 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
     const title = document.createElement("strong");
     title.textContent = "还没有配置";
     const detail = document.createElement("span");
-    detail.textContent = "新建一套标准 配置方案 配置后即可开始构建。";
+    detail.textContent = "新建一套标准配置方案后即可开始构建。";
     empty.append(title, detail);
     root.appendChild(empty);
   } else {
