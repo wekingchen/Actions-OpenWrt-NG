@@ -340,7 +340,7 @@ jobs:
         grep -q '真实步骤进度会自动刷新' control-plane/public/app.js
         grep -q 'function renderConfigStudioPackages' control-plane/public/app.js
         grep -q 'friendlyError' control-plane/public/app.js
-        grep -q 'Profile 可读取' control-plane/public/app.js
+        grep -q '配置可读取' control-plane/public/app.js
         grep -q 'role="alert"' control-plane/public/index.html
         grep -q 'TOKEN_ENCRYPTION_KEY 至少需要 32 个字符' .github/workflows/deploy-control-plane.yml
         grep -q 'Administration / Workflows' .github/workflows/deploy-control-plane.yml
@@ -417,7 +417,7 @@ jobs:
         curl -fsS http://127.0.0.1:8788/app.js -o /tmp/control-plane-app.js
         curl -fsS http://127.0.0.1:8788/style.css -o /tmp/control-plane-style.css
 
-        grep -q "OpenWrt NG Control Plane" /tmp/control-plane-index.html
+        grep -q "OpenWrt NG 管理中心" /tmp/control-plane-index.html
         grep -q 'class="app-shell"' /tmp/control-plane-index.html
         grep -q 'class="sidebar"' /tmp/control-plane-index.html
         grep -q 'id="repo-switcher"' /tmp/control-plane-index.html
