@@ -31,7 +31,7 @@ Adapter 脚本由框架调用，不应自行改写 GitHub 工作流。当前 dir
 - 不绕过项目的 feeds 合并、同名包处理和配置留档逻辑。
 - 不绕过 make defconfig。
 - 不自行发布 Release。
-- 不自行上传 Artifact。
+- 不自行上传 GitHub Actions 构建产物。
 - 不把凭据写进源码树、日志、配置留档或构建产物。
 
 ## 配置方案 Hook
@@ -58,7 +58,7 @@ MAXIMIZE_BUILD_SPACE=true 时，工作流会按项目现有逻辑扩展 GitHub R
 新增 Adapter 后至少要确认：
 
 - shell 语法检查通过。
-- Control Plane CI 全部通过。
+- 中央 CI 全部通过。
 - Config Studio 能按真实源码生成配置目录。
-- Builder 能完成预检、make defconfig、编译和产物校验。
+- 构建工作流能完成预检、make defconfig、编译和产物校验。
 - 不影响现有 direct-openwrt 路径。
