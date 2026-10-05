@@ -61,7 +61,7 @@ export async function loadControlPlaneConfig(
 
   const raw = await response.json();
   if (containsSensitiveControlPlaneData(raw)) {
-    throw new Error("管理中心公开配置中发现疑似凭据，已拒绝加载。");
+    throw new Error("管理中心公开配置中发现疑似敏感凭据，已拒绝加载。");
   }
   return normalizeControlPlaneConfig(raw);
 }
