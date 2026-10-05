@@ -1,0 +1,28 @@
+name: Temporary Branch Cleanup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/temp-branch-cleanup.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: 清理临时分支并删除本工作流
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/temp-branch-cleanup.yml
+          git commit -m "chore: remove temporary branch cleanup helper"
+          git push origin HEAD:main
+          git push origin --delete openwrt-ng/ui-docs-zh-audit || true
