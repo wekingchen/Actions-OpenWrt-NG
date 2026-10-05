@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import importlib.util
-import json
 import re
 import sys
 from pathlib import Path
@@ -18,11 +17,7 @@ assert spec.loader is not None
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 assert module.framework_version(ROOT) == VERSION
-
-status = json.loads(
-    (ROOT / "dashboard" / "data" / "status.json").read_text(encoding="utf-8")
-)
-assert status["repository"]["version"] == f"V{VERSION}"
+assert module.dashboard_version(ROOT) == f"V{VERSION}"
 
 readme = (ROOT / "README.md").read_text(encoding="utf-8")
 assert f"V{VERSION}" in readme
