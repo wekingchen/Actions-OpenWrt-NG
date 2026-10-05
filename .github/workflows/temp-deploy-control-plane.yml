@@ -1,0 +1,48 @@
+name: Temporary Control Plane Deploy Trigger
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/temp-deploy-control-plane.yml"
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  trigger-and-clean:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: 触发正式 Control Plane 部署
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -Eeuo pipefail
+          curl -fsS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$REPO/actions/workflows/deploy-control-plane.yml/dispatches" \
+            -d '{"ref":"main","inputs":{"apply_github_app_secrets":"false"}}'
+          echo "正式部署已触发"
+
+      - name: 清理临时 Workflow
+        if: always()
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          token: ${{ github.token }}
+
+      - name: 删除临时 Workflow 文件
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/temp-deploy-control-plane.yml
+          git commit -m "chore: remove temporary control plane deploy trigger"
+          git push origin HEAD:main
