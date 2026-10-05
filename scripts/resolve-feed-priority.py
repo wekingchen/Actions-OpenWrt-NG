@@ -339,6 +339,7 @@ def main() -> int:
     decisions: list[dict[str, object]] = []
     unsafe_collisions: list[dict[str, object]] = []
     selected_blocks: dict[str, SourceBlock] = {}
+    arbitrated: dict[str, list[str]] = {}
     priority_collision_count = 0
     default_shadow_count = 0
 
@@ -355,6 +356,9 @@ def main() -> int:
 
         if len(priority) > 1:
             priority_collision_count += 1
+            arbitrated[source] = [
+                block.feed for block in sorted(priority, key=lambda item: item.order)
+            ]
             winner, package_winners, unsafe = choose_source_winner(
                 priority,
                 args.mode,
@@ -423,7 +427,7 @@ def main() -> int:
             package_owner.setdefault(package, block.feed)
             package_source.setdefault(package, source)
 
-    cross_feed_dependencies: list[dict[str, str]] = []
+    cross_feed_dependencies: list[dict[str, object]] = []
     seen_dependencies: set[tuple[str, str, str, str]] = set()
 
     for source, block in selected_blocks.items():
@@ -431,6 +435,9 @@ def main() -> int:
             for dependency in meta.dependencies:
                 dependency_feed = package_owner.get(dependency, "")
                 if not dependency_feed or dependency_feed == block.feed:
+                    continue
+                dependency_source = package_source.get(dependency, "")
+                if dependency_source not in arbitrated:
                     continue
                 key = (
                     package,
@@ -448,7 +455,8 @@ def main() -> int:
                         "source": source,
                         "dependency": dependency,
                         "dependencyFeed": dependency_feed,
-                        "dependencySource": package_source.get(dependency, ""),
+                        "dependencySource": dependency_source,
+                        "competingFeeds": arbitrated[dependency_source],
                     }
                 )
 
