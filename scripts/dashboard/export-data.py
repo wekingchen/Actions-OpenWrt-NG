@@ -60,6 +60,10 @@ def framework_version(root: Path) -> str:
     return value
 
 
+def dashboard_version(root: Path) -> str:
+    return f"V{framework_version(root)}"
+
+
 def iso_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
@@ -542,7 +546,7 @@ def main() -> int:
             "releases_url": f"{repo.get('html_url')}/releases",
             "default_branch": repo.get("default_branch"),
             "is_template": repo.get("is_template", False),
-            "version": f"V{framework_version(root)}",
+            "version": dashboard_version(root),
             "baseline_profile": next(
                 (profile["id"] for profile in profiles if profile.get("baseline")),
                 None,
