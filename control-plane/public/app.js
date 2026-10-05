@@ -757,7 +757,7 @@ function readNewProfileInput() {
     adapter: $("new-adapter").value,
     configText: $("new-config-text").value,
     autoUpdate: $("new-auto-update").checked,
-    upload版本发布: $("new-upload-release").checked,
+    uploadRelease: $("new-upload-release").checked,
     uploadFirmware: $("new-upload-firmware").checked,
     maximizeSpace: $("new-maximize-space").checked,
     requiredPackages: $("new-required-packages").value,
@@ -1065,7 +1065,7 @@ function buildProfileId(run) {
   return parts.find((part) => !part.startsWith("cp:") && part !== "Build") || "unknown";
 }
 
-function parseProfile版本发布Policy(content) {
+function parseProfileReleasePolicy(content) {
   const match = String(content || "").match(
     /^\s*UPLOAD_RELEASE\s*=\s*['"]?(true|false)['"]?\s*$/mi
   );
@@ -1097,7 +1097,7 @@ function closeBuildDialog() {
 async function openBuildDialog(repo, profileId) {
   showError();
   if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
-  if (!$("release-existing-dialog").hidden) close版本发布ExistingDialog();
+  if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
   if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
   if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
   if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
@@ -1137,12 +1137,12 @@ async function openBuildDialog(repo, profileId) {
     }
 
     const profileEnv = data.profile.files["profile.env"]?.content || "";
-    const releaseAllowed = parseProfile版本发布Policy(profileEnv);
+    const releaseAllowed = parseProfileReleasePolicy(profileEnv);
     buildDialogState.releaseAllowed = releaseAllowed;
     $("publish-release").disabled = !releaseAllowed;
     $("publish-release-help").textContent = releaseAllowed
       ? "这套配置允许发布版本；这里的开关只影响本次构建。"
-      : "这套配置已关闭版本发布（UPLOAD_RELEASE=false），本次构建不能创建 版本发布。";
+      : "这套配置已关闭版本发布（UPLOAD_RELEASE=false），本次构建不能创建版本发布。";
 
     if (!canRunRepo(repo)) {
       $("trigger-build").disabled = true;
@@ -1270,7 +1270,7 @@ async function openUpdateCheckerDialog(repo, profileId = "") {
   if (!$("delete-profile-dialog").hidden) closeDeleteProfileDialog();
   if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
   if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
-  if (!$("release-existing-dialog").hidden) close版本发布ExistingDialog();
+  if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
 
   clearUpdateCheckerPolling();
   const generation = updateCheckerState.generation + 1;
@@ -1333,21 +1333,21 @@ async function openUpdateCheckerDialog(repo, profileId = "") {
   }
 }
 
-function clear版本发布ExistingPolling() {
+function clearReleaseExistingPolling() {
   if (releaseExistingState.pollTimer) {
     clearTimeout(releaseExistingState.pollTimer);
     releaseExistingState.pollTimer = null;
   }
 }
 
-function set版本发布ExistingStatus(message = "", isError = false) {
+function setReleaseExistingStatus(message = "", isError = false) {
   const node = $("release-existing-status");
   node.textContent = message;
   node.classList.toggle("error-text", Boolean(isError));
 }
 
-function close版本发布ExistingDialog() {
-  clear版本发布ExistingPolling();
+function closeReleaseExistingDialog() {
+  clearReleaseExistingPolling();
   releaseExistingState.generation += 1;
   const restoreFocus = releaseExistingState.restoreFocus;
   $("release-existing-dialog").hidden = true;
@@ -1359,13 +1359,13 @@ function close版本发布ExistingDialog() {
   releaseExistingState.restoreFocus = null;
   renderActionProgressCard("release-existing-progress", null, null);
   $("release-existing-run-link").hidden = true;
-  set版本发布ExistingStatus();
+  setReleaseExistingStatus();
   if (restoreFocus?.isConnected && typeof restoreFocus.focus === "function") {
     restoreFocus.focus();
   }
 }
 
-async function poll版本发布ExistingRun(generation) {
+async function pollReleaseExistingRun(generation) {
   const repo = releaseExistingState.repo;
   const runId = releaseExistingState.runId;
   if (
@@ -1402,9 +1402,9 @@ async function poll版本发布ExistingRun(generation) {
     $("release-existing-run-link").hidden = !run.url;
 
     if (run.status === "completed") {
-      clear版本发布ExistingPolling();
+      clearReleaseExistingPolling();
       const ok = run.conclusion === "success";
-      set版本发布ExistingStatus(
+      setReleaseExistingStatus(
         ok
           ? "补发版本已经完成，正在刷新来源构建的发布信息。"
           : `恢复发布结束：${buildStatusLabel(run)}。请打开 Actions 查看失败步骤。`,
@@ -1419,9 +1419,9 @@ async function poll版本发布ExistingRun(generation) {
       return;
     }
 
-    set版本发布ExistingStatus("正在从已有构建补发版本，页面会自动刷新真实步骤。");
+    setReleaseExistingStatus("正在从已有构建补发版本，页面会自动刷新真实步骤。");
     releaseExistingState.pollTimer = setTimeout(
-      () => poll版本发布ExistingRun(generation),
+      () => pollReleaseExistingRun(generation),
       2500
     );
   } catch (error) {
@@ -1429,15 +1429,15 @@ async function poll版本发布ExistingRun(generation) {
       generation !== releaseExistingState.generation ||
       $("release-existing-dialog").hidden
     ) return;
-    set版本发布ExistingStatus(friendlyError(error), true);
+    setReleaseExistingStatus(friendlyError(error), true);
     releaseExistingState.pollTimer = setTimeout(
-      () => poll版本发布ExistingRun(generation),
+      () => pollReleaseExistingRun(generation),
       5000
     );
   }
 }
 
-function open版本发布ExistingDialog(repo, run) {
+function openReleaseExistingDialog(repo, run) {
   showError();
   if (!canRunRepo(repo)) {
     showError("当前 GitHub App 没有 Actions 写权限，无法补发版本。");
@@ -1450,7 +1450,7 @@ function open版本发布ExistingDialog(repo, run) {
   if (!$("build-dialog").hidden) closeBuildDialog();
   if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
 
-  clear版本发布ExistingPolling();
+  clearReleaseExistingPolling();
   const generation = releaseExistingState.generation + 1;
   releaseExistingState.generation = generation;
   releaseExistingState.repo = repo;
@@ -1467,7 +1467,7 @@ function open版本发布ExistingDialog(repo, run) {
   $("confirm-release-existing").textContent = "发布现有构建";
   $("release-existing-run-link").hidden = true;
   renderActionProgressCard("release-existing-progress", null, null);
-  set版本发布ExistingStatus(
+  setReleaseExistingStatus(
     "将直接复用已有构建保留的发布包；不会重新编译，也不会改动来源构建。"
   );
   $("release-existing-dialog").hidden = false;
@@ -1501,7 +1501,7 @@ function closeProfileLifecycleDialog() {
 async function openProfileLifecycleDialog(repo, profileId, mode) {
   showError();
   if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
-  if (!$("release-existing-dialog").hidden) close版本发布ExistingDialog();
+  if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
   if (!canWriteRepo(repo)) {
     showError("管理配置方案需要“仓库文件（Contents）”和“合并请求（Pull requests）”写权限。");
     return;
@@ -1592,7 +1592,7 @@ function closeBaselineProfileDialog() {
 async function openBaselineProfileDialog(repo, profileId) {
   showError();
   if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
-  if (!$("release-existing-dialog").hidden) close版本发布ExistingDialog();
+  if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
   if (!canWriteRepo(repo)) {
     showError("切换基准配置需要“仓库文件（Contents）”和“合并请求（Pull requests）”写权限。");
     return;
@@ -1685,7 +1685,7 @@ function closeDeleteProfileDialog() {
 async function openDeleteProfileDialog(repo, profileId) {
   showError();
   if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
-  if (!$("release-existing-dialog").hidden) close版本发布ExistingDialog();
+  if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
   if (!canWriteRepo(repo)) {
     showError("删除配置方案需要“仓库文件（Contents）”和“合并请求（Pull requests）”写权限。");
     return;
@@ -2019,8 +2019,8 @@ async function loadBuildDetail(runId) {
     strong.textContent = run.release.name || run.release.tag;
     const span = document.createElement("span");
     span.textContent = run.release.recovered
-      ? "恢复发布 · 打开 版本发布 ↗"
-      : "打开 版本发布 ↗";
+      ? "补发完成 · 打开版本发布 ↗"
+      : "打开版本发布 ↗";
     link.append(strong, span);
     release.appendChild(link);
   } else if (run.releaseRecoveryEligible) {
@@ -2030,7 +2030,7 @@ async function loadBuildDetail(runId) {
     const strong = document.createElement("strong");
     strong.textContent = "已有构建可直接发布";
     const span = document.createElement("span");
-    span.textContent = "复用已保留的 版本发布 bundle，不重新编译。";
+    span.textContent = "复用已保留的 发布包，不重新编译。";
     copy.append(strong, span);
 
     const button = document.createElement("button");
@@ -2039,7 +2039,7 @@ async function loadBuildDetail(runId) {
     button.textContent = "发布现有构建";
     button.disabled = !canRunRepo(repo);
     button.addEventListener("click", () => {
-      open版本发布ExistingDialog(repo, run);
+      openReleaseExistingDialog(repo, run);
     });
     recovery.append(copy, button);
     release.appendChild(recovery);
@@ -2047,15 +2047,15 @@ async function loadBuildDetail(runId) {
     const empty = document.createElement("p");
     empty.className = "muted";
     const reasons = {
-      release_bundle_missing: "本次构建没有发布 版本发布，且没有保留可恢复的 版本发布 bundle。",
-      release_bundle_expired: "本次构建的 版本发布 bundle 已过期，不能直接补发。",
-      build_not_successful: "只有成功完成的构建才能补发 版本发布。",
-      release_already_exists: "本次构建已经有关联 版本发布。"
+      release_bundle_missing: "本次构建没有发布版本，且没有保留可恢复的 发布包。",
+      release_bundle_expired: "本次构建的 发布包 已过期，不能直接补发。",
+      build_not_successful: "只有成功完成的构建才能补发版本。",
+      release_already_exists: "本次构建已经有关联版本发布。"
     };
     empty.textContent =
       run.status === "completed"
-        ? (reasons[run.releaseRecoveryReason] || "本次构建没有发布 版本发布。")
-        : "运行完成后如发布 版本发布，会在这里显示。";
+        ? (reasons[run.releaseRecoveryReason] || "本次构建没有发布版本。")
+        : "运行完成后如发布版本，会在这里显示。";
     release.appendChild(empty);
   }
 
@@ -2434,7 +2434,7 @@ async function loadDeletedProfiles(repo, selectionVersion) {
 async function loadProfiles(repo, selectionVersion, options = {}) {
   showError();
   if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
-  if (!$("release-existing-dialog").hidden) close版本发布ExistingDialog();
+  if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
   clearBuildPolling();
   editorState.loadVersion += 1;
   createState.repo = repo;
@@ -4893,7 +4893,7 @@ document.addEventListener("keydown", (event) => {
     if (!$("baseline-profile-dialog").hidden) closeBaselineProfileDialog();
     if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
     if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
-    if (!$("release-existing-dialog").hidden) close版本发布ExistingDialog();
+    if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
     if (!$("config-studio-dialog").hidden) {
       closeConfigStudio({ cleanup: false }).catch((error) => showError(error));
     }
@@ -5256,7 +5256,7 @@ $("trigger-build").addEventListener("click", async () => {
       {
         method: "POST",
         body: JSON.stringify({
-          publish版本发布:
+          publishRelease:
             buildDialogState.releaseAllowed && $("publish-release").checked
         })
       }
@@ -5587,7 +5587,7 @@ $("confirm-release-existing").addEventListener("click", async () => {
   const button = $("confirm-release-existing");
   button.disabled = true;
   button.textContent = "正在启动…";
-  set版本发布ExistingStatus("正在提交 版本发布 Existing Build 请求…");
+  setReleaseExistingStatus("正在提交补发版本任务…");
   renderActionProgressCard(
     "release-existing-progress",
     null,
@@ -5611,12 +5611,12 @@ $("confirm-release-existing").addEventListener("click", async () => {
     releaseExistingState.runId = Number(result.runId || 0);
     $("release-existing-run-link").href = result.runUrl || "#";
     $("release-existing-run-link").hidden = !result.runUrl;
-    set版本发布ExistingStatus("补发版本任务已经提交，正在等待真实运行步骤。");
+    setReleaseExistingStatus("补发版本任务已经提交，正在等待真实运行步骤。");
     button.textContent = "发布中…";
     if (releaseExistingState.runId) {
-      await poll版本发布ExistingRun(generation);
+      await pollReleaseExistingRun(generation);
     } else {
-      set版本发布ExistingStatus(
+      setReleaseExistingStatus(
         "GitHub 已接受请求，但暂时还没有返回运行 ID；可以通过 GitHub Actions 链接查看。",
         true
       );
@@ -5628,7 +5628,7 @@ $("confirm-release-existing").addEventListener("click", async () => {
       generation === releaseExistingState.generation &&
       !$("release-existing-dialog").hidden
     ) {
-      set版本发布ExistingStatus(friendlyError(error), true);
+      setReleaseExistingStatus(friendlyError(error), true);
       button.disabled = false;
       button.textContent = "重新尝试";
     }
@@ -5650,10 +5650,10 @@ $("update-checker-dialog").addEventListener("click", (event) => {
   if (event.target === $("update-checker-dialog")) closeUpdateCheckerDialog();
 });
 
-$("release-existing-close").addEventListener("click", close版本发布ExistingDialog);
-$("release-existing-cancel").addEventListener("click", close版本发布ExistingDialog);
+$("release-existing-close").addEventListener("click", closeReleaseExistingDialog);
+$("release-existing-cancel").addEventListener("click", closeReleaseExistingDialog);
 $("release-existing-dialog").addEventListener("click", (event) => {
-  if (event.target === $("release-existing-dialog")) close版本发布ExistingDialog();
+  if (event.target === $("release-existing-dialog")) closeReleaseExistingDialog();
 });
 
 $("build-dialog-close").addEventListener("click", closeBuildDialog);
@@ -5838,7 +5838,7 @@ $("config-studio-dialog").addEventListener("click", (event) => {
 $("logout").addEventListener("click", async () => {
   clearBuildPolling();
   clearUpdateCheckerPolling();
-  clear版本发布ExistingPolling();
+  clearReleaseExistingPolling();
   clearConfigStudioPolling();
   if (!$("config-studio-dialog").hidden) {
     await closeConfigStudio({ cleanup: true });
