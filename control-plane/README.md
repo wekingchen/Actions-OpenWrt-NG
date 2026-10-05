@@ -69,7 +69,7 @@ Cloudflare API Token 至少需要允许部署 Workers，并管理目标 D1 数�
 
 ### 3. 第一次部署
 
-运行 GitHub Actions 中的 **Deploy V2 Control Plane**。
+运行 GitHub Actions 中的 **Deploy V2 Control Plane（部署管理中心）**。
 
 第一次还没有 GitHub App 时，不要勾选“同步 GitHub App Secret”。工作流会：
 
@@ -97,7 +97,7 @@ TOKEN_ENCRYPTION_KEY 至少 32 个字符，用于服务端加密保存 GitHub �
 
 ### 5. 第二次部署并同步密钥
 
-再次运行 **Deploy V2 Control Plane**，这次勾选“同步 GitHub App Secret”。
+再次运行 **Deploy V2 Control Plane（部署管理中心）**，这次勾选“同步 GitHub App Secret”。
 
 工作流会把上面四个 GitHub App Secret 写入 Worker Secret。
 
@@ -124,7 +124,7 @@ TOKEN_ENCRYPTION_KEY 至少 32 个字符，用于服务端加密保存 GitHub �
 11. 手动运行一次上游更新检查。
 12. 验证构建取消和重新构建。
 
-正式仓库不建议为了测试专门制造无意义 Release。补发版本功能只在来源构建真实保留发布包时可用。
+正式仓库不建议为了测试专门制造无意义的版本发布。补发版本功能只在来源构建真实保留发布包时可用。
 
 ## 公开 Pages 的管理中心入口
 
@@ -200,7 +200,7 @@ diy-part1.sh 和 diy-part2.sh 使用可执行权限，其余文件使用普通�
 
 重命名使用一次原子提交同时创建新目录和删除旧目录。如果目标正好是当前基准配置，会在同一个提交中更新 profiles/.baseline。
 
-重命名完成后会清理旧配置关联的 Config Studio 会话。
+重命名完成后会清理旧配置关联的图形配置会话。
 
 ### 切换基准
 
@@ -216,7 +216,7 @@ diy-part1.sh 和 diy-part2.sh 使用可执行权限，其余文件使用普通�
 - 没有仍在排队或运行中的该配置构建。
 - 默认分支没有在用户确认期间发生变化。
 
-删除成功后会取消关联的活动 Config Studio Action，并删除临时 session 分支。
+删除成功后会取消关联的活动图形配置任务，并删除临时会话分支。
 
 ### 恢复
 
@@ -299,7 +299,7 @@ diy-part1.sh 和 diy-part2.sh 使用可执行权限，其余文件使用普通�
 - 来源运行属于 build-openwrt.yml。
 - 来源运行已经结束。
 - “编译 OpenWrt 固件”任务成功。
-- 当前还没有关联 Release。
+- 当前还没有关联版本发布（Release）。
 - OpenWrt_NG_release_bundle_<run_id> 仍存在且没有过期。
 
 补发会调用 release-existing.yml，直接复用原发布包，不重新编译。
@@ -356,7 +356,7 @@ control-plane/package.json 的 npm test 会覆盖：
 - API 契约。
 - 配置方案模板。
 - 配置复制、重命名、基准、删除和恢复。
-- Config Studio。
+- 图形配置。
 - 构建取消与重跑。
 - 补发已有构建。
 - 上游更新检查。
