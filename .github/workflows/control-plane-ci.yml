@@ -243,7 +243,7 @@ jobs:
         grep -q 'PROFILE_FILES_DIR' scripts/profile.sh
         ! grep -q 'emit_env FILES_DIR' scripts/profile.sh
         tmp_env="$(mktemp)"
-        GITHUB_ENV="$tmp_env" scripts/profile.sh export default >/dev/null
+        GITHUB_ENV="$tmp_env" scripts/profile.sh export "$baseline_profile" >/dev/null
         grep -q '^PROFILE_FILES_DIR=' "$tmp_env"
         grep -q '^EXTRA_FEEDS_FILE=' "$tmp_env"
         ! grep -q '^FILES_DIR=' "$tmp_env"
