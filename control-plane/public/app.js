@@ -388,7 +388,7 @@ function renderNewConfigStudioState() {
     node.textContent = "已有配置会话，可继续上次操作；不会重新生成。";
     button.textContent = "继续图形配置";
   } else if (draft?.requestId) {
-    node.textContent = "源码、feeds 或基础 .config 已变化，需要重新生成配置菜单。";
+    node.textContent = "源码、软件源（feeds）或基础 .config 已变化，需要重新生成配置菜单。";
     button.textContent = "重新生成配置菜单";
   } else if ($("new-config-text")?.value.trim()) {
     node.textContent = "已有 .config；可继续用图形界面检查或修改。";
@@ -404,7 +404,7 @@ const MAX_BUILD_POLL_ATTEMPTS = 480;
 
 const ERROR_MESSAGES = {
   control_plane_not_configured:
-    "Control Plane 尚未完成 GitHub App 配置，请先完成部署与 Secret 同步。",
+    "管理中心尚未完成 GitHub App 配置，请先完成部署并同步所需密钥。",
   authentication_required:
     "登录状态已失效，请重新使用 GitHub 登录。",
   csrf_validation_failed:
@@ -412,117 +412,117 @@ const ERROR_MESSAGES = {
   invalid_json:
     "请求内容格式无效，请刷新页面后重试。",
   invalid_profile_id:
-    "Profile ID 不符合规则，请检查目录名称。",
+    "配置 ID（配置方案 ID）不符合规则，请检查目录名称。",
   invalid_target_profile_id:
-    "新的 Profile ID 不符合规则，只能使用字母、数字、点、下划线和连字符。",
+    "新的配置 ID 不符合规则，只能使用字母、数字、点、下划线和连字符。",
   profile_target_same_as_source:
-    "新的 Profile ID 不能与当前 Profile 相同。",
+    "新的配置 ID 不能与当前配置方案相同。",
   profile_not_found:
-    "该 Profile 不存在、已移动，或当前默认分支中不可用。",
+    "这套配置方案不存在、已被移动，或当前默认分支中已经没有它。",
   profile_already_exists:
-    "这个 Profile ID 已经存在，请换一个 ID，或直接编辑已有 Profile。",
+    "这个配置 ID 已经存在，请换一个 ID，或直接编辑现有配置方案。",
   protected_profile:
-    "当前基准 Profile 不能删除。请先把另一套配置设为基准，再删除它。",
+    "当前基准配置不能删除。请先把另一套配置设为基准，再回来删除。",
   invalid_baseline_profile:
-    "仓库的基准 Profile 指针无效，请检查 profiles/.baseline 是否指向现有 Profile。",
+    "仓库记录的基准配置无效，请检查 profiles/.baseline 是否指向现有配置方案。",
   profile_build_active:
-    "这个 Profile 还有排队或运行中的构建，请等构建结束后再删除。",
+    "这套配置还有排队或运行中的构建，请先等构建结束或取消它，再删除。",
   invalid_profile_template:
-    "新 Profile 参数没有通过服务端校验。",
+    "新配置方案没有通过校验，请检查填写内容。",
   repository_head_unavailable:
     "暂时无法读取仓库默认分支的最新提交，请稍后重试。",
   repository_changed:
     "仓库默认分支在操作期间已经更新。请重新加载或重新预览，确认最新状态后再提交。",
   no_changes:
-    "当前内容与仓库一致，没有需要创建 Pull Request 的变更。",
+    "当前内容与仓库完全一致，没有需要保存的变更。",
   invalid_profile_files:
-    "Profile 文件集合不符合标准结构，已拒绝写入。",
+    "配置方案的文件结构不符合标准，已停止保存。",
   profile_file_too_large:
-    "单个 Profile 文件过大，已拒绝提交。",
+    "单个配置文件过大，已停止保存。",
   profile_payload_too_large:
-    "本次 Profile 变更总大小过大，已拒绝提交。",
+    "本次配置变更总大小过大，已停止保存。",
   github_profile_write_failed:
-    "GitHub 未能完成 Profile 分支 / Pull Request 写入。",
+    "GitHub 没能完成配置分支或合并请求（PR）的写入。",
   github_profile_delete_failed:
-    "GitHub 未能完成 Profile 删除分支 / Pull Request 写入。",
+    "GitHub 没能完成删除配置所需的分支或合并请求（PR）。",
   github_build_status_failed:
-    "暂时无法从 GitHub 读取 Builder 状态。",
+    "暂时无法从 GitHub 读取构建状态。",
   github_builder_dispatch_failed:
-    "GitHub 未能启动 Builder，请检查 Actions 权限与 workflow 是否存在。",
+    "GitHub 没能启动构建，请检查 Actions 权限以及构建工作流是否存在。",
   github_builder_control_failed:
-    "GitHub 未能完成 Builder 取消 / 重跑操作。",
+    "GitHub 没能完成取消或重新构建操作。",
   github_release_existing_failed:
-    "GitHub 未能启动 Release Existing Build。",
+    "GitHub 没能启动“补发已有构建”任务。",
   release_existing_unavailable:
-    "这个构建当前不能直接补发 Release。",
+    "这次构建当前不能直接补发版本。",
   release_existing_already_active:
-    "这个构建已经有 Release Existing 任务在运行。",
+    "这次构建已经有补发版本任务在运行。",
   release_already_exists:
-    "这个构建已经有关联 Release，不需要重复发布。",
+    "这次构建已经发布过版本，不需要重复发布。",
   release_bundle_missing:
-    "这个构建没有保留 Release bundle，无法直接补发 Release。",
+    "这次构建没有保留补发版本所需的发布包，无法直接补发。",
   release_bundle_expired:
-    "这个构建的 Release bundle 已过期，无法直接补发 Release。",
+    "这次构建保留的发布包已经过期，无法直接补发版本。",
   build_not_successful:
-    "来源 Run 必须已经结束，且“编译 OpenWrt 固件”job 必须成功，才能补发 Release。",
+    "来源运行必须已经结束，而且“编译 OpenWrt 固件”任务必须成功，才能补发版本。",
   github_update_checker_failed:
-    "GitHub 未能启动 Update Checker。",
+    "GitHub 没能启动上游更新检查。",
   update_check_already_active:
-    "当前已有 Update Checker 在运行，本次不会重复排队。",
+    "当前已有上游更新检查在运行，本次不会重复排队。",
   invalid_update_check_request:
-    "Update Checker 请求参数无效。",
+    "上游更新检查的请求参数无效，请刷新页面后重试。",
   invalid_update_check_force:
-    "Update Checker 强制选项无效。",
+    "“强制重新构建”选项无效，请刷新页面后重试。",
   github_deleted_profiles_failed:
-    "暂时无法读取最近删除的 Profile。",
+    "暂时无法读取最近删除的配置方案。",
   github_profile_restore_failed:
-    "GitHub 未能完成 Profile 恢复 Pull Request。",
+    "GitHub 没能完成恢复配置所需的合并请求（PR）。",
   invalid_deletion_commit:
-    "删除记录无效，无法恢复 Profile。",
+    "删除记录无效，无法恢复这套配置。",
   deletion_commit_mismatch:
-    "该删除记录与目标 Profile 不匹配，已拒绝恢复。",
+    "这条删除记录与目标配置不匹配，已停止恢复。",
   deleted_profile_snapshot_unavailable:
-    "删除前的 Profile 快照已经不可用。",
+    "删除前的配置快照已经不可用。",
   deleted_profile_snapshot_incomplete:
-    "删除前快照缺少标准 Profile 文件，无法安全恢复。",
+    "删除前快照缺少标准配置文件，无法安全恢复。",
   build_not_active:
     "这个构建已经不在运行，不能再取消。",
   build_not_completed:
     "这个构建尚未结束，不能重跑。",
   github_config_studio_failed:
-    "GitHub 未能启动图形配置会话，请检查 Actions / Contents 权限与 Config Studio workflow。",
+    "GitHub 没能启动图形配置，请检查 Actions、仓库文件权限以及图形配置工作流。",
   github_config_studio_apply_failed:
-    "Kconfig 已完成，但 GitHub 未能创建 Profile 配置 Pull Request。",
+    "OpenWrt 依赖解析已经完成，但 GitHub 没能创建保存配置的合并请求（PR）。",
   config_studio_session_not_found:
     "图形配置会话已经不存在，可能已完成、取消或被清理。",
   config_studio_run_active:
-    "当前图形配置仍在 Actions 中运行，请等本轮解析完成后再提交。",
+    "当前图形配置仍在运行，请等本轮依赖解析结束后再保存。",
   config_studio_not_resolved:
-    "还没有可应用的 Kconfig 解析结果，请先校验当前选择。",
+    "还没有可保存的依赖解析结果，请先完成“检查依赖”。",
   config_studio_profile_mismatch:
-    "这次图形配置会话不属于当前 Profile，已拒绝应用。",
+    "这次图形配置会话不属于当前配置方案，已停止保存。",
   invalid_config_studio_selection:
     "图形配置选择格式无效，请刷新配置目录后重试。",
   invalid_config_symbol:
-    "提交内容包含不允许的 Kconfig 符号，已拒绝处理。",
+    "提交内容包含不允许的 Kconfig 配置项，已停止处理。",
   config_studio_gzip_unavailable:
-    "当前 Control Plane 运行环境无法解压配置目录。",
+    "当前管理中心运行环境无法解压配置结果。",
   config_studio_result_invalid:
-    "Config Studio 返回的数据无法解析，请查看对应 Actions 日志。",
+    "图形配置返回的数据无法解析，请打开对应的 GitHub Actions 运行记录查看错误。",
   build_already_active:
-    "这个 Profile 已经有构建在运行，本次不会重复排队。",
+    "这套配置已经有构建在运行，本次不会重复排队。",
   invalid_build_request:
-    "Builder 请求包含不允许的字段，已拒绝执行。",
+    "构建请求包含不允许的参数，已停止执行。",
   invalid_publish_release:
-    "Release 开关值无效，请刷新页面后重试。",
+    "版本发布开关状态无效，请刷新页面后重试。",
   not_builder_run:
-    "该 Actions Run 不是 OpenWrt NG Builder 运行。",
+    "这条 GitHub Actions 运行记录不是 OpenWrt NG 构建任务。",
   github_oauth_exchange_failed:
     "GitHub 登录授权交换失败，请重新登录。",
   github_user_lookup_failed:
     "GitHub 登录成功，但暂时无法读取用户信息。",
   internal_error:
-    "Control Plane 发生内部错误，请稍后重试。"
+    "管理中心发生内部错误，请稍后重试。"
 };
 
 const REASON_MESSAGES = {
@@ -578,7 +578,7 @@ function showWriteResult(message = "", url = "") {
     link.href = url;
     link.target = "_blank";
     link.rel = "noreferrer";
-    link.textContent = "打开 Pull Request";
+    link.textContent = "打开合并请求（PR）";
     node.append(link);
   }
 }
@@ -601,7 +601,7 @@ function showNewProfileResult(message = "", url = "") {
     link.href = url;
     link.target = "_blank";
     link.rel = "noreferrer";
-    link.textContent = "打开 Pull Request";
+    link.textContent = "打开合并请求（PR）";
     node.append(link);
   }
 }
@@ -618,7 +618,7 @@ function showProfileListResult(message = "", url = "") {
     link.href = url;
     link.target = "_blank";
     link.rel = "noreferrer";
-    link.textContent = "打开 Pull Request";
+    link.textContent = "打开合并请求（PR）";
     node.append(link);
   }
 }
@@ -649,13 +649,13 @@ function configStudioCleanupNote(cleanup) {
     `发现 ${found} 个关联图形配置会话`,
     `已删除 ${deleted} 个会话分支`
   ];
-  if (lookupFailed) details.push("活动 Action 查询失败");
-  if (cancelFailed) details.push(`${cancelFailed} 个 Action 取消失败`);
+  if (lookupFailed) details.push("运行任务查询失败");
+  if (cancelFailed) details.push(`${cancelFailed}  个运行任务取消失败`);
   if (branchFailed) details.push(`${branchFailed} 个会话分支删除失败`);
-  return "；" + details.join("，") + "，请检查 Actions / 临时分支";
+  return "；" + details.join("，") + "，请检查 GitHub Actions 和临时分支";
 }
 
-function profileWriteResultMessage(result, subject = "Profile") {
+function profileWriteResultMessage(result, subject = "配置方案") {
   const pull = result?.pullRequest || {};
   const number = Number(pull.number || 0);
   if (pull.merged) {
@@ -671,7 +671,7 @@ function profileWriteResultMessage(result, subject = "Profile") {
       : "";
     return (
       subject +
-      " 已通过 PR #" +
+      " 已通过合并请求（PR）#" +
       number +
       " 自动合并到默认分支" +
       branchNote +
@@ -683,18 +683,18 @@ function profileWriteResultMessage(result, subject = "Profile") {
   if (pull.autoMergeEnabled && pull.mergePolicy === "after-checks") {
     return (
       subject +
-      " 已创建 PR #" +
+      " 已创建合并请求（PR）#" +
       number +
-      "，并已启用 GitHub Auto-merge；满足仓库必需检查与审核后会自动 squash 合并。"
+      "，已启用 GitHub 自动合并；等仓库要求的检查和审核通过后会自动合并。"
     );
   }
 
   if (pull.mergePolicy === "manual" || pull.mergeReason === "manual_review_required") {
     return (
       subject +
-      " 已创建 PR #" +
+      " 已创建合并请求（PR）#" +
       number +
-      "；当前策略为 manual，不会自动合并。请在 GitHub 审核后手动合并。"
+      "；当前设置为人工合并，请到 GitHub 审核并手动合并。"
     );
   }
 
@@ -703,15 +703,15 @@ function profileWriteResultMessage(result, subject = "Profile") {
     pull.mergeReason === "github_http_409"
       ? "仓库规则、必需检查或分支状态暂时阻止了自动合并"
       : pull.mergePolicy === "after-checks"
-        ? "GitHub Auto-merge 未能启用"
+        ? "GitHub 自动合并未能启用"
         : "自动合并未完成";
   return (
     subject +
-    " 已创建 PR #" +
+    " 已创建合并请求（PR）#" +
     number +
     "，但" +
     reason +
-    "。PR 与临时分支已保留，请打开 PR 处理。"
+    "。合并请求（PR）和临时分支已经保留，请打开 PR 处理。"
   );
 }
 
@@ -846,7 +846,7 @@ function openNewProfileForm() {
   const repo = createState.repo;
   if (!repo || !canWriteRepo(repo)) {
     showError(
-      "新建 Profile 需要 Contents 与 Pull requests 写权限，请先调整 GitHub App。"
+      "新建配置方案需要“仓库文件（Contents）”和“合并请求（Pull requests）”写权限，请先调整 GitHub App。"
     );
     return;
   }
@@ -854,7 +854,7 @@ function openNewProfileForm() {
   resetNewProfileForm();
   $("editor-card").hidden = true;
   $("new-profile-card").hidden = false;
-  $("new-profile-title").textContent = repo.fullName + " · 新建配置";
+  $("new-profile-title").textContent = repo.fullName + " · 新建配置方案";
   showControlPlaneView("profiles");
   setActiveNavigation("profiles");
   scrollToPanel($("new-profile-card"));
@@ -945,15 +945,15 @@ function canWriteRepo(repo) {
 }
 
 function repositoryCapabilityText(repo) {
-  const read = canReadRepo(repo) ? "Profile 可读取" : "缺少 Contents";
-  const edit = canWriteRepo(repo) ? "可编辑 / PR" : "编辑只读";
-  const build = canRunRepo(repo) ? "Builder 可运行" : "Builder 不可运行";
+  const read = canReadRepo(repo) ? "配置可读取" : "缺少仓库文件权限";
+  const edit = canWriteRepo(repo) ? "可编辑 / 可保存" : "只读";
+  const build = canRunRepo(repo) ? "可构建" : "不可构建";
   return [read, edit, build].join(" · ");
 }
 
 function updateRepositoryContext(repo) {
   $("repo-meta-line").hidden = false;
-  $("repo-visibility").textContent = repo.private ? "Private" : "Public";
+  $("repo-visibility").textContent = repo.private ? "私有仓库" : "公开仓库";
   $("repo-branch").textContent = repo.defaultBranch;
   const ready = canWriteRepo(repo) && canRunRepo(repo);
   $("repo-capability").textContent = ready ? "完整能力" : "权限受限";
@@ -1062,7 +1062,7 @@ function buildProfileId(run) {
   const title = String(run.displayTitle || "");
   const parts = title.split(" · ").map((item) => item.trim()).filter(Boolean);
   if (parts[0] === "Build" && parts[1]) return parts[1];
-  return parts.find((part) => !part.startsWith("cp:") && part !== "Build") || "unknown";
+  return parts.find((part) => !part.startsWith("cp:") && part !== "Build") || "未知配置";
 }
 
 function parseProfileReleasePolicy(content) {
@@ -1116,7 +1116,7 @@ async function openBuildDialog(repo, profileId) {
   $("build-dialog-repo").textContent = repo.fullName;
   $("publish-release").checked = false;
   $("publish-release").disabled = true;
-  $("publish-release-help").textContent = "正在读取 Profile 发布策略…";
+  $("publish-release-help").textContent = "正在读取这套配置的发布设置…";
   $("trigger-build").disabled = true;
   setBuildDialogStatus();
   $("build-dialog").hidden = false;
@@ -1141,12 +1141,12 @@ async function openBuildDialog(repo, profileId) {
     buildDialogState.releaseAllowed = releaseAllowed;
     $("publish-release").disabled = !releaseAllowed;
     $("publish-release-help").textContent = releaseAllowed
-      ? "Profile 允许发布；开启后仅影响本次构建。"
-      : "此 Profile 的 UPLOAD_RELEASE=false，本次不能发布 Release。";
+      ? "这套配置允许发布版本；这里的开关只影响本次构建。"
+      : "这套配置已关闭版本发布（UPLOAD_RELEASE=false），本次构建不能创建版本发布。";
 
     if (!canRunRepo(repo)) {
       $("trigger-build").disabled = true;
-      setBuildDialogStatus("当前 GitHub App 没有 Actions 写权限，不能发起构建。", true);
+      setBuildDialogStatus("当前 GitHub App 没有 Actions 写权限，无法启动构建。", true);
     } else {
       $("trigger-build").disabled = false;
     }
@@ -1220,9 +1220,9 @@ async function pollUpdateCheckerRun(generation) {
       {
         force: true,
         runningTitle: "正在检查上游",
-        runningDetail: "进度来自 Update Checker 的真实 GitHub Actions 步骤。",
-        waitingTitle: "等待 Update Checker",
-        waitingDetail: "运行记录已经建立，正在等待 Runner 开始。"
+        runningDetail: "进度来自本次上游更新检查的真实 GitHub Actions 步骤。",
+        waitingTitle: "等待上游更新检查",
+        waitingDetail: "运行记录已经建立，正在等待 GitHub 执行器开始。"
       }
     );
     $("update-checker-run-link").href = run.url || "#";
@@ -1233,8 +1233,8 @@ async function pollUpdateCheckerRun(generation) {
       const ok = run.conclusion === "success";
       setUpdateCheckerStatus(
         ok
-          ? "更新检查完成；如发现需要处理的新上游状态，已按现有规则触发对应 Builder。"
-          : `更新检查结束：${buildStatusLabel(run)}。请打开 Actions 查看失败步骤。`,
+          ? "更新检查完成；如果发现新的上游状态，已按现有规则启动对应构建。"
+          : `更新检查结束：${buildStatusLabel(run)}。请打开 GitHub Actions 运行记录查看失败步骤。`,
         !ok
       );
       $("confirm-update-checker").disabled = false;
@@ -1242,7 +1242,7 @@ async function pollUpdateCheckerRun(generation) {
       return;
     }
 
-    setUpdateCheckerStatus("Update Checker 正在运行，页面会自动刷新真实步骤。");
+    setUpdateCheckerStatus("上游更新检查正在运行，页面会自动刷新真实步骤。");
     updateCheckerState.pollTimer = setTimeout(
       () => pollUpdateCheckerRun(generation),
       2500
@@ -1263,7 +1263,7 @@ async function pollUpdateCheckerRun(generation) {
 async function openUpdateCheckerDialog(repo, profileId = "") {
   showError();
   if (!canRunRepo(repo)) {
-    showError("当前 GitHub App 没有 Actions 写权限，不能手动触发 Update Checker。");
+    showError("当前 GitHub App 没有 Actions 写权限，无法手动检查上游更新。");
     return;
   }
   if (!$("build-dialog").hidden) closeBuildDialog();
@@ -1283,10 +1283,10 @@ async function openUpdateCheckerDialog(repo, profileId = "") {
   $("update-checker-repo").textContent = repo.fullName;
   $("update-checker-force").checked = false;
   $("confirm-update-checker").disabled = true;
-  $("confirm-update-checker").textContent = "正在读取 Profile…";
+  $("confirm-update-checker").textContent = "正在读取配置方案…";
   $("update-checker-run-link").hidden = true;
   renderActionProgressCard("update-checker-progress", null, null);
-  setUpdateCheckerStatus("正在读取可检查的 Profile…");
+  setUpdateCheckerStatus("正在读取可检查的配置方案…");
   $("update-checker-dialog").hidden = false;
   document.body.classList.add("dialog-open");
 
@@ -1304,7 +1304,7 @@ async function openUpdateCheckerDialog(repo, profileId = "") {
     select.replaceChildren();
     const all = document.createElement("option");
     all.value = "";
-    all.textContent = "全部 AUTO_UPDATE=true Profile";
+    all.textContent = "全部已开启自动更新的配置";
     select.appendChild(all);
     for (const profile of data.profiles || []) {
       const option = document.createElement("option");
@@ -1317,8 +1317,8 @@ async function openUpdateCheckerDialog(repo, profileId = "") {
       : "";
     setUpdateCheckerStatus(
       profileId
-        ? `将检查 ${profileId}；指定 Profile 时不受 AUTO_UPDATE 开关限制。`
-        : "将检查所有 AUTO_UPDATE=true 的 Profile。"
+        ? `将检查 ${profileId}；指定单个配置方案时不受“自动更新”开关限制。`
+        : "将检查所有已开启自动更新的配置方案。"
     );
     $("confirm-update-checker").disabled = false;
     $("confirm-update-checker").textContent = "开始检查";
@@ -1392,10 +1392,10 @@ async function pollReleaseExistingRun(generation) {
       run,
       {
         force: true,
-        runningTitle: "正在补发 Release",
-        runningDetail: "正在复用已有 Build 的 Release bundle。",
-        waitingTitle: "等待 Release Runner",
-        waitingDetail: "恢复发布任务已经建立，正在等待 Runner。"
+        runningTitle: "正在补发版本",
+        runningDetail: "正在复用已有构建保留的发布包。",
+        waitingTitle: "等待版本发布任务",
+        waitingDetail: "补发版本任务已经建立，正在等待 GitHub 执行器。"
       }
     );
     $("release-existing-run-link").href = run.url || "#";
@@ -1406,8 +1406,8 @@ async function pollReleaseExistingRun(generation) {
       const ok = run.conclusion === "success";
       setReleaseExistingStatus(
         ok
-          ? "Release Existing Build 已完成；正在刷新来源构建的 Release 信息。"
-          : `恢复发布结束：${buildStatusLabel(run)}。请打开 Actions 查看失败步骤。`,
+          ? "补发版本已经完成，正在刷新来源构建的发布信息。"
+          : `补发版本结束：${buildStatusLabel(run)}。请打开 GitHub Actions 运行记录查看失败步骤。`,
         !ok
       );
       $("confirm-release-existing").disabled = ok;
@@ -1419,7 +1419,7 @@ async function pollReleaseExistingRun(generation) {
       return;
     }
 
-    setReleaseExistingStatus("正在从已有构建补发 Release，页面会自动刷新真实步骤。");
+    setReleaseExistingStatus("正在从已有构建补发版本，页面会自动刷新真实步骤。");
     releaseExistingState.pollTimer = setTimeout(
       () => pollReleaseExistingRun(generation),
       2500
@@ -1440,7 +1440,7 @@ async function pollReleaseExistingRun(generation) {
 function openReleaseExistingDialog(repo, run) {
   showError();
   if (!canRunRepo(repo)) {
-    showError("当前 GitHub App 没有 Actions 写权限，不能补发 Release。");
+    showError("当前 GitHub App 没有 Actions 写权限，无法补发版本。");
     return;
   }
   if (!run?.releaseRecoveryEligible) {
@@ -1468,7 +1468,7 @@ function openReleaseExistingDialog(repo, run) {
   $("release-existing-run-link").hidden = true;
   renderActionProgressCard("release-existing-progress", null, null);
   setReleaseExistingStatus(
-    "将直接复用已有 Release bundle；不会重新编译，也不会改变来源 Build。"
+    "将直接复用已有构建保留的发布包；不会重新编译，也不会改动来源构建。"
   );
   $("release-existing-dialog").hidden = false;
   document.body.classList.add("dialog-open");
@@ -1503,7 +1503,7 @@ async function openProfileLifecycleDialog(repo, profileId, mode) {
   if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
   if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
   if (!canWriteRepo(repo)) {
-    showError("需要 Contents 与 Pull requests 写权限才能管理 Profile。");
+    showError("管理配置方案需要“仓库文件（Contents）”和“合并请求（Pull requests）”写权限。");
     return;
   }
   if (!["copy", "rename"].includes(mode)) return;
@@ -1527,7 +1527,7 @@ async function openProfileLifecycleDialog(repo, profileId, mode) {
   $("profile-lifecycle-repo").textContent = repo.fullName;
   $("profile-lifecycle-source").textContent = profileId;
   $("profile-lifecycle-target-label").textContent =
-    copying ? "新 Profile ID" : "新的 Profile ID";
+    copying ? "新配置 ID" : "新的配置 ID";
   $("profile-lifecycle-target").value = copying ? `${profileId}-copy` : profileId;
   $("confirm-profile-lifecycle").disabled = true;
   $("confirm-profile-lifecycle").textContent = "正在校验…";
@@ -1550,7 +1550,7 @@ async function openProfileLifecycleDialog(repo, profileId, mode) {
       copying
         ? "复制会保留 7 个标准文件内容，并把内部 profiles/<旧ID>/ 路径改为新 ID。"
         : data.profile?.baseline
-          ? "这是当前基准 Profile；重命名会在同一个 commit 中同步更新 profiles/.baseline。"
+          ? "这是当前基准配置；重命名时会在同一次提交中同步更新 profiles/.baseline。"
           : "重命名会在同一个 commit 中写入新目录并删除旧目录。"
     );
     $("confirm-profile-lifecycle").disabled = false;
@@ -1594,7 +1594,7 @@ async function openBaselineProfileDialog(repo, profileId) {
   if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
   if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
   if (!canWriteRepo(repo)) {
-    showError("需要 Contents 与 Pull requests 写权限才能切换基准 Profile。");
+    showError("切换基准配置需要“仓库文件（Contents）”和“合并请求（Pull requests）”写权限。");
     return;
   }
   if (!$("build-dialog").hidden) closeBuildDialog();
@@ -1636,14 +1636,14 @@ async function openBaselineProfileDialog(repo, profileId) {
     }
 
     if (data.profile?.baseline) {
-      setBaselineProfileStatus("这套配置已经是当前基准 Profile。");
+      setBaselineProfileStatus("这套配置已经是当前基准。");
       $("confirm-baseline-profile").textContent = "已是基准";
       return;
     }
 
     baselineProfileState.baseRefSha = data.baseRefSha || "";
     setBaselineProfileStatus(
-      "切换会创建独立 PR；自动合并后，未显式指定 Profile 的入口会使用这套配置。"
+      "切换会创建独立合并请求（PR）；合并后，没有明确指定配置 ID 的入口都会使用这套基准配置。"
     );
     $("confirm-baseline-profile").disabled = false;
     $("confirm-baseline-profile").textContent = "设为基准";
@@ -1687,7 +1687,7 @@ async function openDeleteProfileDialog(repo, profileId) {
   if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
   if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
   if (!canWriteRepo(repo)) {
-    showError("需要 Contents 与 Pull requests 写权限才能删除 Profile。");
+    showError("删除配置方案需要“仓库文件（Contents）”和“合并请求（Pull requests）”写权限。");
     return;
   }
   if (!$("build-dialog").hidden) closeBuildDialog();
@@ -1737,10 +1737,10 @@ async function openDeleteProfileDialog(repo, profileId) {
 
     deleteProfileState.baseRefSha = data.baseRefSha || "";
     setDeleteProfileStatus(
-      "删除会创建独立 PR；自动合并成功后此 Profile 将从默认分支移除。"
+      "删除会创建独立合并请求（PR）；合并成功后，这套配置会从默认分支移除。"
     );
     $("confirm-delete-profile").disabled = false;
-    $("confirm-delete-profile").textContent = "创建删除 PR";
+    $("confirm-delete-profile").textContent = "确认删除";
   } catch (error) {
     if (
       requestVersion !== deleteProfileState.requestVersion ||
@@ -1749,7 +1749,7 @@ async function openDeleteProfileDialog(repo, profileId) {
       return;
     }
     $("confirm-delete-profile").disabled = true;
-    $("confirm-delete-profile").textContent = "创建删除 PR";
+    $("confirm-delete-profile").textContent = "确认删除";
     setDeleteProfileStatus(friendlyError(error), true);
   }
 }
@@ -1867,7 +1867,7 @@ function renderBuildRows(root, runs, options = {}) {
       cancel.className = "build-record-action danger-action";
       cancel.textContent = "取消";
       cancel.disabled = !canRunRepo(buildState.repo || currentRepository());
-      cancel.title = cancel.disabled ? "需要 Actions 写权限" : "取消这次构建";
+      cancel.title = cancel.disabled ? "需要 GitHub Actions 写权限" : "取消这次构建";
       cancel.addEventListener("click", () => {
         controlBuilderRun(run, "cancel", cancel).catch((error) => showError(error));
       });
@@ -1878,7 +1878,7 @@ function renderBuildRows(root, runs, options = {}) {
       rerun.className = "build-record-action";
       rerun.textContent = "重跑";
       rerun.disabled = !canRunRepo(buildState.repo || currentRepository());
-      rerun.title = rerun.disabled ? "需要 Actions 写权限" : "完整重跑这次 Builder";
+      rerun.title = rerun.disabled ? "需要 GitHub Actions 写权限" : "重新执行这次构建";
       rerun.addEventListener("click", () => {
         controlBuilderRun(run, "rerun", rerun).catch((error) => showError(error));
       });
@@ -1905,7 +1905,7 @@ function renderBuildRows(root, runs, options = {}) {
     actionLink.href = run.url;
     actionLink.target = "_blank";
     actionLink.rel = "noreferrer";
-    actionLink.textContent = "Actions ↗";
+    actionLink.textContent = "查看运行记录 ↗";
     actions.appendChild(actionLink);
 
     row.append(main, actions);
@@ -1937,7 +1937,7 @@ async function loadBuildDetail(runId) {
       runningTitle: "构建进行中",
       runningDetail: "进度来自本次 GitHub Actions 的真实步骤。",
       waitingTitle: "等待构建步骤",
-      waitingDetail: "GitHub Job 建立后会自动显示实际构建阶段。"
+      waitingDetail: "GitHub 任务建立后会自动显示实际构建阶段。"
     }
   );
 
@@ -1964,8 +1964,8 @@ async function loadBuildDetail(runId) {
       const span = document.createElement("span");
       span.textContent =
         job.status === "completed"
-          ? (job.conclusion || "completed")
-          : job.status;
+          ? buildStatusLabel(job)
+          : buildStatusLabel(job);
       row.append(strong, span);
       jobs.appendChild(row);
     }
@@ -1982,8 +1982,8 @@ async function loadBuildDetail(runId) {
     const empty = document.createElement("p");
     empty.className = "muted";
     empty.textContent = run.status === "completed"
-      ? "本次运行没有可下载的 Artifact。"
-      : "构建完成后将在这里显示固件 Artifact。";
+      ? "本次运行没有可下载的构建产物。"
+      : "构建完成后会在这里显示可下载的固件产物。";
     artifacts.appendChild(empty);
   } else {
     for (const artifact of availableArtifacts) {
@@ -2006,7 +2006,7 @@ async function loadBuildDetail(runId) {
   const release = $("build-release");
   release.replaceChildren();
   const releaseTitle = document.createElement("h4");
-  releaseTitle.textContent = "Release";
+  releaseTitle.textContent = "版本发布";
   release.appendChild(releaseTitle);
 
   if (run.release) {
@@ -2019,8 +2019,8 @@ async function loadBuildDetail(runId) {
     strong.textContent = run.release.name || run.release.tag;
     const span = document.createElement("span");
     span.textContent = run.release.recovered
-      ? "恢复发布 · 打开 Release ↗"
-      : "打开 Release ↗";
+      ? "补发完成 · 打开版本发布 ↗"
+      : "打开版本发布 ↗";
     link.append(strong, span);
     release.appendChild(link);
   } else if (run.releaseRecoveryEligible) {
@@ -2030,7 +2030,7 @@ async function loadBuildDetail(runId) {
     const strong = document.createElement("strong");
     strong.textContent = "已有构建可直接发布";
     const span = document.createElement("span");
-    span.textContent = "复用已保留的 Release bundle，不重新编译。";
+    span.textContent = "复用已保留的发布包，不重新编译。";
     copy.append(strong, span);
 
     const button = document.createElement("button");
@@ -2047,15 +2047,15 @@ async function loadBuildDetail(runId) {
     const empty = document.createElement("p");
     empty.className = "muted";
     const reasons = {
-      release_bundle_missing: "本次构建没有发布 Release，且没有保留可恢复的 Release bundle。",
-      release_bundle_expired: "本次构建的 Release bundle 已过期，不能直接补发。",
-      build_not_successful: "只有成功完成的构建才能补发 Release。",
-      release_already_exists: "本次构建已经有关联 Release。"
+      release_bundle_missing: "本次构建没有发布版本，也没有保留可用于补发的发布包。",
+      release_bundle_expired: "本次构建保留的发布包已经过期，不能直接补发。",
+      build_not_successful: "只有成功完成的构建才能补发版本。",
+      release_already_exists: "本次构建已经有关联版本发布。"
     };
     empty.textContent =
       run.status === "completed"
-        ? (reasons[run.releaseRecoveryReason] || "本次构建没有发布 Release。")
-        : "运行完成后如发布 Release，会在这里显示。";
+        ? (reasons[run.releaseRecoveryReason] || "本次构建没有发布版本。")
+        : "运行完成后如发布版本，会在这里显示。";
     release.appendChild(empty);
   }
 
@@ -2151,7 +2151,7 @@ async function loadBuildRuns(options = {}) {
       {
         force: true,
         waitingTitle: "等待 GitHub 同步运行记录",
-        waitingDetail: "已经拿到 Run ID；GitHub 列表接口同步后会自动显示真实构建步骤。"
+        waitingDetail: "已经拿到运行 ID；GitHub 同步完成后会自动显示真实构建步骤。"
       }
     );
     showBuildResult("构建已建立，正在等待 GitHub 同步运行详情。");
@@ -2230,7 +2230,7 @@ async function setupBuildHistory(repo) {
   if (!canReadActions(repo)) {
     renderBuildHistoryState(
       "无法读取构建历史",
-      "GitHub App 需要 Actions 读取权限。"
+      "GitHub App 需要 Actions 读取权限才能显示构建历史。"
     );
     return;
   }
@@ -2282,7 +2282,7 @@ async function openProfile(repo, profileId, options = {}) {
   $("editor-card").hidden = false;
   $("editor-title").textContent = `编辑配置 · ${profileId}`;
   $("editor-meta").textContent =
-    `基线：${data.defaultBranch}@${data.baseRefSha.slice(0, 12)} · 保存时创建独立 PR 并自动合并；受仓库规则阻止时保留 PR`;
+    `基线：${data.defaultBranch}@${data.baseRefSha.slice(0, 12)} · 保存时创建独立合并请求（PR）并按仓库策略合并；受规则阻止时会保留 PR`;
 
   const select = $("file-select");
   select.replaceChildren();
@@ -2297,8 +2297,8 @@ async function openProfile(repo, profileId, options = {}) {
 
   const writeReady = canWriteRepo(repo);
   $("write-permission").textContent = writeReady
-    ? "可创建 PR"
-    : "只读：需 Contents + Pull requests 写权限";
+    ? "可保存变更"
+    : "只读：需要仓库文件和合并请求写权限";
   $("preview-change").disabled = !writeReady;
   $("editor-content").readOnly = !writeReady;
   $("create-pr").disabled = true;
@@ -2315,7 +2315,7 @@ async function openProfile(repo, profileId, options = {}) {
 
 async function restoreDeletedProfile(repo, profile, button) {
   if (!canWriteRepo(repo)) {
-    showError("需要 Contents 与 Pull requests 写权限才能恢复 Profile。");
+    showError("恢复配置方案需要“仓库文件（Contents）”和“合并请求（Pull requests）”写权限。");
     return;
   }
   const original = button.textContent;
@@ -2334,7 +2334,7 @@ async function restoreDeletedProfile(repo, profile, button) {
     );
     const resultMessage = profileWriteResultMessage(
       result,
-      "Profile " + profile.id + " 恢复"
+      "配置方案 " + profile.id + " 恢复"
     );
     if (repositoryState.selectedFullName === repo.fullName) {
       await loadProfiles(repo, repositoryState.selectionVersion, {
@@ -2368,7 +2368,7 @@ async function loadDeletedProfiles(repo, selectionVersion) {
       selectionVersion !== repositoryState.selectionVersion ||
       repositoryState.selectedFullName !== repo.fullName
     ) return;
-    console.warn("Deleted Profile history unavailable", error);
+    console.warn("Deleted profile history unavailable", error);
     return;
   }
 
@@ -2407,7 +2407,7 @@ async function loadDeletedProfiles(repo, selectionVersion) {
     restore.textContent = "恢复";
     restore.disabled = !canWriteRepo(repo);
     restore.title = restore.disabled
-      ? "需要 Contents 与 Pull requests 写权限"
+      ? "需要仓库文件（Contents）和合并请求（Pull requests）写权限"
       : "从删除前快照恢复 7 个标准文件";
     restore.addEventListener("click", () => {
       restoreDeletedProfile(repo, profile, restore)
@@ -2452,19 +2452,19 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
 
   $("new-profile-open").disabled = !canWriteRepo(repo);
   $("new-profile-open").title = canWriteRepo(repo)
-    ? "通过 Pull Request 新建标准 Profile"
-    : "需要 Contents 与 Pull requests 写权限";
+    ? "通过合并请求（PR）新建标准配置方案"
+    : "需要仓库文件（Contents）和合并请求（Pull requests）写权限";
   $("update-checker-open").disabled = !canRunRepo(repo);
   $("update-checker-open").title = canRunRepo(repo)
-    ? "手动触发 OpenWrt NG Update Checker"
+    ? "手动检查 OpenWrt 上游更新"
     : "需要 Actions 写权限";
 
   $("profile-card").hidden = false;
-  $("profile-title").textContent = "配置";
+  $("profile-title").textContent = "配置方案";
   const root = $("profiles");
   showProfileListResult();
   root.replaceChildren(
-    buildStateMessage("正在读取配置", "正在从当前仓库读取 Profile…")
+    buildStateMessage("正在读取配置", "正在从当前仓库读取配置方案…")
   );
 
   let data;
@@ -2504,7 +2504,7 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
     const title = document.createElement("strong");
     title.textContent = "还没有配置";
     const detail = document.createElement("span");
-    detail.textContent = "新建一套标准 Profile 配置后即可开始构建。";
+    detail.textContent = "新建一套标准配置方案后即可开始构建。";
     empty.append(title, detail);
     root.appendChild(empty);
   } else {
@@ -2573,7 +2573,7 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
       updateButton.disabled = !canRunRepo(repo);
       updateButton.title = updateButton.disabled
         ? "需要 Actions 写权限"
-        : `手动运行 Update Checker · ${profile.id}`;
+        : `手动检查上游更新 · ${profile.id}`;
       updateButton.addEventListener("click", () => {
         openUpdateCheckerDialog(repo, profile.id)
           .catch((error) => showError(error));
@@ -2588,7 +2588,7 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
       copyButton.disabled = !canWriteRepo(repo);
       copyButton.title = canWriteRepo(repo)
         ? `复制 ${profile.id}`
-        : "需要 Contents 与 Pull requests 写权限";
+        : "需要仓库文件（Contents）和合并请求（Pull requests）写权限";
       copyButton.addEventListener("click", () => {
         openProfileLifecycleDialog(repo, profile.id, "copy")
           .catch((error) => showError(error));
@@ -2603,7 +2603,7 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
       renameButton.disabled = !canWriteRepo(repo);
       renameButton.title = canWriteRepo(repo)
         ? `重命名 ${profile.id}`
-        : "需要 Contents 与 Pull requests 写权限";
+        : "需要仓库文件（Contents）和合并请求（Pull requests）写权限";
       renameButton.addEventListener("click", () => {
         openProfileLifecycleDialog(repo, profile.id, "rename")
           .catch((error) => showError(error));
@@ -2620,10 +2620,10 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
       );
       baselineButton.disabled = Boolean(profile.baseline) || !canWriteRepo(repo);
       baselineButton.title = profile.baseline
-        ? "当前基准 Profile"
+        ? "当前基准配置"
         : canWriteRepo(repo)
-          ? `将 ${profile.id} 设为基准 Profile`
-          : "需要 Contents 与 Pull requests 写权限";
+          ? `将 ${profile.id} 设为基准配置`
+          : "需要仓库文件（Contents）和合并请求（Pull requests）写权限";
       baselineButton.addEventListener("click", () => {
         openBaselineProfileDialog(repo, profile.id).catch((error) => showError(error));
       });
@@ -2636,10 +2636,10 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
       deleteButton.setAttribute("aria-label", `删除 ${profile.id}`);
       deleteButton.disabled = Boolean(profile.baseline) || !canWriteRepo(repo);
       deleteButton.title = profile.baseline
-        ? "当前基准 Profile 不可删除，请先切换基准"
+        ? "当前基准配置不能删除，请先切换基准"
         : canWriteRepo(repo)
           ? `删除 ${profile.id}`
-          : "需要 Contents 与 Pull requests 写权限";
+          : "需要仓库文件（Contents）和合并请求（Pull requests）写权限";
       deleteButton.addEventListener("click", () => {
         openDeleteProfileDialog(repo, profile.id).catch((error) => showError(error));
       });
@@ -2720,10 +2720,10 @@ function resetConfigStudioProgress(mode = "catalog") {
   const resolving = mode === "resolve";
   $("config-studio-progress-title").textContent = resolving
     ? "等待依赖检查任务"
-    : "等待 GitHub Runner";
+    : "等待 GitHub 执行器";
   $("config-studio-progress-detail").textContent = resolving
-    ? "正在等待新的 resolve Action 建立运行记录。"
-    : "正在建立本次配置任务，随后会显示真实 Action 步骤。";
+    ? "正在等待新的依赖检查运行记录。"
+    : "正在建立本次配置任务，随后会显示真实运行步骤。";
   $("config-studio-progress-count").textContent = "准备中";
   $("config-studio-progress-elapsed").textContent = "";
   $("config-studio-progress-bar").style.width = "0%";
@@ -2744,10 +2744,10 @@ function renderConfigStudioProgress(progress, run, mode = "catalog") {
   const current = progress.failed || progress.current || "处理中";
   $("config-studio-progress-title").textContent = current;
   $("config-studio-progress-detail").textContent = progress.failed
-    ? "后台步骤失败，请展开“后台运行详情”查看 Actions 日志。"
+    ? "后台步骤失败，请展开“后台运行详情”查看 GitHub Actions 日志。"
     : current === "更新 Feeds" || current === "安装 Feeds"
-      ? "Feeds 数量较多时这一阶段通常最久；页面会继续自动更新。"
-      : "进度来自当前 GitHub Actions 的真实 job steps。";
+      ? "软件源较多时这一阶段通常最久；页面会继续自动更新。"
+      : "进度来自当前 GitHub Actions 的真实任务步骤。";
   $("config-studio-progress-count").textContent =
     `已完成 ${progress.completed} / ${progress.total} 步`;
   $("config-studio-progress-elapsed").textContent =
@@ -2811,7 +2811,7 @@ function renderActionProgressCard(rootId, progress, run, options = {}) {
       progress.failed || progress.current || options.runningTitle || "处理中";
     if (progress.failed) {
       detail.textContent =
-        `失败步骤：${progress.currentDetail || progress.failed}。可打开 Actions 查看日志。`;
+        `失败步骤：${progress.currentDetail || progress.failed}。可以打开 GitHub Actions 查看日志。`;
     } else if (progress.currentDetail && progress.currentDetail !== progress.current) {
       detail.textContent = `当前 GitHub 步骤：${progress.currentDetail}`;
     } else {
@@ -2819,7 +2819,7 @@ function renderActionProgressCard(rootId, progress, run, options = {}) {
         options.runningDetail || "进度来自当前 GitHub Actions 的真实步骤。";
     }
   } else {
-    title.textContent = options.waitingTitle || "等待 GitHub Runner";
+    title.textContent = options.waitingTitle || "等待 GitHub 执行器";
     detail.textContent =
       options.waitingDetail || "运行记录建立后会自动显示真实步骤。";
   }
@@ -2832,7 +2832,7 @@ function renderActionProgressCard(rootId, progress, run, options = {}) {
     link.href = run.url;
     link.target = "_blank";
     link.rel = "noreferrer";
-    link.textContent = "Actions ↗";
+    link.textContent = "查看运行记录 ↗";
     head.appendChild(link);
   }
   root.appendChild(head);
@@ -2983,7 +2983,7 @@ function renderConfigStudioTargetSelectors() {
   if (!devices.length) {
     const option = document.createElement("option");
     option.value = "";
-    option.textContent = "Default";
+    option.textContent = "默认";
     deviceSelect.appendChild(option);
   } else {
     for (const device of devices) {
@@ -3774,12 +3774,12 @@ function configStudioPackageChoice(pkg, prompt, options) {
   const strong = document.createElement("strong");
   strong.textContent = prompt || "单选配置";
   const badge = document.createElement("span");
-  badge.textContent = "choice";
+  badge.textContent = "单选组";
   title.append(strong, badge);
 
   const meta = document.createElement("small");
   meta.textContent =
-    "与传统 menuconfig 的 choice 一致：同组只能选择一个值。";
+    "与 OpenWrt 配置菜单的单选组一致：同一组只能选择一个值。";
   copy.append(title, meta);
 
   const select = document.createElement("select");
@@ -3936,7 +3936,7 @@ function renderConfigStudioPackages() {
     const empty = document.createElement("div");
     empty.className = "config-studio-empty config-studio-menu-hint";
     empty.textContent =
-      "像传统 menuconfig 一样，先选择一级分类，再按二级菜单缩小范围；也可以直接搜索全部软件包。";
+      "和 OpenWrt 配置菜单一样，可以先选一级分类，再用二级菜单缩小范围；也可以直接搜索全部软件包。";
     root.appendChild(empty);
     return;
   }
@@ -4371,7 +4371,7 @@ function renderConfigStudioResult() {
   $("config-studio-apply").hidden = !existing;
   $("config-studio-use").hidden = existing;
   setConfigStudioStatus(
-    "Kconfig 解析完成",
+    "依赖解析完成",
     "依赖检查完成。确认无误后，点击右下角的确认按钮进入下一步。"
   );
 }
@@ -4480,9 +4480,9 @@ async function pollConfigStudio(generation) {
     if (status === "failed") {
       setConfigStudioStatus(
         "配置环境生成失败",
-        "请打开 Actions 查看真实 OpenWrt / feeds / Kconfig 错误。"
+        "请打开 GitHub Actions 查看真实的 OpenWrt、软件源或 Kconfig 错误。"
       );
-      setConfigStudioError("Config Studio Action 执行失败。");
+      setConfigStudioError("图形配置任务执行失败。");
       $("config-studio-resolve").disabled = true;
       return;
     }
@@ -4495,7 +4495,7 @@ async function pollConfigStudio(generation) {
       setConfigStudioStep(1);
       setConfigStudioStatus(
         "配置菜单已就绪",
-        "选择设备、App 和编译特性；完成后点击“下一步：检查依赖”。"
+        "选择设备、应用和编译特性；完成后点击“下一步：检查依赖”。"
       );
       renderConfigStudioCatalog(true);
       if (restoreNewConfigStudioUi()) {
@@ -4518,7 +4518,7 @@ async function pollConfigStudio(generation) {
     if (status === "resolving") {
       setConfigStudioStep(2);
       setConfigStudioStatus(
-        "Kconfig 正在解析选择",
+        "正在解析依赖",
         "正在真实运行 make defconfig，并重新生成当前目标下的菜单目录。"
       );
       $("config-studio-resolve").disabled = true;
@@ -4526,7 +4526,7 @@ async function pollConfigStudio(generation) {
       setConfigStudioStep(1);
       setConfigStudioStatus(
         "正在生成配置菜单",
-        "正在读取源码、feeds 和设备元数据。"
+        "正在读取源码、软件源和设备信息。"
       );
     }
   } catch (error) {
@@ -4540,7 +4540,7 @@ async function pollConfigStudio(generation) {
   }
 
   if (configStudioState.pollAttempts >= MAX_CONFIG_STUDIO_POLL_ATTEMPTS) {
-    setConfigStudioError("图形配置准备时间过长，请打开 Actions 检查运行状态。");
+    setConfigStudioError("图形配置准备时间过长，请打开 GitHub Actions 检查运行状态。");
     return;
   }
   configStudioState.pollTimer = setTimeout(
@@ -4552,7 +4552,7 @@ async function pollConfigStudio(generation) {
 async function startConfigStudio(repo, options) {
   if (!repo || !canWriteRepo(repo) || !canRunRepo(repo)) {
     showError(
-      "图形配置需要 Contents、Pull requests 与 Actions 写权限。"
+      "图形配置需要仓库文件（Contents）、合并请求（Pull requests）和 Actions 写权限。"
     );
     return;
   }
@@ -4589,9 +4589,9 @@ async function startConfigStudio(repo, options) {
   setConfigStudioError();
   $("config-studio-title").textContent = existing
     ? "图形配置 · " + options.profileId
-    : "新 Profile · 图形 Menuconfig";
+    : "新配置方案 · 图形配置";
   $("config-studio-context").textContent = existing
-    ? repo.fullName + " · 从当前编辑器 Profile 快照开始"
+    ? repo.fullName + " · 从当前编辑器里的配置快照开始"
     : repo.fullName + " · " + options.sourceRepo + " @ " + options.sourceBranch;
   $("config-studio-loading").hidden = false;
   $("config-studio-workbench").hidden = true;
@@ -4607,8 +4607,8 @@ async function startConfigStudio(repo, options) {
   setConfigStudioStatus(
     options.resumeRequestId ? "正在恢复上次配置" : "正在生成配置菜单",
     options.resumeRequestId
-      ? "源码和 feeds 没有变化，继续使用上次会话，不会重新启动 Action。"
-      : "后台会读取源码、应用 feeds，并生成可选择的设备、App 与特性。"
+      ? "源码和软件源没有变化，继续使用上次会话，不会重新启动任务。"
+      : "后台会读取源码、应用软件源，并生成可选择的设备、应用和编译特性。"
   );
 
   $("config-studio-dialog").hidden = false;
@@ -4657,7 +4657,7 @@ async function startConfigStudio(repo, options) {
     if (generation !== configStudioState.generation) return;
     setConfigStudioStatus(
       "无法启动图形配置",
-      "Control Plane 没有创建 Config Studio 会话。"
+      "管理中心没有成功创建图形配置会话。"
     );
     setConfigStudioError(error);
   }
@@ -4697,7 +4697,7 @@ async function resolveConfigStudio() {
     $("config-studio-workbench").hidden = true;
     resetConfigStudioProgress("resolve");
     setConfigStudioStatus(
-      "Kconfig 正在解析选择",
+      "正在解析依赖",
       "正在运行 make defconfig；依赖变化会在完成后逐项展示。"
     );
     await pollConfigStudio(configStudioState.generation);
@@ -4763,7 +4763,7 @@ async function useConfigStudioForNewProfile() {
   setActiveNavigation("profiles");
   scrollToPanel($("new-profile-card"));
   showNewProfileResult(
-    "图形配置已完成，正在自动生成 Profile 预览。最后检查后点击“完成：创建 Profile PR”。"
+    "图形配置已完成，正在生成配置方案预览。最后检查后点击“完成：保存并应用”。"
   );
   $("new-profile-preview").click();
 }
@@ -4854,7 +4854,7 @@ async function init() {
     $("workspace-empty").hidden = false;
     $("workspace-empty-title").textContent = "选择一个仓库";
     $("workspace-empty-text").textContent =
-      "从顶栏仓库切换器进入 Profile 与构建工作区。";
+      "从顶栏仓库切换器进入配置方案和构建工作区。";
   }
 }
 for (const item of document.querySelectorAll(".sidebar-nav .nav-item")) {
@@ -4923,7 +4923,7 @@ $("new-config-studio").addEventListener("click", async () => {
     return;
   }
   if (!sourceRepo || !sourceBranch) {
-    showError("请先填写源码仓库与分支 / Tag。");
+    showError("请先填写源码仓库与分支 / 标签（Tag）。");
     return;
   }
 
@@ -5091,7 +5091,7 @@ $("new-profile-preview").addEventListener("click", async () => {
     showError(error);
   } finally {
     button.disabled = false;
-    button.textContent = "下一步：预览 Profile";
+    button.textContent = "下一步：预览配置方案";
   }
 });
 
@@ -5120,7 +5120,7 @@ $("new-profile-form").addEventListener("submit", async (event) => {
     );
     const resultMessage = profileWriteResultMessage(
       result,
-      "Profile " + result.profileId
+      "配置方案 " + result.profileId
     );
     const resultUrl = result.pullRequest.url;
     createState.previewValid = false;
@@ -5212,7 +5212,7 @@ $("create-pr").addEventListener("click", async () => {
       }
     );
     showWriteResult(
-      profileWriteResultMessage(result, "Profile " + editorState.profileId),
+      profileWriteResultMessage(result, "配置方案 " + editorState.profileId),
       result.pullRequest.url
     );
     if (result.pullRequest?.merged) {
@@ -5283,7 +5283,7 @@ $("trigger-build").addEventListener("click", async () => {
         waitingTitle: result.runId
           ? "构建运行已建立"
           : "等待 GitHub 建立运行记录",
-        waitingDetail: "正在获取本次构建的真实 Job / Step 进度。"
+        waitingDetail: "正在获取本次构建的真实任务 / 步骤进度。"
       }
     );
 
@@ -5303,7 +5303,7 @@ $("trigger-build").addEventListener("click", async () => {
         !$("build-dialog").hidden
       ) {
         setBuildDialogStatus(
-          `这个 Profile 已有构建 #${run.runNumber} 正在${buildStatusLabel(run)}，不会重复触发。`,
+          `这套配置已有构建 #${run.runNumber} 正在${buildStatusLabel(run)}，不会重复触发。`,
           true
         );
       }
@@ -5345,8 +5345,8 @@ $("confirm-profile-lifecycle").addEventListener("click", async () => {
   showError();
   setProfileLifecycleStatus(
     mode === "copy"
-      ? "正在创建复制分支与 Pull Request…"
-      : "正在创建原子重命名分支与 Pull Request…"
+      ? "正在创建复制分支和合并请求（PR）…"
+      : "正在创建重命名分支和合并请求（PR）…"
   );
 
   try {
@@ -5360,8 +5360,8 @@ $("confirm-profile-lifecycle").addEventListener("click", async () => {
     let resultMessage = profileWriteResultMessage(
       result,
       mode === "copy"
-        ? `Profile ${profileId} → ${targetProfileId} 复制`
-        : `Profile ${profileId} → ${targetProfileId} 重命名`
+        ? `配置方案 ${profileId} → ${targetProfileId} 复制`
+        : `配置方案 ${profileId} → ${targetProfileId} 重命名`
     );
     resultMessage += configStudioCleanupNote(result.configStudioCleanup);
     const resultUrl = result.pullRequest?.url || "";
@@ -5406,7 +5406,7 @@ $("confirm-baseline-profile").addEventListener("click", async () => {
   button.disabled = true;
   button.textContent = "正在切换…";
   showError();
-  setBaselineProfileStatus("正在创建基准切换分支与 Pull Request…");
+  setBaselineProfileStatus("正在创建基准切换分支和合并请求（PR）…");
 
   try {
     const result = await request(
@@ -5418,7 +5418,7 @@ $("confirm-baseline-profile").addEventListener("click", async () => {
     );
     const resultMessage = profileWriteResultMessage(
       result,
-      "基准 Profile " + profileId
+      "基准配置 " + profileId
     );
     const resultUrl = result.pullRequest?.url || "";
     closeBaselineProfileDialog();
@@ -5462,7 +5462,7 @@ $("confirm-delete-profile").addEventListener("click", async () => {
   button.disabled = true;
   button.textContent = "正在删除…";
   showError();
-  setDeleteProfileStatus("正在创建删除分支与 Pull Request…");
+  setDeleteProfileStatus("正在创建删除分支和合并请求（PR）…");
 
   try {
     const result = await request(
@@ -5474,7 +5474,7 @@ $("confirm-delete-profile").addEventListener("click", async () => {
     );
     let resultMessage = profileWriteResultMessage(
       result,
-      "Profile " + profileId + " 删除"
+      "配置方案 " + profileId + " 删除"
     );
     resultMessage += configStudioCleanupNote(result.configStudioCleanup);
     const resultUrl = result.pullRequest?.url || "";
@@ -5502,7 +5502,7 @@ $("confirm-delete-profile").addEventListener("click", async () => {
       requestVersion === deleteProfileState.requestVersion &&
       !$("delete-profile-dialog").hidden
     ) {
-      button.textContent = "创建删除 PR";
+      button.textContent = "确认删除";
     }
   }
 });
@@ -5515,14 +5515,14 @@ $("confirm-update-checker").addEventListener("click", async () => {
   const button = $("confirm-update-checker");
   button.disabled = true;
   button.textContent = "正在启动…";
-  setUpdateCheckerStatus("正在提交 Update Checker 请求…");
+  setUpdateCheckerStatus("正在提交上游更新检查…");
   renderActionProgressCard(
     "update-checker-progress",
     null,
     null,
     {
       force: true,
-      waitingTitle: "正在建立 Update Checker",
+      waitingTitle: "正在建立上游更新检查",
       waitingDetail: "GitHub 建立运行记录后会显示真实步骤。"
     }
   );
@@ -5545,13 +5545,13 @@ $("confirm-update-checker").addEventListener("click", async () => {
     updateCheckerState.runId = Number(result.runId || 0);
     $("update-checker-run-link").href = result.runUrl || "#";
     $("update-checker-run-link").hidden = !result.runUrl;
-    setUpdateCheckerStatus("Update Checker 已提交，正在等待真实运行步骤。");
+    setUpdateCheckerStatus("上游更新检查已经提交，正在等待真实运行步骤。");
     button.textContent = "运行中…";
     if (updateCheckerState.runId) {
       await pollUpdateCheckerRun(generation);
     } else {
       setUpdateCheckerStatus(
-        "GitHub 已接受请求，但暂未返回 Run ID；请通过 Actions 链接查看本次检查。",
+        "GitHub 已接受请求，但暂时还没有返回运行 ID；可以通过 GitHub Actions 链接查看本次检查。",
         true
       );
       button.disabled = false;
@@ -5573,8 +5573,8 @@ $("update-checker-profile").addEventListener("change", () => {
   const profileId = $("update-checker-profile").value;
   setUpdateCheckerStatus(
     profileId
-      ? `将检查 ${profileId}；指定 Profile 时不受 AUTO_UPDATE 开关限制。`
-      : "将检查所有 AUTO_UPDATE=true 的 Profile。"
+      ? `将检查 ${profileId}；指定单个配置方案时不受“自动更新”开关限制。`
+      : "将检查所有已开启自动更新的配置方案。"
   );
 });
 
@@ -5587,7 +5587,7 @@ $("confirm-release-existing").addEventListener("click", async () => {
   const button = $("confirm-release-existing");
   button.disabled = true;
   button.textContent = "正在启动…";
-  setReleaseExistingStatus("正在提交 Release Existing Build 请求…");
+  setReleaseExistingStatus("正在提交补发版本任务…");
   renderActionProgressCard(
     "release-existing-progress",
     null,
@@ -5611,13 +5611,13 @@ $("confirm-release-existing").addEventListener("click", async () => {
     releaseExistingState.runId = Number(result.runId || 0);
     $("release-existing-run-link").href = result.runUrl || "#";
     $("release-existing-run-link").hidden = !result.runUrl;
-    setReleaseExistingStatus("恢复发布任务已提交，正在等待真实运行步骤。");
+    setReleaseExistingStatus("补发版本任务已经提交，正在等待真实运行步骤。");
     button.textContent = "发布中…";
     if (releaseExistingState.runId) {
       await pollReleaseExistingRun(generation);
     } else {
       setReleaseExistingStatus(
-        "GitHub 已接受请求，但暂未返回 Run ID；请通过 Actions 链接查看。",
+        "GitHub 已接受请求，但暂时还没有返回运行 ID；可以通过 GitHub Actions 链接查看。",
         true
       );
       button.disabled = false;

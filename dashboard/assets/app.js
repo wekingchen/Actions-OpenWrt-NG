@@ -14,7 +14,7 @@
     if (!Number.isFinite(seconds)) return "—";
     const mins = Math.floor(seconds / 60);
     const secs = Math.max(0, Math.floor(seconds % 60));
-    return mins > 0 ? `${mins}m ${String(secs).padStart(2, "0")}s` : `${secs}s`;
+    return mins > 0 ? `${mins} 分 ${String(secs).padStart(2, "0")} 秒` : `${secs} 秒`;
   };
   const statusClass = (status) => {
     if (status === "success") return "success";
@@ -23,11 +23,28 @@
     return "neutral";
   };
   const statusLabel = (status) => ({
-    success: "Build Success",
-    failure: "Build Failed",
-    in_progress: "Building",
-    queued: "Queued"
-  }[status] || status || "Unknown");
+    success: "构建成功",
+    failure: "构建失败",
+    in_progress: "构建中",
+    queued: "排队中",
+    requested: "等待中",
+    waiting: "等待中",
+    pending: "等待中",
+    cancelled: "已取消",
+    skipped: "已跳过",
+    timed_out: "超时",
+    action_required: "需要操作",
+    neutral: "已完成"
+  }[status] || "状态未知");
+  const eventLabel = (event) => ({
+    workflow_dispatch: "手动触发",
+    repository_dispatch: "自动触发",
+    schedule: "定时检查",
+    push: "代码推送",
+    pull_request: "合并请求",
+    workflow_run: "工作流联动"
+  }[event] || (event ? `其他（${event}）` : "—"));
+  const adapterLabel = (adapter) => adapter === "direct-openwrt" ? "标准 OpenWrt" : (adapter || "—");
 
   function setLinks(repo) {
     const base = repo.html_url || "#";
@@ -39,21 +56,21 @@
 
   function renderOverview(data) {
     const build = data.latest_build || {};
-    el("latest-build-title").textContent = build.profile_name || build.profile || "No build";
+    el("latest-build-title").textContent = build.profile_name || build.profile || "暂无构建";
     const pill = el("latest-build-status");
     pill.textContent = statusLabel(build.status);
     pill.className = `status-pill ${statusClass(build.status)}`;
 
     const config = build.config || {};
     const configSummary = [config.changed, config.added, config.removed].every((v) => Number.isFinite(v))
-      ? `changed ${config.changed} · added ${config.added} · removed ${config.removed}`
+      ? `修改 ${config.changed} · 新增 ${config.added} · 删除 ${config.removed}`
       : "—";
     const metrics = [
-      ["Profile", build.profile || "—"],
-      ["Source", build.source ? `${build.source} @ ${build.branch || "—"}` : "—"],
-      ["Commit", build.commit ? build.commit.slice(0, 12) : "—"],
-      ["Duration", fmtDuration(build.duration_seconds)],
-      ["Config", configSummary]
+      ["配置方案", build.profile || "—"],
+      ["源码", build.source ? `${build.source} @ ${build.branch || "—"}` : "—"],
+      ["提交", build.commit ? build.commit.slice(0, 12) : "—"],
+      ["耗时", fmtDuration(build.duration_seconds)],
+      ["配置摘要", configSummary]
     ];
     el("latest-build-metrics").innerHTML = metrics.map(([k, v]) =>
       `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>`
@@ -62,19 +79,19 @@
 
     const update = data.update_status?.[0];
     const upstreamLabel = {
-      up_to_date: "Up to date",
-      update_available: "Update Available",
-      unknown: "Status Unknown"
+      up_to_date: "已是最新",
+      update_available: "发现更新",
+      unknown: "状态未知"
     };
     el("upstream-status").textContent = update
-      ? (upstreamLabel[update.state] || "Status Unknown")
-      : "No data";
+      ? (upstreamLabel[update.state] || "状态未知")
+      : "暂无数据";
     el("upstream-detail").textContent = update
-      ? `${update.profile}: current ${update.commit?.slice(0, 12) || "unknown"} · built ${update.last_built_commit?.slice(0, 12) || "unknown"}`
+      ? `${update.profile}: 当前 ${update.commit?.slice(0, 12) || "未知"} · 上次构建 ${update.last_built_commit?.slice(0, 12) || "未知"}`
       : "暂无上游状态数据";
 
     const release = data.latest_releases?.[0];
-    el("latest-release-tag").textContent = release?.tag || "No release";
+    el("latest-release-tag").textContent = release?.tag || "暂无发布";
     el("latest-release-time").textContent = release ? fmtTime(release.published_at) : "—";
     el("latest-release-link").href = release?.url || "#";
 
@@ -96,23 +113,23 @@
       status.textContent = statusLabel(profile.last_build_status);
       status.className = `status-pill profile-status ${statusClass(profile.last_build_status)}`;
       const rows = [
-        ["Source", profile.source_repo || "—"],
-        ["Branch", profile.source_branch || "—"],
-        ["Adapter", profile.adapter || "—"],
-        ["Last commit", profile.last_commit ? profile.last_commit.slice(0, 12) : "—"]
+        ["源码", profile.source_repo || "—"],
+        ["分支", profile.source_branch || "—"],
+        ["源码类型", adapterLabel(profile.adapter)],
+        ["最新提交", profile.last_commit ? profile.last_commit.slice(0, 12) : "—"]
       ];
       node.querySelector(".profile-meta").innerHTML = rows.map(([k, v]) =>
         `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>`
       ).join("");
       node.querySelector(".update-badge").textContent =
-        (profile.baseline ? "基准 Profile · " : "") +
-        (profile.auto_update ? "Auto update · On" : "Auto update · Off");
+        (profile.baseline ? "基准配置 · " : "") +
+        (profile.auto_update ? "自动更新 · 已开启" : "自动更新 · 已关闭");
       node.querySelector(".profile-run-link").href = profile.last_build_url || "#";
       grid.appendChild(node);
     });
 
     if (!profiles.length) {
-      grid.innerHTML = '<p class="muted">没有可展示的 Profile。</p>';
+      grid.innerHTML = '<p class="muted">没有可展示的配置方案。</p>';
     }
   }
 
@@ -124,7 +141,7 @@
       tr.innerHTML = `
         <td><span class="state-dot ${statusClass(build.status)}"></span>${escapeHtml(statusLabel(build.status))}</td>
         <td>${escapeHtml(build.profile || "—")}</td>
-        <td>${escapeHtml(build.event || "—")}</td>
+        <td>${escapeHtml(eventLabel(build.event))}</td>
         <td class="mono">${escapeHtml(build.commit ? build.commit.slice(0, 12) : "—")}</td>
         <td>${escapeHtml(fmtDuration(build.duration_seconds))}</td>
         <td>${escapeHtml(fmtTime(build.created_at))}</td>
@@ -142,7 +159,7 @@
     releases.forEach((release) => {
       const node = template.content.cloneNode(true);
       node.querySelector(".release-tag").textContent = release.tag;
-      node.querySelector(".release-meta").textContent = `${fmtTime(release.published_at)} · ${release.assets?.length || 0} assets`;
+      node.querySelector(".release-meta").textContent = `${fmtTime(release.published_at)} · ${release.assets?.length || 0} 个附件`;
       const chips = node.querySelector(".release-assets");
       const allAssets = release.assets || [];
       const firmwareAssets = allAssets.filter((asset) =>
@@ -216,12 +233,12 @@
       renderProfiles(data.profiles || []);
       renderBuilds(data.latest_builds || []);
       renderReleases(data.latest_releases || []);
-      el("generated-at").textContent = `Updated ${fmtTime(data.generated_at)}`;
+      el("generated-at").textContent = `数据更新于 ${fmtTime(data.generated_at)}`;
     } catch (error) {
-      el("latest-build-title").textContent = "Dashboard data unavailable";
-      el("latest-build-status").textContent = "Data Error";
+      el("latest-build-title").textContent = "构建看板数据暂时不可用";
+      el("latest-build-status").textContent = "数据错误";
       el("latest-build-status").className = "status-pill failure";
-      el("generated-at").textContent = `Failed to load data: ${error.message}`;
+      el("generated-at").textContent = `数据加载失败：${error.message}`;
     }
   }
 

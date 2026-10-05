@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0a9f6e">
-  <title>OpenWrt NG Control Plane</title>
+  <title>OpenWrt NG 管理中心</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -16,7 +16,7 @@
         </div>
         <div class="brand-copy">
           <strong>OpenWrt NG</strong>
-          <small>Control Plane</small>
+          <small>管理中心</small>
         </div>
       </div>
 
@@ -27,7 +27,7 @@
         </button>
         <button class="nav-item" type="button" data-nav="profiles" aria-controls="profile-card">
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10l3 3v13H4V7z"/><path d="M8 11h8M8 15h8"/></svg>
-          <span>配置</span>
+          <span>配置方案</span>
         </button>
         <button class="nav-item" type="button" data-nav="builder" aria-controls="build-card">
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg>
@@ -37,7 +37,8 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.21.11</small>
+        <small>管理中心 0.21.11</small>
+        <!-- Control Plane 0.21.11 -->
       </div>
     </aside>
 
@@ -58,15 +59,15 @@
               <span class="repo-meta-chip" id="repo-capability"></span>
               <span class="repo-meta-security">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.9 8.2 7 10 4.1-1.8 7-5.4 7-10V6z"/><path d="m9.5 12 1.7 1.7 3.6-4"/></svg>
-                Profile 变更经 Pull Request 自动合并并保留审计记录
+                配置方案的修改会通过合并请求（PR）保存，不会直接修改默认分支
               </span>
             </div>
           </div>
         </div>
 
         <div class="topbar-actions">
-          <span class="mobile-version-badge" aria-label="Control Plane 版本">0.21.11</span>
-          <div class="connection-badge" title="Control Plane 服务可用">
+          <span class="mobile-version-badge" aria-label="管理中心版本">0.21.11</span>
+          <div class="connection-badge" title="管理中心服务可用">
             <span class="status-dot"></span>
             <span>服务正常</span>
           </div>
@@ -103,8 +104,8 @@
           </div>
           <div class="login-content">
             <p class="eyebrow">安全连接</p>
-            <h2>连接你的 GitHub</h2>
-            <p class="muted">授权信息仅保存在 Control Plane 服务端；浏览器不会获得 GitHub access token。</p>
+            <h2>连接 GitHub</h2>
+            <p class="muted">登录凭据仅保存在管理中心服务端；浏览器不会拿到 GitHub 访问令牌。</p>
             <p class="setup-status" id="setup-status">正在检查 GitHub App 配置…</p>
             <a class="button primary large-button" id="login-action" href="/api/v1/auth/start?return_to=/" hidden>
               使用 GitHub 登录
@@ -124,8 +125,8 @@
             <section class="panel profile-panel" id="profile-card" hidden>
               <div class="panel-header">
                 <div>
-                  <h2 id="profile-title">配置</h2>
-                  <p class="panel-description">管理 Profile；可查看、复制、重命名、构建、切换基准或删除配置。</p>
+                  <h2 id="profile-title">配置方案</h2>
+                  <p class="panel-description">管理构建配置方案：查看、复制、重命名、构建、设为基准、删除或恢复。</p>
                 </div>
                 <div class="panel-header-actions">
                   <button class="button ghost secondary-action" id="update-checker-open" type="button">
@@ -144,7 +145,7 @@
                 <div class="deleted-profiles-head">
                   <div>
                     <strong>最近删除</strong>
-                    <span>仅显示通过 Control Plane 删除、且当前仍不存在的 Profile；恢复仍走独立 PR。</span>
+                    <span>这里显示最近从管理中心删除、目前仍未恢复的配置方案；恢复也会通过独立合并请求（PR）保存。</span>
                   </div>
                 </div>
                 <div id="deleted-profiles" class="profile-list deleted-profile-list"></div>
@@ -155,8 +156,8 @@
               <div class="panel-header">
                 <div>
                   <p class="eyebrow">配置</p>
-                  <h2 id="new-profile-title">新建配置</h2>
-                  <p class="panel-description">服务端生成固定 7 个标准文件，经独立 Pull Request 校验后自动合并；受仓库规则阻止时保留 PR。</p>
+                  <h2 id="new-profile-title">新建配置方案</h2>
+                  <p class="panel-description">生成标准 7 个配置文件，先预览，再通过独立合并请求（PR）保存；如果仓库规则阻止自动合并，会保留 PR 供你处理。</p>
                 </div>
                 <button class="icon-button" id="new-profile-close" type="button" aria-label="关闭">×</button>
               </div>
@@ -165,19 +166,19 @@
                 <div class="form-section">
                   <div class="form-section-title">
                     <span>01</span>
-                    <div><strong>基础信息</strong><small>定义 Profile 的身份与源码来源</small></div>
+                    <div><strong>基础信息</strong><small>定义这套配置的名称、目录 ID 和源码来源</small></div>
                   </div>
                   <div class="form-grid two-cols">
                     <label class="field">
-                      <span>Profile ID</span>
+                      <span>配置 ID（Profile ID）</span>
                       <input id="new-profile-id" maxlength="64" required autocomplete="off"
                              pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" value="my-openwrt">
-                      <small>作为 profiles/&lt;id&gt;/ 的目录名</small>
+                      <small>也就是 profiles/&lt;id&gt;/ 的目录名，建议使用简短、稳定的英文标识</small>
                     </label>
                     <label class="field">
                       <span>显示名称</span>
                       <input id="new-profile-name" maxlength="200" required autocomplete="off" value="My OpenWrt">
-                      <small>用于 Dashboard 与 Actions 展示</small>
+                      <small>用于构建看板和 GitHub Actions 展示</small>
                     </label>
                   </div>
 
@@ -198,13 +199,13 @@
                              value="https://github.com/coolsnowwolf/lede">
                     </label>
                     <label class="field">
-                      <span>分支 / Tag</span>
+                      <span>分支 / 标签（Tag）</span>
                       <input id="new-source-branch" required autocomplete="off" value="master">
                     </label>
                   </div>
 
                   <label class="field" id="new-adapter-field" hidden>
-                    <span>源码接入方式</span>
+                    <span>源码类型</span>
                     <select id="new-adapter">
                       <option value="direct-openwrt" selected>标准 OpenWrt 源码</option>
                     </select>
@@ -215,7 +216,7 @@
                 <div class="form-section">
                   <div class="form-section-title">
                     <span>02</span>
-                    <div><strong>软件源 / Feeds</strong><small>先添加第三方源，再生成 Menuconfig</small></div>
+                    <div><strong>软件源（Feeds）</strong><small>先确认第三方软件源，再生成图形配置菜单</small></div>
                   </div>
 
                   <div class="feed-preset-row">
@@ -231,26 +232,26 @@
                   </div>
 
                   <label class="field">
-                    <span>额外 feeds</span>
+                    <span>额外软件源（Feeds）</span>
                     <textarea id="new-extra-feeds" class="editor feeds-editor" spellcheck="false"
                               placeholder="src-git my_feed https://github.com/example/openwrt-packages.git;main"></textarea>
-                    <small>这些源会在 <code>./scripts/feeds update -a</code> 前插入。与源码默认 feed 名称重复时自动保留这里的第三方源；额外 feeds 自己重名则保留第一条。“常用源”都会标记为第三方优先；不同 feed 提供同名 source package 时仍按版本最高者择优。修改后需要重新生成配置菜单。</small>
+                    <small>这些第三方软件源会在 OpenWrt 更新软件源前加入。名称与源码自带软件源重复时，优先使用这里配置的第三方源；这里自己出现重名时保留第一条。多个第三方源提供同名软件包时，再按下方冲突策略决定使用哪一个。修改后需要重新生成配置菜单。</small>
                   </label>
 
                   <label class="field">
-                    <span>Feed 冲突策略</span>
+                    <span>同名软件包冲突处理</span>
                     <select id="new-feed-priority-mode">
                       <option value="per-package" selected>per-package · 按二进制包版本择优</option>
                       <option value="feed-order">feed-order · 按 feeds.conf 顺序整源优先</option>
                     </select>
-                    <small><code>per-package</code> 是默认策略；如果同一 source 中不同二进制包分别要求不同 feed 胜出，会停止并提示风险。<code>feed-order</code> 则始终保留排在最前的第三方优先 feed，适合更重视整套包一致性的情况。</small>
+                    <small><code>per-package</code> 是默认策略：同名软件包比较版本，版本高的优先；如果同一源码包拆出的多个软件包要求不同来源获胜，会停止并提示风险。<code>feed-order</code> 则按第三方软件源的排列顺序整套选择，适合更重视同一来源一致性的情况。</small>
                   </label>
                 </div>
 
                 <div class="form-section">
                   <div class="form-section-title">
                     <span>03</span>
-                    <div><strong>图形 Menuconfig</strong><small>生成一次菜单，然后选择设备、App 与编译特性</small></div>
+                    <div><strong>图形配置</strong><small>读取真实 OpenWrt 菜单，再选择设备、应用和编译特性</small></div>
                   </div>
                   <div class="config-source-choice">
                     <div>
@@ -263,7 +264,7 @@
                   </div>
 
                   <details class="advanced-disclosure">
-                    <summary>已有 .config / 高级方式</summary>
+                    <summary>已有 .config / 高级编辑</summary>
                     <label class="field">
                       <span>OpenWrt .config</span>
                       <div class="file-drop">
@@ -280,7 +281,7 @@
                 </div>
 
                 <details class="advanced-disclosure profile-advanced-options">
-                  <summary>高级选项（可选）· 发布、追新、Manifest 校验</summary>
+                  <summary>高级选项（可选）· 发布、自动更新、固件清单校验</summary>
                   <div class="profile-advanced-body">
                     <div class="form-section compact-section">
                       <div class="form-section-title">
@@ -293,11 +294,11 @@
                         </label>
                         <label class="check-row compact-check">
                           <input id="new-upload-release" type="checkbox" checked>
-                          <span><strong>发布 Release</strong><small>成功后允许发布</small></span>
+                          <span><strong>发布版本（Release）</strong><small>构建成功后允许创建版本发布</small></span>
                         </label>
                         <label class="check-row compact-check">
                           <input id="new-upload-firmware" type="checkbox" checked>
-                          <span><strong>固件 Artifact</strong><small>保留构建产物</small></span>
+                          <span><strong>保留固件产物</strong><small>在 GitHub Actions 中保留可下载文件</small></span>
                         </label>
                         <label class="check-row compact-check">
                           <input id="new-maximize-space" type="checkbox">
@@ -308,11 +309,11 @@
 
                     <div class="form-section compact-section">
                       <div class="form-section-title">
-                        <div><strong>高级校验</strong><small>Manifest 与额外上游监控</small></div>
+                        <div><strong>高级校验</strong><small>固件清单与额外上游监控</small></div>
                       </div>
                       <div class="form-grid two-cols">
                         <label class="field">
-                          <span>Manifest 必选软件包</span>
+                          <span>固件清单必选软件包</span>
                           <textarea id="new-required-packages" class="compact-input" spellcheck="false"
                                     placeholder="luci&#10;curl"></textarea>
                         </label>
@@ -327,7 +328,7 @@
                 </details>
 
                 <div class="form-actions">
-                  <button class="button ghost" id="new-profile-preview" type="button">下一步：预览 Profile</button>
+                  <button class="button ghost" id="new-profile-preview" type="button">下一步：预览配置方案</button>
                   <button class="button primary" id="new-profile-create" type="submit" disabled>完成：保存并应用</button>
                 </div>
               </form>
@@ -335,8 +336,8 @@
               <div id="new-profile-preview-card" class="preview-box" hidden>
                 <div class="preview-header">
                   <div>
-                    <span class="preview-kicker">Generated files</span>
-                    <h3>标准 Profile 预览</h3>
+                    <span class="preview-kicker">生成文件</span>
+                    <h3>标准配置方案预览</h3>
                   </div>
                   <select id="new-profile-preview-file" class="file-select preview-file-select"></select>
                 </div>
@@ -367,7 +368,7 @@
                   <span class="code-dot red"></span>
                   <span class="code-dot amber"></span>
                   <span class="code-dot green"></span>
-                  <span class="code-label">Profile configuration</span>
+                  <span class="code-label">配置文件</span>
                 </div>
                 <textarea id="editor-content" class="editor" spellcheck="false"></textarea>
               </div>
@@ -381,7 +382,7 @@
               <div id="preview-card" class="preview-box" hidden>
                 <div class="preview-header">
                   <div>
-                    <span class="preview-kicker">Diff</span>
+                    <span class="preview-kicker">变更对比</span>
                     <h3>变更预览</h3>
                   </div>
                 </div>
@@ -428,7 +429,7 @@
                 <span class="preview-kicker">构建详情</span>
                 <h3 id="build-detail-title">运行详情</h3>
               </div>
-              <a class="text-link" id="build-summary-link" href="#" target="_blank" rel="noreferrer">打开 Actions ↗</a>
+              <a class="text-link" id="build-summary-link" href="#" target="_blank" rel="noreferrer">查看运行记录 ↗</a>
             </div>
             <div id="build-detail-progress" class="action-progress-panel" hidden></div>
             <div id="build-jobs" class="build-sublist"></div>
@@ -444,7 +445,7 @@
           <div class="build-dialog-handle" aria-hidden="true"></div>
           <div class="panel-header build-dialog-header">
             <div>
-              <p class="eyebrow">Update Checker</p>
+              <p class="eyebrow">上游更新</p>
               <h2 id="update-checker-title">手动检查上游更新</h2>
               <p class="panel-description" id="update-checker-repo"></p>
             </div>
@@ -454,7 +455,7 @@
           <label class="field">
             <span>检查范围</span>
             <select id="update-checker-profile"></select>
-            <small>“全部自动追新 Profile”只检查 AUTO_UPDATE=true；指定 Profile 时不受 AUTO_UPDATE 开关限制。</small>
+            <small>选择“全部自动追新”时，只检查已开启自动更新的配置方案；指定单个配置方案时不受此开关限制。</small>
           </label>
 
           <label class="check-row release-check">
@@ -467,7 +468,7 @@
 
           <div id="update-checker-progress" class="action-progress-panel" hidden></div>
           <p class="build-dialog-status" id="update-checker-status" aria-live="polite"></p>
-          <a class="text-link" id="update-checker-run-link" href="#" target="_blank" rel="noreferrer" hidden>打开 Actions ↗</a>
+          <a class="text-link" id="update-checker-run-link" href="#" target="_blank" rel="noreferrer" hidden>查看运行记录 ↗</a>
 
           <div class="form-actions build-dialog-actions">
             <button class="button ghost" id="update-checker-cancel" type="button">关闭</button>
@@ -482,7 +483,7 @@
           <div class="build-dialog-handle" aria-hidden="true"></div>
           <div class="panel-header build-dialog-header">
             <div>
-              <p class="eyebrow">Release Existing Build</p>
+              <p class="eyebrow">补发版本</p>
               <h2 id="release-existing-title">发布已有构建</h2>
               <p class="panel-description" id="release-existing-repo"></p>
             </div>
@@ -495,12 +496,12 @@
           </div>
           <div class="baseline-profile-note">
             <strong>不会重新编译固件。</strong>
-            <span>直接复用该 Build 已验证并保留的 Release bundle 创建 Release；完成后仍执行 Release 保留数量清理。</span>
+            <span>直接复用这次构建已验证并保留的发布包，不会重新编译；发布完成后仍按现有规则清理过旧版本。</span>
           </div>
 
           <div id="release-existing-progress" class="action-progress-panel" hidden></div>
           <p class="build-dialog-status" id="release-existing-status" aria-live="polite"></p>
-          <a class="text-link" id="release-existing-run-link" href="#" target="_blank" rel="noreferrer" hidden>打开 Actions ↗</a>
+          <a class="text-link" id="release-existing-run-link" href="#" target="_blank" rel="noreferrer" hidden>查看运行记录 ↗</a>
 
           <div class="form-actions build-dialog-actions">
             <button class="button ghost" id="release-existing-cancel" type="button">关闭</button>
@@ -514,7 +515,7 @@
                  aria-labelledby="config-studio-title" aria-describedby="config-studio-status">
           <div class="panel-header config-studio-header">
             <div>
-              <p class="eyebrow">Web Menuconfig</p>
+              <p class="eyebrow">OpenWrt 图形配置</p>
               <h2 id="config-studio-title">图形配置</h2>
               <p class="panel-description" id="config-studio-context"></p>
             </div>
@@ -522,7 +523,7 @@
           </div>
 
           <div class="config-studio-steps" aria-label="配置步骤">
-            <div class="config-studio-step active" data-config-step="1"><span>1</span><strong>选择设备与 App</strong></div>
+            <div class="config-studio-step active" data-config-step="1"><span>1</span><strong>选择设备与应用</strong></div>
             <div class="config-studio-step" data-config-step="2"><span>2</span><strong>检查依赖</strong></div>
             <div class="config-studio-step" data-config-step="3"><span>3</span><strong>确认配置</strong></div>
           </div>
@@ -530,11 +531,11 @@
           <div class="config-studio-status-row">
             <div>
               <strong id="config-studio-status">正在准备真实 OpenWrt 配置环境…</strong>
-              <span id="config-studio-status-detail">Actions 会读取目标源码、安装 feeds，并运行 make defconfig。</span>
+              <span id="config-studio-status-detail">GitHub Actions 会读取目标源码、安装软件源（feeds），并运行 make defconfig 解析依赖。</span>
             </div>
             <details class="config-studio-technical">
               <summary>后台运行详情</summary>
-              <a class="text-link" id="config-studio-run-link" href="#" target="_blank" rel="noreferrer" hidden>打开 Actions ↗</a>
+              <a class="text-link" id="config-studio-run-link" href="#" target="_blank" rel="noreferrer" hidden>查看运行记录 ↗</a>
             </details>
           </div>
 
@@ -542,8 +543,8 @@
             <div class="config-studio-loading-head">
               <span class="config-studio-spinner" aria-hidden="true"></span>
               <div>
-                <strong id="config-studio-progress-title">等待 GitHub Runner</strong>
-                <span id="config-studio-progress-detail">正在建立本次配置任务，随后会显示真实 Action 步骤。</span>
+                <strong id="config-studio-progress-title">等待 GitHub 执行器</strong>
+                <span id="config-studio-progress-detail">正在建立本次配置任务，随后会显示真实运行步骤。</span>
               </div>
             </div>
             <div class="config-studio-progress" aria-live="polite">
@@ -562,19 +563,19 @@
             <section class="config-studio-targets">
               <div class="config-studio-section-title">
                 <strong>目标设备</strong>
-                <span>对应 make menuconfig 顶部的 Target / Subtarget / Target Profile</span>
+                <span>对应 OpenWrt 配置菜单顶部的目标平台、子目标和设备型号</span>
               </div>
               <div class="form-grid three-cols">
                 <label class="field">
-                  <span>Target System</span>
+                  <span>目标平台（Target System）</span>
                   <select id="config-studio-target"></select>
                 </label>
                 <label class="field">
-                  <span>Subtarget</span>
+                  <span>子目标（Subtarget）</span>
                   <select id="config-studio-subtarget"></select>
                 </label>
                 <label class="field">
-                  <span>Target Profile / Device</span>
+                  <span>设备型号（Target Profile）</span>
                   <select id="config-studio-device"></select>
                 </label>
               </div>
@@ -583,7 +584,7 @@
             <section class="config-studio-options">
               <div class="config-studio-tabs" role="tablist" aria-label="配置类别">
                 <button class="config-studio-tab active" id="config-studio-tab-packages" type="button"
-                        role="tab" aria-selected="true" aria-controls="config-studio-packages-panel">软件包 / LuCI App</button>
+                        role="tab" aria-selected="true" aria-controls="config-studio-packages-panel">软件包 / LuCI 应用</button>
                 <button class="config-studio-tab" id="config-studio-tab-features" type="button"
                         role="tab" aria-selected="false" aria-controls="config-studio-features-panel">编译特性</button>
               </div>
@@ -596,7 +597,7 @@
                   <select id="config-studio-submenu" aria-label="软件包二级菜单" disabled></select>
                   <label class="form-switch config-studio-luci-filter">
                     <input id="config-studio-luci-only" type="checkbox">
-                    <span>只看 LuCI App</span>
+                    <span>只看 LuCI 应用</span>
                   </label>
                 </div>
                 <div id="config-studio-dependency-summary"
@@ -629,7 +630,7 @@
                 </div>
                 <div class="config-studio-list-head">
                   <span id="config-studio-feature-count">0 个可选特性</span>
-                  <span>仅显示 menuconfig 中有可见提示的选项</span>
+                  <span>仅显示 OpenWrt 配置菜单中可见的选项</span>
                 </div>
                 <div id="config-studio-features" class="config-studio-option-list"></div>
               </div>
@@ -645,7 +646,7 @@
           <div id="config-studio-result" class="config-studio-result" hidden>
             <div class="config-studio-result-head">
               <div>
-                <span class="preview-kicker">Kconfig Resolve</span>
+                <span class="preview-kicker">依赖解析结果</span>
                 <h3>OpenWrt 已解析你的选择</h3>
               </div>
               <div class="config-studio-result-metrics">
@@ -665,7 +666,7 @@
             <button class="button ghost" id="config-studio-back" type="button" hidden>返回修改</button>
             <button class="button primary" id="config-studio-resolve" type="button" disabled>下一步：检查依赖</button>
             <button class="button primary" id="config-studio-apply" type="button" hidden>确认并保存配置</button>
-            <button class="button primary" id="config-studio-use" type="button" hidden>确认并返回新 Profile</button>
+            <button class="button primary" id="config-studio-use" type="button" hidden>确认并返回新配置方案</button>
           </div>
         </section>
       </div>
@@ -683,15 +684,15 @@
           </div>
 
           <div class="build-target">
-            <span>目标 Profile</span>
+            <span>目标配置方案</span>
             <strong id="build-dialog-profile">—</strong>
           </div>
 
           <label class="check-row release-check build-release-option">
             <input id="publish-release" type="checkbox">
             <span>
-              <strong>本次构建同时发布 Release</strong>
-              <small id="publish-release-help">正在读取 Profile 发布策略…</small>
+              <strong>本次构建同时发布版本（Release）</strong>
+              <small id="publish-release-help">正在读取这套配置的发布设置…</small>
             </span>
           </label>
 
@@ -711,19 +712,19 @@
           <div class="panel-header build-dialog-header">
             <div>
               <p class="eyebrow" id="profile-lifecycle-eyebrow">配置管理</p>
-              <h2 id="profile-lifecycle-title">复制 Profile</h2>
+              <h2 id="profile-lifecycle-title">复制配置方案</h2>
               <p class="panel-description" id="profile-lifecycle-repo"></p>
             </div>
             <button class="icon-button" id="profile-lifecycle-close" type="button" aria-label="关闭配置管理">×</button>
           </div>
 
           <div class="build-target profile-lifecycle-source">
-            <span>当前 Profile</span>
+            <span>当前配置方案</span>
             <strong id="profile-lifecycle-source">—</strong>
           </div>
 
           <label class="field">
-            <span id="profile-lifecycle-target-label">新 Profile ID</span>
+            <span id="profile-lifecycle-target-label">新配置 ID（Profile ID）</span>
             <input id="profile-lifecycle-target" maxlength="64" autocomplete="off"
                    pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" placeholder="new-profile">
             <small id="profile-lifecycle-description">目录名只能包含字母、数字、点、下划线和连字符。内部 profiles/&lt;id&gt;/ 路径会同步重写。</small>
@@ -745,20 +746,20 @@
           <div class="panel-header build-dialog-header">
             <div>
               <p class="eyebrow">基准配置</p>
-              <h2 id="baseline-profile-title">设为基准 Profile</h2>
+              <h2 id="baseline-profile-title">设为基准配置</h2>
               <p class="panel-description" id="baseline-profile-repo"></p>
             </div>
             <button class="icon-button" id="baseline-profile-close" type="button" aria-label="关闭基准配置确认">×</button>
           </div>
 
           <div class="build-target baseline-profile-target">
-            <span>新的基准 Profile</span>
+            <span>新的基准配置</span>
             <strong id="baseline-profile-name">—</strong>
           </div>
 
           <div class="baseline-profile-note" id="baseline-profile-description">
-            <strong>仓库始终只有一个基准 Profile。</strong>
-            <span>切换后，手动 Builder 未指定 Profile、以及 profile.sh 未指定 Profile 时，都会使用新的基准。原基准不会被删除，只是取消基准身份。</span>
+            <strong>仓库始终只有一个基准配置。</strong>
+            <span>切换后，手动构建或 profile.sh 没有指定配置 ID 时，都会使用新的基准配置。原基准不会被删除，只是变回普通配置方案。</span>
           </div>
 
           <p class="build-dialog-status" id="baseline-profile-status" aria-live="polite" hidden></p>
@@ -777,27 +778,27 @@
           <div class="panel-header build-dialog-header">
             <div>
               <p class="eyebrow danger-eyebrow">删除配置</p>
-              <h2 id="delete-profile-title">删除 Profile</h2>
+              <h2 id="delete-profile-title">删除配置方案</h2>
               <p class="panel-description" id="delete-profile-repo"></p>
             </div>
             <button class="icon-button" id="delete-profile-close" type="button" aria-label="关闭删除确认">×</button>
           </div>
 
           <div class="build-target delete-profile-target">
-            <span>目标 Profile</span>
+            <span>目标配置方案</span>
             <strong id="delete-profile-name">—</strong>
           </div>
 
           <div class="delete-profile-warning" id="delete-profile-description">
-            <strong>这会删除该 Profile 的全部 7 个标准配置文件。</strong>
-            <span>Control Plane 不会直接改默认分支，而是创建独立 Pull Request 并尝试自动合并；Git 历史和 PR 审计记录仍会保留。运行中的 Builder 会阻止删除；删除成功后，关联的 Config Studio 会话会先取消其活动 Action，再清理临时会话分支。</span>
+            <strong>这会删除该配置方案的全部 7 个标准文件。</strong>
+            <span>管理中心不会直接修改默认分支，而是创建独立合并请求（PR）并按仓库策略合并；Git 历史和 PR 记录会保留。存在运行中的构建时会阻止删除；删除成功后，关联的图形配置会话也会自动取消并清理。</span>
           </div>
 
           <p class="build-dialog-status" id="delete-profile-status" aria-live="polite" hidden></p>
 
           <div class="form-actions build-dialog-actions">
             <button class="button ghost" id="delete-profile-cancel" type="button">取消</button>
-            <button class="button danger" id="confirm-delete-profile" type="button" disabled>创建删除 PR</button>
+            <button class="button danger" id="confirm-delete-profile" type="button" disabled>确认删除</button>
           </div>
         </section>
       </div>

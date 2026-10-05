@@ -8,16 +8,16 @@ export function normalizeControlPlaneConfig(raw) {
   };
 
   if (normalized.version !== 1) {
-    throw new Error("不支持的 Control Plane 配置版本。");
+    throw new Error("不支持的管理中心配置版本。");
   }
 
   if (normalized.enabled) {
     if (!/^https:\/\//i.test(normalized.controlPlaneUrl)) {
-      throw new Error("启用 Control Plane 时必须配置 HTTPS 地址。");
+      throw new Error("启用管理中心时必须配置 HTTPS 地址。");
     }
     const url = new URL(normalized.controlPlaneUrl);
     if (url.username || url.password || url.search || url.hash) {
-      throw new Error("Control Plane 地址不能包含账号、查询参数或片段。");
+      throw new Error("管理中心地址不能包含账号、查询参数或网址片段。");
     }
   }
 
@@ -56,12 +56,12 @@ export async function loadControlPlaneConfig(
     credentials: "omit"
   });
   if (!response.ok) {
-    throw new Error(`Control Plane 配置读取失败：HTTP ${response.status}`);
+    throw new Error(`管理中心配置读取失败：HTTP ${response.status}`);
   }
 
   const raw = await response.json();
   if (containsSensitiveControlPlaneData(raw)) {
-    throw new Error("Control Plane 公共配置包含疑似凭据，已拒绝加载。");
+    throw new Error("管理中心公开配置中发现疑似敏感凭据，已拒绝加载。");
   }
   return normalizeControlPlaneConfig(raw);
 }
