@@ -30,16 +30,16 @@
 - 浏览器不能指定任意 workflow、任意 ref 或任意仓库路径。
 - 配置写入范围被限制在标准配置方案文件和 profiles/.baseline。
 - 正常配置变更不会直接修改默认分支，而是创建独立分支和合并请求（PR）。
-- 执行第三方 OpenWrt 源码和 feeds 的 Config Studio 工作流只拥有读取仓库内容的权限，大型结果通过短期 Actions Artifact 返回。
+- 执行第三方 OpenWrt 源码和 feeds 的图形配置工作流只拥有读取仓库内容的权限，大型结果通过短期 GitHub Actions 构建产物返回。
 
 ## GitHub App 权限
 
 当前完整功能建议一次配置：
 
-- Metadata：Read-only
-- Contents：Read and write
-- Pull requests：Read and write
-- Actions：Read and write
+- Metadata（仓库基本信息）：只读
+- Contents（仓库文件）：读写
+- Pull requests（合并请求）：读写
+- Actions（构建任务）：读写
 
 不需要：
 
@@ -362,4 +362,4 @@ control-plane/package.json 的 npm test 会覆盖：
 - 上游更新检查。
 - 合并策略。
 
-中央 control-plane-ci.yml 还会检查共享代码同步、运行时 API、Dashboard / Wizard 契约和自托管容器启动。
+中央 control-plane-ci.yml 还会检查共享代码同步、运行时 API、构建看板 / 配置方案向导契约和自托管容器启动。
