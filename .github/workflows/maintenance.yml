@@ -142,12 +142,42 @@ jobs:
               ;;
           esac
 
-          merged_count="$(
-            gh api --method GET "repos/$GITHUB_REPOSITORY/pulls"               -f state=closed               -f head="$owner:$branch"               --jq '[.[] | select(.merged_at != null)] | length'
+          merged_pr="$(
+            gh api --method GET "repos/$GITHUB_REPOSITORY/pulls" \
+              -f state=closed \
+              -f head="$owner:$branch" \
+              -f per_page=100 \
+              --jq '[.[] | select(.merged_at != null)] | sort_by(.merged_at) | if length == 0 then "" else (.[-1] | [(.number | tostring), .head.sha] | @tsv) end'
           )"
 
-          if [ "$merged_count" -eq 0 ]; then
+          if [ -z "$merged_pr" ]; then
             echo "保留未确认合并的辅助分支：$branch"
+            kept=$((kept + 1))
+            continue
+          fi
+
+          IFS=          if [ "$DRY_RUN" = "true" ]; then
+            echo "计划删除已合并辅助分支：$branch"
+          else
+            echo "删除已合并辅助分支：$branch"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch" --silent
+          fi
+          deleted=$((deleted + 1))
+        done
+
+        echo
+        if [ "$DRY_RUN" = "true" ]; then
+          echo "辅助分支清理预览完成：计划删除 $deleted 条，保留 $kept 条。"
+        else
+          echo "辅助分支清理完成：删除 $deleted 条，保留 $kept 条。"
+        fi
+\t' read -r merged_pr_number merged_head_sha <<< "$merged_pr"
+          branch_sha="$(
+            gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$branch" --jq '.object.sha'
+          )"
+
+          if [ "$branch_sha" != "$merged_head_sha" ]; then
+            echo "保留合并后又有新提交的辅助分支：$branch | current=$branch_sha | merged-pr=#$merged_pr_number head=$merged_head_sha"
             kept=$((kept + 1))
             continue
           fi
