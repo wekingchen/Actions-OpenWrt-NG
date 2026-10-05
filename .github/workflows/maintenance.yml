@@ -1,11 +1,7 @@
 name: Repository Maintenance
-run-name: 仓库维护 · ${{ github.event_name == 'push' && 'cleanup-merged-helper-branches' || inputs.operation }} · dry-run=${{ github.event_name == 'push' && 'false' || inputs.dry_run }}
+run-name: 仓库维护 · ${{ inputs.operation }} · dry-run=${{ inputs.dry_run }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-    - ".github/workflows/maintenance.yml"
   workflow_dispatch:
     inputs:
       operation:
@@ -115,10 +111,10 @@ jobs:
         echo "跳过默认分支/无分支：$skipped_default 条"
 
     - name: 清理已合并的辅助分支
-      if: github.event_name == 'push' || inputs.operation == 'cleanup-merged-helper-branches'
+      if: inputs.operation == 'cleanup-merged-helper-branches'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        DRY_RUN: ${{ github.event_name == 'push' && 'false' || inputs.dry_run }}
+        DRY_RUN: ${{ inputs.dry_run }}
       run: |
         set -Eeuo pipefail
 
