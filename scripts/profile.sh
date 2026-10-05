@@ -112,7 +112,7 @@ AUTO_UPDATE="${AUTO_UPDATE:-false}"
 MAXIMIZE_BUILD_SPACE="${MAXIMIZE_BUILD_SPACE:-false}"
 FEED_PRIORITY_MODE="${FEED_PRIORITY_MODE:-per-package}"
 if [ "${STREAM_BUILD_LOG+x}" = "x" ]; then
-  echo "WARNING: STREAM_BUILD_LOG 已废弃并被忽略；如需临时全量流式日志，请仅使用 Core 调试变量 OPENWRT_NG_DEBUG_STREAM_LOG=true。" >&2
+  echo "::warning::STREAM_BUILD_LOG 已废弃并被忽略；如需临时全量流式日志，请仅使用 Core 调试变量 OPENWRT_NG_DEBUG_STREAM_LOG=true。"
 fi
 unset STREAM_BUILD_LOG
 UPLOAD_BIN_DIR="${UPLOAD_BIN_DIR:-false}"
