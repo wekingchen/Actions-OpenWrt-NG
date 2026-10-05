@@ -1993,38 +1993,42 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   box-shadow: 0 5px 14px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
-.deleted-profiles-section {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px dashed var(--border);
+.trash-icon-button {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
 }
-.deleted-profiles-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+.trash-icon-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
-.deleted-profiles-head > div {
-  display: grid;
-  gap: 4px;
+.trash-icon-button:hover:not(:disabled) {
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+  background: var(--accent-soft);
 }
-.deleted-profiles-head strong {
-  font-size: 12px;
-}
-.deleted-profiles-head span {
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.5;
+
+.deleted-profiles-panel {
+  min-height: 240px;
 }
 .deleted-profile-list {
-  margin-top: 10px;
+  margin-top: 16px;
 }
 .deleted-profile-item {
   min-height: 58px;
   opacity: .92;
+  cursor: default;
 }
 .deleted-profile-item:hover {
   transform: none;
+}
+.deleted-profile-item:hover::before {
+  background: transparent;
 }
 .deleted-list-icon {
   color: var(--muted);
@@ -2265,6 +2269,7 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 #profile-card,
 #new-profile-card,
 #editor-card,
+#deleted-profiles-card,
 #build-card,
 #workspace-empty {
   scroll-margin-top: 102px;
@@ -2280,6 +2285,7 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   #profile-card,
   #new-profile-card,
   #editor-card,
+  #deleted-profiles-card,
   #build-card,
   #workspace-empty {
     scroll-margin-top: 70px;
