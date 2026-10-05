@@ -1234,7 +1234,7 @@ async function pollUpdateCheckerRun(generation) {
       setUpdateCheckerStatus(
         ok
           ? "更新检查完成；如果发现新的上游状态，已按现有规则启动对应构建。"
-          : `更新检查结束：${buildStatusLabel(run)}。请打开 Actions 查看失败步骤。`,
+          : `更新检查结束：${buildStatusLabel(run)}。请打开 GitHub Actions 运行记录查看失败步骤。`,
         !ok
       );
       $("confirm-update-checker").disabled = false;
@@ -1407,7 +1407,7 @@ async function pollReleaseExistingRun(generation) {
       setReleaseExistingStatus(
         ok
           ? "补发版本已经完成，正在刷新来源构建的发布信息。"
-          : `恢复发布结束：${buildStatusLabel(run)}。请打开 Actions 查看失败步骤。`,
+          : `补发版本结束：${buildStatusLabel(run)}。请打开 GitHub Actions 运行记录查看失败步骤。`,
         !ok
       );
       $("confirm-release-existing").disabled = ok;
