@@ -79,7 +79,7 @@ const secretFetch = async () => ({
 });
 await assert.rejects(
   () => loadControlPlaneConfig("unused", secretFetch),
-  /疑似凭据/
+  /敏感凭据/
 );
 
 console.log("管理中心公开配置测试通过。");
