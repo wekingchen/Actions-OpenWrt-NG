@@ -99,7 +99,7 @@ const connectHtml = await readFile(
   new URL("../../dashboard/connect.html", import.meta.url),
   "utf8"
 );
-assert.match(connectHtml, /当前已完成能力/);
+assert.match(connectHtml, /能做什么/);
 assert.match(connectHtml, /配置方案：.*新建.*复制.*重命名.*删除.*恢复/);
 assert.match(connectHtml, /推荐最终权限/);
 assert.match(connectHtml, /Administration \/ Workflows：不需要/);
