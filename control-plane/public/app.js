@@ -946,7 +946,7 @@ function canWriteRepo(repo) {
 
 function repositoryCapabilityText(repo) {
   const read = canReadRepo(repo) ? "配置可读取" : "缺少仓库文件权限";
-  const edit = canWriteRepo(repo) ? "可编辑 / 可提交 PR" : "编辑只读";
+  const edit = canWriteRepo(repo) ? "可编辑 / 可保存" : "只读";
   const build = canRunRepo(repo) ? "可构建" : "不可构建";
   return [read, edit, build].join(" · ");
 }
@@ -1062,7 +1062,7 @@ function buildProfileId(run) {
   const title = String(run.displayTitle || "");
   const parts = title.split(" · ").map((item) => item.trim()).filter(Boolean);
   if (parts[0] === "Build" && parts[1]) return parts[1];
-  return parts.find((part) => !part.startsWith("cp:") && part !== "Build") || "unknown";
+  return parts.find((part) => !part.startsWith("cp:") && part !== "Build") || "未知配置";
 }
 
 function parseProfileReleasePolicy(content) {
@@ -1964,8 +1964,8 @@ async function loadBuildDetail(runId) {
       const span = document.createElement("span");
       span.textContent =
         job.status === "completed"
-          ? (job.conclusion || "completed")
-          : job.status;
+          ? buildStatusLabel(job)
+          : buildStatusLabel(job);
       row.append(strong, span);
       jobs.appendChild(row);
     }
@@ -2047,8 +2047,8 @@ async function loadBuildDetail(runId) {
     const empty = document.createElement("p");
     empty.className = "muted";
     const reasons = {
-      release_bundle_missing: "本次构建没有发布版本，且没有保留可恢复的 发布包。",
-      release_bundle_expired: "本次构建的 发布包 已过期，不能直接补发。",
+      release_bundle_missing: "本次构建没有发布版本，也没有保留可用于补发的发布包。",
+      release_bundle_expired: "本次构建保留的发布包已经过期，不能直接补发。",
       build_not_successful: "只有成功完成的构建才能补发版本。",
       release_already_exists: "本次构建已经有关联版本发布。"
     };
@@ -2636,7 +2636,7 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
       deleteButton.setAttribute("aria-label", `删除 ${profile.id}`);
       deleteButton.disabled = Boolean(profile.baseline) || !canWriteRepo(repo);
       deleteButton.title = profile.baseline
-        ? "当前基准 配置方案 不可删除，请先切换基准"
+        ? "当前基准配置不能删除，请先切换基准"
         : canWriteRepo(repo)
           ? `删除 ${profile.id}`
           : "需要仓库文件（Contents）和合并请求（Pull requests）写权限";
@@ -2722,8 +2722,8 @@ function resetConfigStudioProgress(mode = "catalog") {
     ? "等待依赖检查任务"
     : "等待 GitHub 执行器";
   $("config-studio-progress-detail").textContent = resolving
-    ? "正在等待新的 resolve Action 建立运行记录。"
-    : "正在建立本次配置任务，随后会显示真实 Action 步骤。";
+    ? "正在等待新的依赖检查运行记录。"
+    : "正在建立本次配置任务，随后会显示真实运行步骤。";
   $("config-studio-progress-count").textContent = "准备中";
   $("config-studio-progress-elapsed").textContent = "";
   $("config-studio-progress-bar").style.width = "0%";
@@ -4482,7 +4482,7 @@ async function pollConfigStudio(generation) {
         "配置环境生成失败",
         "请打开 GitHub Actions 查看真实的 OpenWrt、软件源或 Kconfig 错误。"
       );
-      setConfigStudioError("Config Studio Action 执行失败。");
+      setConfigStudioError("图形配置任务执行失败。");
       $("config-studio-resolve").disabled = true;
       return;
     }
@@ -4591,7 +4591,7 @@ async function startConfigStudio(repo, options) {
     ? "图形配置 · " + options.profileId
     : "新配置方案 · 图形配置";
   $("config-studio-context").textContent = existing
-    ? repo.fullName + " · 从当前编辑器 配置方案 快照开始"
+    ? repo.fullName + " · 从当前编辑器里的配置快照开始"
     : repo.fullName + " · " + options.sourceRepo + " @ " + options.sourceBranch;
   $("config-studio-loading").hidden = false;
   $("config-studio-workbench").hidden = true;
@@ -4763,7 +4763,7 @@ async function useConfigStudioForNewProfile() {
   setActiveNavigation("profiles");
   scrollToPanel($("new-profile-card"));
   showNewProfileResult(
-    "图形配置已完成，正在自动生成 配置方案 预览。最后检查后点击“完成：创建 配置方案 PR”。"
+    "图形配置已完成，正在生成配置方案预览。最后检查后点击“完成：保存并应用”。"
   );
   $("new-profile-preview").click();
 }
@@ -4854,7 +4854,7 @@ async function init() {
     $("workspace-empty").hidden = false;
     $("workspace-empty-title").textContent = "选择一个仓库";
     $("workspace-empty-text").textContent =
-      "从顶栏仓库切换器进入 配置方案 与构建工作区。";
+      "从顶栏仓库切换器进入配置方案和构建工作区。";
   }
 }
 for (const item of document.querySelectorAll(".sidebar-nav .nav-item")) {
@@ -5303,7 +5303,7 @@ $("trigger-build").addEventListener("click", async () => {
         !$("build-dialog").hidden
       ) {
         setBuildDialogStatus(
-          `这个 配置方案 已有构建 #${run.runNumber} 正在${buildStatusLabel(run)}，不会重复触发。`,
+          `这套配置已有构建 #${run.runNumber} 正在${buildStatusLabel(run)}，不会重复触发。`,
           true
         );
       }
@@ -5418,7 +5418,7 @@ $("confirm-baseline-profile").addEventListener("click", async () => {
     );
     const resultMessage = profileWriteResultMessage(
       result,
-      "基准 配置方案 " + profileId
+      "基准配置 " + profileId
     );
     const resultUrl = result.pullRequest?.url || "";
     closeBaselineProfileDialog();
