@@ -37,7 +37,8 @@
 
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
-        <small>Control Plane 0.21.11</small>
+        <small>管理中心 0.21.11</small>
+        <!-- Control Plane 0.21.11 -->
       </div>
     </aside>
 
@@ -65,8 +66,8 @@
         </div>
 
         <div class="topbar-actions">
-          <span class="mobile-version-badge" aria-label="Control Plane 版本">0.21.11</span>
-          <div class="connection-badge" title="Control Plane 服务可用">
+          <span class="mobile-version-badge" aria-label="管理中心版本">0.21.11</span>
+          <div class="connection-badge" title="管理中心服务可用">
             <span class="status-dot"></span>
             <span>服务正常</span>
           </div>
@@ -165,7 +166,7 @@
                 <div class="form-section">
                   <div class="form-section-title">
                     <span>01</span>
-                    <div><strong>基础信息</strong><small>定义 Profile 的身份与源码来源</small></div>
+                    <div><strong>基础信息</strong><small>定义这套配置的名称、目录 ID 和源码来源</small></div>
                   </div>
                   <div class="form-grid two-cols">
                     <label class="field">
@@ -308,7 +309,7 @@
 
                     <div class="form-section compact-section">
                       <div class="form-section-title">
-                        <div><strong>高级校验</strong><small>Manifest 与额外上游监控</small></div>
+                        <div><strong>高级校验</strong><small>固件清单与额外上游监控</small></div>
                       </div>
                       <div class="form-grid two-cols">
                         <label class="field">
@@ -467,7 +468,7 @@
 
           <div id="update-checker-progress" class="action-progress-panel" hidden></div>
           <p class="build-dialog-status" id="update-checker-status" aria-live="polite"></p>
-          <a class="text-link" id="update-checker-run-link" href="#" target="_blank" rel="noreferrer" hidden>打开 Actions ↗</a>
+          <a class="text-link" id="update-checker-run-link" href="#" target="_blank" rel="noreferrer" hidden>查看运行记录 ↗</a>
 
           <div class="form-actions build-dialog-actions">
             <button class="button ghost" id="update-checker-cancel" type="button">关闭</button>
@@ -500,7 +501,7 @@
 
           <div id="release-existing-progress" class="action-progress-panel" hidden></div>
           <p class="build-dialog-status" id="release-existing-status" aria-live="polite"></p>
-          <a class="text-link" id="release-existing-run-link" href="#" target="_blank" rel="noreferrer" hidden>打开 Actions ↗</a>
+          <a class="text-link" id="release-existing-run-link" href="#" target="_blank" rel="noreferrer" hidden>查看运行记录 ↗</a>
 
           <div class="form-actions build-dialog-actions">
             <button class="button ghost" id="release-existing-cancel" type="button">关闭</button>
@@ -534,7 +535,7 @@
             </div>
             <details class="config-studio-technical">
               <summary>后台运行详情</summary>
-              <a class="text-link" id="config-studio-run-link" href="#" target="_blank" rel="noreferrer" hidden>打开 Actions ↗</a>
+              <a class="text-link" id="config-studio-run-link" href="#" target="_blank" rel="noreferrer" hidden>查看运行记录 ↗</a>
             </details>
           </div>
 
@@ -691,7 +692,7 @@
             <input id="publish-release" type="checkbox">
             <span>
               <strong>本次构建同时发布版本（Release）</strong>
-              <small id="publish-release-help">正在读取 Profile 发布策略…</small>
+              <small id="publish-release-help">正在读取这套配置的发布设置…</small>
             </span>
           </label>
 
