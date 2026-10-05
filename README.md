@@ -100,7 +100,7 @@ profiles/.baseline 保存当前唯一基准配置 ID。
 
 也可以直接复制 profiles/default/，改成自己的配置 ID，再手工维护 7 个文件。
 
-只要配置目录能通过 scripts/profile.sh validate，就可以交给统一 Builder 使用。
+只要配置目录能通过 scripts/profile.sh validate，就可以交给统一构建工作流使用。
 
 ## 图形配置为什么不是“假菜单”
 
@@ -176,7 +176,7 @@ Config Studio 不维护静态设备数据库，也不在浏览器里自己猜 Op
 - 详细并行输出留在 Runner 临时文件。
 - 失败后提取有限错误上下文。
 - 必要时对失败目标执行受限的 -j1 V=s 诊断。
-- 失败诊断作为短期 Artifact 保留。
+- 失败诊断作为短期构建产物保留。
 
 这样可以避免 GitHub 日志被截断后只剩“step truncated”而看不到真正错误。
 
@@ -212,7 +212,7 @@ Config Studio 不维护静态设备数据库，也不在浏览器里自己猜 Op
 
 ## 固件清单校验
 
-required-packages.txt 每行写一个必须出现在最终 image manifest 中的软件包。
+required-packages.txt 每行写一个必须出现在最终固件清单中的软件包。
 
 构建完成后 scripts/validate-manifest.sh 会检查它们是否真实进入目标固件，而不是只检查 .config 中有没有选中。
 
@@ -242,7 +242,7 @@ required-packages.txt 每行写一个必须出现在最终 image manifest 中的
 
 只有以下条件同时满足才允许补发：
 
-- 来源是正式 Builder。
+- 来源是正式构建工作流。
 - 来源运行已经结束。
 - “编译 OpenWrt 固件”任务成功。
 - 当前没有关联 Release。
@@ -273,7 +273,7 @@ GitHub Pages 构建看板用于只读查看：
 
 - Metadata：只读。
 - Contents：读写。
-- Pull requests：读写。
+- Pull requests（合并请求）：读写。
 - Actions：读写。
 
 不需要 Administration 或 Workflows 权限。
@@ -325,7 +325,7 @@ VERSION                框架版本唯一来源
 
 - 主仓是共享代码唯一来源。
 - 测试仓在跑新功能前必须先通过共享代码同步门禁。
-- 测试仓允许保留自己的测试 Profile、Dashboard 数据和 .openwrt-ng 同步配置。
+- 测试仓允许保留自己的测试配置方案、构建看板数据和 .openwrt-ng 同步配置。
 - 共享代码有缺失、额外或内容 / 文件模式不同，测试应直接失败。
 - 优先使用 smoke 配置验证框架逻辑，不为了验证按钮反复跑大型固件。
 - 大型编译失败时只抓有限错误上下文，不反复拉取被 GitHub 截断的巨型日志。
@@ -365,7 +365,7 @@ npm test
 - Feed 合并和冲突策略。
 - 失败上下文提取。
 - 缓存清理。
-- Dashboard / Wizard。
+- 构建看板 / 配置方案向导。
 - Docker 自托管启动。
 
 ## 常见问题
