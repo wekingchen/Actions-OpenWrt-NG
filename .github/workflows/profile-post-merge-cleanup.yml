@@ -5,10 +5,7 @@ on:
   pull_request:
     types: [closed]
 
-permissions:
-  contents: write
-  actions: write
-  pull-requests: write
+permissions: {}
 
 concurrency:
   group: openwrt-ng-profile-post-merge-${{ github.event.pull_request.number }}
@@ -23,6 +20,10 @@ jobs:
       startsWith(github.event.pull_request.head.ref, 'openwrt-ng/profile-')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+      pull-requests: write
 
     steps:
     - name: 检出默认分支
