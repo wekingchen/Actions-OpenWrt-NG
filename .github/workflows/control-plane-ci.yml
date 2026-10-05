@@ -206,8 +206,10 @@ jobs:
         grep -q 'control_plane_request_id:' .github/workflows/build-openwrt.yml
         grep -q 'cp:{0}' .github/workflows/build-openwrt.yml
         grep -q 'openwrt/.ccache' .github/workflows/build-openwrt.yml
-        grep -q 'CONFIG_DEVEL=y' profiles/default/.config
-        grep -q 'CONFIG_CCACHE=y' profiles/default/.config
+        baseline_profile="$(tr -d '\r\n[:space:]' < profiles/.baseline)"
+        test -n "$baseline_profile"
+        grep -q 'CONFIG_DEVEL=y' "profiles/$baseline_profile/.config"
+        grep -q 'CONFIG_CCACHE=y' "profiles/$baseline_profile/.config"
         grep -q 'ccache 配置验收通过' .github/workflows/build-openwrt.yml
         grep -q 'Profile 请求 CONFIG_CCACHE=y' .github/workflows/build-openwrt.yml
         grep -q 'openwrt-ng-build-v3-ubuntu24-' .github/workflows/build-openwrt.yml
