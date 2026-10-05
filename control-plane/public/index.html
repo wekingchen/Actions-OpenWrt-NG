@@ -235,7 +235,7 @@
                     <span>额外软件源（Feeds）</span>
                     <textarea id="new-extra-feeds" class="editor feeds-editor" spellcheck="false"
                               placeholder="src-git my_feed https://github.com/example/openwrt-packages.git;main"></textarea>
-                    <small>这些源会在 <code>./scripts/feeds update -a</code> 前插入。与源码默认 feed 名称重复时自动保留这里的第三方源；额外 feeds 自己重名则保留第一条。“常用源”都会标记为第三方优先；不同 feed 提供同名 source package 时仍按版本最高者择优。修改后需要重新生成配置菜单。</small>
+                    <small>这些第三方软件源会在 OpenWrt 更新软件源前加入。名称与源码自带软件源重复时，优先使用这里配置的第三方源；这里自己出现重名时保留第一条。多个第三方源提供同名软件包时，再按下方冲突策略决定使用哪一个。修改后需要重新生成配置菜单。</small>
                   </label>
 
                   <label class="field">
@@ -244,7 +244,7 @@
                       <option value="per-package" selected>per-package · 按二进制包版本择优</option>
                       <option value="feed-order">feed-order · 按 feeds.conf 顺序整源优先</option>
                     </select>
-                    <small><code>per-package</code> 是默认策略；如果同一 source 中不同二进制包分别要求不同 feed 胜出，会停止并提示风险。<code>feed-order</code> 则始终保留排在最前的第三方优先 feed，适合更重视整套包一致性的情况。</small>
+                    <small><code>per-package</code> 是默认策略：同名软件包比较版本，版本高的优先；如果同一源码包拆出的多个软件包要求不同来源获胜，会停止并提示风险。<code>feed-order</code> 则按第三方软件源的排列顺序整套选择，适合更重视同一来源一致性的情况。</small>
                   </label>
                 </div>
 
@@ -429,7 +429,7 @@
                 <span class="preview-kicker">构建详情</span>
                 <h3 id="build-detail-title">运行详情</h3>
               </div>
-              <a class="text-link" id="build-summary-link" href="#" target="_blank" rel="noreferrer">打开 Actions ↗</a>
+              <a class="text-link" id="build-summary-link" href="#" target="_blank" rel="noreferrer">查看运行记录 ↗</a>
             </div>
             <div id="build-detail-progress" class="action-progress-panel" hidden></div>
             <div id="build-jobs" class="build-sublist"></div>
