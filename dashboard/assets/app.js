@@ -46,13 +46,13 @@
 
     const config = build.config || {};
     const configSummary = [config.changed, config.added, config.removed].every((v) => Number.isFinite(v))
-      ? `changed ${config.changed} · added ${config.added} · removed ${config.removed}`
+      ? `修改 ${config.changed} · 新增 ${config.added} · 删除 ${config.removed}`
       : "—";
     const metrics = [
       ["配置方案", build.profile || "—"],
-      ["Source", build.source ? `${build.source} @ ${build.branch || "—"}` : "—"],
+      ["源码", build.source ? `${build.source} @ ${build.branch || "—"}` : "—"],
       ["提交", build.commit ? build.commit.slice(0, 12) : "—"],
-      ["Duration", fmtDuration(build.duration_seconds)],
+      ["耗时", fmtDuration(build.duration_seconds)],
       ["配置摘要", configSummary]
     ];
     el("latest-build-metrics").innerHTML = metrics.map(([k, v]) =>
