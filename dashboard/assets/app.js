@@ -216,12 +216,12 @@
       renderProfiles(data.profiles || []);
       renderBuilds(data.latest_builds || []);
       renderReleases(data.latest_releases || []);
-      el("generated-at").textContent = `Updated ${fmtTime(data.generated_at)}`;
+      el("generated-at").textContent = `数据更新于 ${fmtTime(data.generated_at)}`;
     } catch (error) {
       el("latest-build-title").textContent = "构建看板数据暂时不可用";
-      el("latest-build-status").textContent = "Data Error";
+      el("latest-build-status").textContent = "数据错误";
       el("latest-build-status").className = "status-pill failure";
-      el("generated-at").textContent = `Failed to load data: ${error.message}`;
+      el("generated-at").textContent = `数据加载失败：${error.message}`;
     }
   }
 
