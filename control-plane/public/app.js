@@ -388,7 +388,7 @@ function renderNewConfigStudioState() {
     node.textContent = "已有配置会话，可继续上次操作；不会重新生成。";
     button.textContent = "继续图形配置";
   } else if (draft?.requestId) {
-    node.textContent = "源码、feeds 或基础 .config 已变化，需要重新生成配置菜单。";
+    node.textContent = "源码、软件源（feeds）或基础 .config 已变化，需要重新生成配置菜单。";
     button.textContent = "重新生成配置菜单";
   } else if ($("new-config-text")?.value.trim()) {
     node.textContent = "已有 .config；可继续用图形界面检查或修改。";
@@ -953,7 +953,7 @@ function repositoryCapabilityText(repo) {
 
 function updateRepositoryContext(repo) {
   $("repo-meta-line").hidden = false;
-  $("repo-visibility").textContent = repo.private ? "Private" : "Public";
+  $("repo-visibility").textContent = repo.private ? "私有仓库" : "公开仓库";
   $("repo-branch").textContent = repo.defaultBranch;
   const ready = canWriteRepo(repo) && canRunRepo(repo);
   $("repo-capability").textContent = ready ? "完整能力" : "权限受限";
@@ -1867,7 +1867,7 @@ function renderBuildRows(root, runs, options = {}) {
       cancel.className = "build-record-action danger-action";
       cancel.textContent = "取消";
       cancel.disabled = !canRunRepo(buildState.repo || currentRepository());
-      cancel.title = cancel.disabled ? "需要 Actions 写权限" : "取消这次构建";
+      cancel.title = cancel.disabled ? "需要 GitHub Actions 写权限" : "取消这次构建";
       cancel.addEventListener("click", () => {
         controlBuilderRun(run, "cancel", cancel).catch((error) => showError(error));
       });
@@ -1878,7 +1878,7 @@ function renderBuildRows(root, runs, options = {}) {
       rerun.className = "build-record-action";
       rerun.textContent = "重跑";
       rerun.disabled = !canRunRepo(buildState.repo || currentRepository());
-      rerun.title = rerun.disabled ? "需要 Actions 写权限" : "重新执行这次构建";
+      rerun.title = rerun.disabled ? "需要 GitHub Actions 写权限" : "重新执行这次构建";
       rerun.addEventListener("click", () => {
         controlBuilderRun(run, "rerun", rerun).catch((error) => showError(error));
       });
@@ -2983,7 +2983,7 @@ function renderConfigStudioTargetSelectors() {
   if (!devices.length) {
     const option = document.createElement("option");
     option.value = "";
-    option.textContent = "Default";
+    option.textContent = "默认";
     deviceSelect.appendChild(option);
   } else {
     for (const device of devices) {
@@ -3774,7 +3774,7 @@ function configStudioPackageChoice(pkg, prompt, options) {
   const strong = document.createElement("strong");
   strong.textContent = prompt || "单选配置";
   const badge = document.createElement("span");
-  badge.textContent = "choice";
+  badge.textContent = "单选组";
   title.append(strong, badge);
 
   const meta = document.createElement("small");
@@ -4923,7 +4923,7 @@ $("new-config-studio").addEventListener("click", async () => {
     return;
   }
   if (!sourceRepo || !sourceBranch) {
-    showError("请先填写源码仓库与分支 / Tag。");
+    showError("请先填写源码仓库与分支 / 标签（Tag）。");
     return;
   }
 
