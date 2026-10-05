@@ -140,6 +140,10 @@ profiles/.baseline 保存当前唯一基准配置 ID。
 
 常用第三方源可以使用 --force 标记，从而优先覆盖源码默认同名包。
 
+这里需要区分“正常分仓”和“发生过仲裁后的跨源拼接”：例如 passwall_luci 依赖 passwall_packages 本来就是上游的正常拆分，不会提示风险；只有依赖包所在 source 同时被多个优先 feed 提供、经过仲裁后由另一 feed 胜出时，才会记录跨 feed 依赖告警。
+
+从旧版本升级后，如果 per-package 发现同一 source 内不同二进制包分别需要不同 feed 胜出，会以退出码 2 停止，而不是静默拼接。确认希望某个 feed 整套优先时，把 Profile 的 FEED_PRIORITY_MODE 改为 feed-order，并按 feeds.conf 顺序放置优先源。
+
 每轮决策都会进入 config-record/feed-priority.json，方便之后排查“这次到底用了哪个源”。
 
 ## 正式构建
