@@ -31,6 +31,10 @@ def cache(
     )
 
 
+def hash_tail(value: int) -> str:
+    return f"{value:064x}"
+
+
 assert module.parse_keep("2") == 2
 for invalid in ("0", "-1", "abc"):
     try:
@@ -49,13 +53,13 @@ build = "openwrt-ng-build-v3-ubuntu24-Linux-X64-smoke-"
 other = "openwrt-ng-dl-Linux-gl-mt3600be-"
 
 caches = [
-    cache(1, dl + "old", "2026-10-01T00:00:00Z", size=10),
-    cache(2, dl + "mid", "2026-10-02T00:00:00Z", size=20),
-    cache(3, dl + "new", "2026-10-03T00:00:00Z", size=30),
-    cache(4, build + "old", "2026-10-01T00:00:00Z", size=40),
-    cache(5, build + "mid", "2026-10-02T00:00:00Z", size=50),
-    cache(6, build + "new", "2026-10-03T00:00:00Z", size=60),
-    cache(7, other + "must-stay", "2026-09-01T00:00:00Z", size=70),
+    cache(1, dl + hash_tail(1), "2026-10-01T00:00:00Z", size=10),
+    cache(2, dl + hash_tail(2), "2026-10-02T00:00:00Z", size=20),
+    cache(3, dl + hash_tail(3), "2026-10-03T00:00:00Z", size=30),
+    cache(4, build + hash_tail(4), "2026-10-01T00:00:00Z", size=40),
+    cache(5, build + hash_tail(5), "2026-10-02T00:00:00Z", size=50),
+    cache(6, build + hash_tail(6), "2026-10-03T00:00:00Z", size=60),
+    cache(7, other + hash_tail(7), "2026-09-01T00:00:00Z", size=70),
 ]
 
 plan = module.plan_deletions(caches, [dl, build], 2)
@@ -73,11 +77,29 @@ assert all(
 
 # 同一访问时间时，用 created_at / id 稳定决定“更新”的 cache。
 tie = [
-    cache(10, dl + "a", "2026-10-03T00:00:00Z", created="2026-10-03T00:00:00Z"),
-    cache(11, dl + "b", "2026-10-03T00:00:00Z", created="2026-10-04T00:00:00Z"),
+    cache(10, dl + hash_tail(10), "2026-10-03T00:00:00Z", created="2026-10-03T00:00:00Z"),
+    cache(11, dl + hash_tail(11), "2026-10-03T00:00:00Z", created="2026-10-04T00:00:00Z"),
 ]
 tie_plan = module.plan_deletions(tie, [dl], 1)
 assert [item.id for item in tie_plan[dl]["keep"]] == [11]
 assert [item.id for item in tie_plan[dl]["delete"]] == [10]
+
+# Profile x86 的前缀不能误匹配 x86-test。
+x86 = "openwrt-ng-dl-Linux-x86-"
+x86_test = "openwrt-ng-dl-Linux-x86-test-"
+prefix_collision = [
+    cache(20, x86 + hash_tail(20), "2026-10-01T00:00:00Z"),
+    cache(21, x86 + hash_tail(21), "2026-10-03T00:00:00Z"),
+    cache(22, x86_test + hash_tail(22), "2026-09-01T00:00:00Z"),
+]
+collision_plan = module.plan_deletions(prefix_collision, [x86], 1)
+assert [item.id for item in collision_plan[x86]["keep"]] == [21]
+assert [item.id for item in collision_plan[x86]["delete"]] == [20]
+assert all(
+    item.id != 22
+    for group in collision_plan.values()
+    for items in group.values()
+    for item in items
+)
 
 print("Actions cache governance tests passed.")
