@@ -4495,7 +4495,7 @@ async function pollConfigStudio(generation) {
       setConfigStudioStep(1);
       setConfigStudioStatus(
         "配置菜单已就绪",
-        "选择设备、App 和编译特性；完成后点击“下一步：检查依赖”。"
+        "选择设备、应用和编译特性；完成后点击“下一步：检查依赖”。"
       );
       renderConfigStudioCatalog(true);
       if (restoreNewConfigStudioUi()) {
