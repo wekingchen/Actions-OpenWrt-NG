@@ -82,7 +82,7 @@ await assert.rejects(
   /疑似凭据/
 );
 
-console.log("Control Plane public-config tests passed.");
+console.log("管理中心公开配置测试通过。");
 
 
 const publicConfig = JSON.parse(
@@ -100,7 +100,7 @@ const connectHtml = await readFile(
   "utf8"
 );
 assert.match(connectHtml, /当前已完成能力/);
-assert.match(connectHtml, /直接新建标准 Profile/);
+assert.match(connectHtml, /配置方案：.*新建.*复制.*重命名.*删除.*恢复/);
 assert.match(connectHtml, /推荐最终权限/);
 assert.match(connectHtml, /Administration \/ Workflows：不需要/);
 assert.doesNotMatch(connectHtml, /V2 Preview|Roadmap|V2\.0A 权限边界/);
