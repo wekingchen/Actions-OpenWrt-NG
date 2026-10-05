@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -14,6 +15,7 @@ from typing import Any
 
 API_ROOT = "https://api.github.com"
 API_VERSION = "2022-11-28"
+HASH_TAIL_RE = re.compile(r"[0-9a-f]{64}")
 
 
 @dataclass(frozen=True)
@@ -70,6 +72,12 @@ def normalized_prefixes(value: str) -> list[str]:
     return prefixes
 
 
+def key_matches(key: str, prefix: str) -> bool:
+    return key.startswith(prefix) and bool(
+        HASH_TAIL_RE.fullmatch(key[len(prefix):])
+    )
+
+
 def cache_sort_key(cache: CacheRecord) -> tuple[str, str, int]:
     return (cache.last_accessed_at, cache.created_at, cache.id)
 
@@ -86,7 +94,7 @@ def plan_deletions(
         matched = [
             cache
             for cache in caches
-            if cache.id > 0 and cache.id not in claimed and cache.key.startswith(prefix)
+            if cache.id > 0 and cache.id not in claimed and key_matches(cache.key, prefix)
         ]
         matched.sort(key=cache_sort_key, reverse=True)
         for cache in matched:
