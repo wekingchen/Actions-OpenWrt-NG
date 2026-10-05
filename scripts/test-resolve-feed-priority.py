@@ -184,7 +184,31 @@ def test_feed_order_resolves_split_source() -> None:
         assert "bundle" not in beta
 
 
-def test_cross_feed_dependency_warning() -> None:
+def test_normal_split_dependency_is_not_warned() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        write_feeds(
+            root,
+            [
+                "src-git --force passwall_luci https://example.invalid/passwall_luci.git",
+                "src-git --force passwall_packages https://example.invalid/passwall_packages.git",
+            ],
+        )
+        (root / "feeds" / "passwall_luci.index").write_text(
+            block("luci-app-passwall", [("luci-app-passwall", "1.0-r1", "+xray-core")]),
+            encoding="utf-8",
+        )
+        (root / "feeds" / "passwall_packages.index").write_text(
+            block("xray-core", [("xray-core", "1.0-r1", "")]),
+            encoding="utf-8",
+        )
+
+        proc, data = run_tool(root)
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert data["crossFeedDependencyCount"] == 0
+
+
+def test_arbitrated_cross_feed_dependency_warning() -> None:
     with tempfile.TemporaryDirectory() as raw:
         root = Path(raw)
         write_feeds(
@@ -195,11 +219,12 @@ def test_cross_feed_dependency_warning() -> None:
             ],
         )
         (root / "feeds" / "alpha.index").write_text(
-            block("app", [("app", "1.0-r1", "+libfoo")]),
+            block("app", [("app", "1.0-r1", "+libfoo")])
+            + block("libfoo", [("libfoo", "1.0-r1", "")]),
             encoding="utf-8",
         )
         (root / "feeds" / "beta.index").write_text(
-            block("libfoo", [("libfoo", "1.0-r1", "")]),
+            block("libfoo", [("libfoo", "2.0-r1", "")]),
             encoding="utf-8",
         )
 
@@ -211,13 +236,16 @@ def test_cross_feed_dependency_warning() -> None:
         assert warning["packageFeed"] == "alpha"
         assert warning["dependency"] == "libfoo"
         assert warning["dependencyFeed"] == "beta"
+        assert warning["dependencySource"] == "libfoo"
+        assert warning["competingFeeds"] == ["alpha", "beta"]
 
 
 def main() -> None:
     test_per_package_happy_path()
     test_split_package_winners_fail_safe()
     test_feed_order_resolves_split_source()
-    test_cross_feed_dependency_warning()
+    test_normal_split_dependency_is_not_warned()
+    test_arbitrated_cross_feed_dependency_warning()
     print("Feed priority mode tests passed.")
 
 

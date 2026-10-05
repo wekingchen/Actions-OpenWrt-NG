@@ -1,0 +1,109 @@
+name: Repository Maintenance
+run-name: 仓库维护 · ${{ inputs.operation }} · dry-run=${{ inputs.dry_run }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 选择维护操作
+        required: true
+        type: choice
+        default: cleanup-non-main-runs
+        options:
+        - cleanup-non-main-runs
+        - cleanup-workflow-history
+      dry_run:
+        description: 仅预览，不实际删除
+        required: true
+        type: boolean
+        default: true
+
+permissions: {}
+
+jobs:
+  maintenance:
+    name: 执行仓库维护
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: write
+      contents: read
+
+    steps:
+    - name: 检出维护脚本
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 清理已删除或过期 Workflow 历史
+      if: inputs.operation == 'cleanup-workflow-history'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        WORKFLOW_RETENTION_DAYS: "30"
+        WORKFLOW_KEEP_MINIMUM_RUNS: "10"
+        WORKFLOW_CLEANUP_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+      run: |
+        set -Eeuo pipefail
+        bash scripts/cleanup-workflow-runs.sh
+
+    - name: 清理非默认分支的已完成运行记录
+      if: inputs.operation == 'cleanup-non-main-runs'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        DRY_RUN: ${{ inputs.dry_run }}
+      run: |
+        set -Eeuo pipefail
+
+        default_branch="$(gh api "repos/$GITHUB_REPOSITORY" --jq '.default_branch')"
+        [ -n "$default_branch" ] || {
+          echo "ERROR: 无法获取默认分支" >&2
+          exit 1
+        }
+
+        total=0
+        skipped_profile=0
+        skipped_active=0
+        skipped_default=0
+
+        while IFS=$'\t' read -r run_id head_branch status workflow_name; do
+          [ -n "$run_id" ] || continue
+
+          if [ "$status" != "completed" ]; then
+            skipped_active=$((skipped_active + 1))
+            continue
+          fi
+
+          if [ -z "$head_branch" ] || [ "$head_branch" = "$default_branch" ]; then
+            skipped_default=$((skipped_default + 1))
+            continue
+          fi
+
+          case "$head_branch" in
+            openwrt-ng/profile-*)
+              echo "保留 Profile PR 审计记录：$run_id | $head_branch | $workflow_name"
+              skipped_profile=$((skipped_profile + 1))
+              continue
+              ;;
+          esac
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "计划删除：$run_id | $head_branch | $workflow_name"
+          else
+            echo "删除：$run_id | $head_branch | $workflow_name"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --silent
+          fi
+          total=$((total + 1))
+        done < <(
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | [.id, (.head_branch // ""), .status, .name] | @tsv'
+        )
+
+        echo
+        if [ "$DRY_RUN" = "true" ]; then
+          echo "维护预览完成：计划删除 $total 条，未实际删除。"
+        else
+          echo "维护完成：已删除 $total 条。"
+        fi
+        echo "保留 Profile PR 记录：$skipped_profile 条"
+        echo "跳过仍在运行：$skipped_active 条"
+        echo "跳过默认分支/无分支：$skipped_default 条"

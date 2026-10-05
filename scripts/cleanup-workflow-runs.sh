@@ -6,11 +6,27 @@ repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 
 retention_days="${WORKFLOW_RETENTION_DAYS:-30}"
 keep_minimum_runs="${WORKFLOW_KEEP_MINIMUM_RUNS:-10}"
+dry_run="${WORKFLOW_CLEANUP_DRY_RUN:-0}"
 
 if ! [[ "$retention_days" =~ ^[0-9]+$ ]] || ! [[ "$keep_minimum_runs" =~ ^[0-9]+$ ]]; then
   echo "ERROR: WORKFLOW_RETENTION_DAYS / WORKFLOW_KEEP_MINIMUM_RUNS 必须是非负整数" >&2
   exit 2
 fi
+[[ "$dry_run" = "0" || "$dry_run" = "1" ]] || {
+  echo "ERROR: WORKFLOW_CLEANUP_DRY_RUN 只能是 0 或 1" >&2
+  exit 2
+}
+
+delete_run() {
+  local run_id="$1"
+  if [ "$dry_run" = "1" ]; then
+    return 0
+  fi
+  gh api -X DELETE "repos/$repo/actions/runs/$run_id" --silent
+}
+
+delete_label="删除"
+[ "$dry_run" = "0" ] || delete_label="计划删除"
 
 default_branch="$(gh api "repos/$repo" --jq '.default_branch')"
 [ -n "$default_branch" ] || {
@@ -66,8 +82,8 @@ while IFS=$'\t' read -r run_id run_path run_status run_name; do
     continue
   fi
 
-  echo "删除已无对应 yml/yaml 的 Workflow Run：$run_id | $run_path | $run_name"
-  gh api -X DELETE "repos/$repo/actions/runs/$run_id" --silent
+  echo "${delete_label}已无对应 yml/yaml 的 Workflow Run：$run_id | $run_path | $run_name"
+  delete_run "$run_id"
   obsolete_deleted=$((obsolete_deleted + 1))
 done < "$all_runs"
 
@@ -97,8 +113,8 @@ while IFS=$'\t' read -r workflow_id workflow_path; do
     created_epoch="$(date -u -d "$created_at" +%s)"
     [ "$created_epoch" -lt "$cutoff_epoch" ] || continue
 
-    echo "删除过期 Workflow Run：$run_id | $workflow_path | $created_at"
-    gh api -X DELETE "repos/$repo/actions/runs/$run_id" --silent
+    echo "${delete_label}过期 Workflow Run：$run_id | $workflow_path | $created_at"
+    delete_run "$run_id"
     retention_deleted=$((retention_deleted + 1))
   done
 done < <(
@@ -107,9 +123,15 @@ done < <(
 )
 
 echo
-echo "Workflow 历史清理完成："
-echo "  已删除 workflow 的 completed runs：$obsolete_deleted"
+if [ "$dry_run" = "1" ]; then
+  echo "Workflow 历史清理预览完成：未实际删除任何记录。"
+  count_label="计划删除"
+else
+  echo "Workflow 历史清理完成："
+  count_label="已删除"
+fi
+echo "  ${count_label} workflow 的 completed runs：$obsolete_deleted"
 echo "  已删除 workflow 的活动 runs（跳过）：$obsolete_active"
 echo "  未知路径（跳过）：$unknown_path"
-echo "  现存 workflow 的过期 runs：$retention_deleted"
+echo "  ${count_label}现存 workflow 的过期 runs：$retention_deleted"
 echo "  保留策略：每个现存 workflow 至少 $keep_minimum_runs 条；仅清理 $retention_days 天前的额外记录"
