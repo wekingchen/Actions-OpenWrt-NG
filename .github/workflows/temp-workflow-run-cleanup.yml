@@ -1,0 +1,61 @@
+name: Temporary Non-Main Workflow Run Cleanup
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/temp-workflow-run-cleanup.yml
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 删除非 main 的 Workflow Runs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          repo="${GITHUB_REPOSITORY}"
+          current_run="${GITHUB_RUN_ID}"
+
+          mapfile -t run_ids < <(
+            gh api --paginate --method GET               -H "Accept: application/vnd.github+json"               "/repos/${repo}/actions/runs?per_page=100"               --jq '.workflow_runs[] | select(.head_branch != "main" and .status == "completed") | .id'
+          )
+
+          echo "待删除的非 main Workflow Runs：${#run_ids[@]} 条"
+
+          deleted=0
+          failed=0
+
+          for run_id in "${run_ids[@]}"; do
+            if [[ "${run_id}" == "${current_run}" ]]; then
+              continue
+            fi
+
+            if gh api --method DELETE               -H "Accept: application/vnd.github+json"               "/repos/${repo}/actions/runs/${run_id}" >/dev/null 2>&1; then
+              deleted=$((deleted + 1))
+            else
+              echo "::warning::删除 run ${run_id} 失败"
+              failed=$((failed + 1))
+            fi
+          done
+
+          remaining="$(
+            gh api --paginate --method GET               -H "Accept: application/vnd.github+json"               "/repos/${repo}/actions/runs?per_page=100"               --jq '.workflow_runs[] | select(.head_branch != "main") | .id'               | wc -l | tr -d ' '
+          )"
+
+          echo "已删除：${deleted} 条"
+          echo "删除失败：${failed} 条"
+          echo "剩余非 main：${remaining} 条"
+
+          if [[ "${failed}" -ne 0 || "${remaining}" -ne 0 ]]; then
+            exit 1
+          fi
