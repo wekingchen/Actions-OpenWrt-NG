@@ -21,7 +21,7 @@ dashboard/ 是 OpenWrt NG 的公开 GitHub Pages 前端。它负责展示只读�
 
 浏览器端不会直接使用 GitHub Token，也不会调用需要仓库写权限的 GitHub API。
 
-Pages 工作流读取仓库和 Actions 状态后生成静态数据。部署任务只需要 GitHub Pages 所需权限。构建看板发生故障不会影响 Builder、Update Checker 或版本发布。
+Pages 工作流读取仓库和 Actions 状态后生成静态数据。部署任务只需要 GitHub Pages 所需权限。构建看板发生故障不会影响构建工作流、上游更新检查或版本发布。
 
 ## 配置方案向导
 
