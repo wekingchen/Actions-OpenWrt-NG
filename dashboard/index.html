@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OpenWrt NG Dashboard</title>
-  <meta name="description" content="OpenWrt NG build status dashboard">
+  <title>OpenWrt NG 构建看板</title>
+  <meta name="description" content="OpenWrt NG 构建状态看板">
   <link rel="stylesheet" href="./assets/style.css">
 </head>
 <body>
@@ -12,24 +12,24 @@
     <header class="site-header">
       <div>
         <p class="eyebrow">OpenWrt NG</p>
-        <h1>Build Dashboard</h1>
-        <p class="subtitle">Profiles、构建、上游状态与 Release 的统一只读视图。</p>
+        <h1>构建看板</h1>
+        <p class="subtitle">集中查看配置方案、构建、上游更新和版本发布状态；这里只读，不会修改仓库。</p>
       </div>
       <div class="header-actions">
-        <a class="button secondary" href="./wizard.html">创建 Profile</a>
-        <a class="button secondary" href="./connect.html">V2 控制面</a>
-        <a class="button secondary" id="repo-link" href="#" target="_blank" rel="noreferrer">Repository</a>
-        <a class="button" id="actions-link" href="#" target="_blank" rel="noreferrer">Actions</a>
+        <a class="button secondary" href="./wizard.html">创建配置方案</a>
+        <a class="button secondary" href="./connect.html">管理中心</a>
+        <a class="button secondary" id="repo-link" href="#" target="_blank" rel="noreferrer">代码仓库</a>
+        <a class="button" id="actions-link" href="#" target="_blank" rel="noreferrer">构建记录</a>
       </div>
     </header>
 
     <main>
-      <section class="hero-grid" aria-label="Overview">
+      <section class="hero-grid" aria-label="概览">
         <article class="status-card primary-card">
           <div class="card-heading">
             <div>
-              <p class="section-kicker">Latest Build</p>
-              <h2 id="latest-build-title">Loading…</h2>
+              <p class="section-kicker">最新构建</p>
+              <h2 id="latest-build-title">正在读取…</h2>
             </div>
             <span class="status-pill neutral" id="latest-build-status">…</span>
           </div>
@@ -40,22 +40,22 @@
         </article>
 
         <article class="status-card">
-          <p class="section-kicker">Upstream</p>
+          <p class="section-kicker">上游更新</p>
           <div class="big-status" id="upstream-status">—</div>
           <p class="muted" id="upstream-detail">正在读取上游状态…</p>
         </article>
 
         <article class="status-card">
-          <p class="section-kicker">Latest Release</p>
+          <p class="section-kicker">最新发布</p>
           <div class="big-status mono" id="latest-release-tag">—</div>
           <p class="muted" id="latest-release-time">—</p>
           <div class="card-actions">
-            <a class="text-link" id="latest-release-link" href="#" target="_blank" rel="noreferrer">打开 Release →</a>
+            <a class="text-link" id="latest-release-link" href="#" target="_blank" rel="noreferrer">打开版本发布 →</a>
           </div>
         </article>
 
         <article class="status-card">
-          <p class="section-kicker">Profiles</p>
+          <p class="section-kicker">配置方案</p>
           <div class="big-number" id="profile-count">0</div>
           <p class="muted" id="auto-update-count">0 个启用自动追新</p>
         </article>
@@ -64,10 +64,10 @@
       <section class="content-section">
         <div class="section-heading">
           <div>
-            <p class="section-kicker">Profiles</p>
-            <h2>构建配置</h2>
+            <p class="section-kicker">配置方案</p>
+            <h2>配置方案</h2>
           </div>
-          <p class="section-note">Profile 是 Dashboard 的主视图单位。</p>
+          <p class="section-note">每套配置方案对应一组独立的源码、设备、软件包和构建设置。</p>
         </div>
         <div class="profile-grid" id="profiles-grid"></div>
       </section>
@@ -75,19 +75,19 @@
       <section class="content-section">
         <div class="section-heading">
           <div>
-            <p class="section-kicker">Build History</p>
+            <p class="section-kicker">构建历史</p>
             <h2>最近构建</h2>
           </div>
-          <a class="text-link" id="all-runs-link" href="#" target="_blank" rel="noreferrer">查看全部 Actions →</a>
+          <a class="text-link" id="all-runs-link" href="#" target="_blank" rel="noreferrer">查看全部构建记录 →</a>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
                 <th>状态</th>
-                <th>Profile</th>
+                <th>配置方案</th>
                 <th>触发</th>
-                <th>Commit</th>
+                <th>提交</th>
                 <th>耗时</th>
                 <th>时间</th>
                 <th></th>
@@ -101,18 +101,18 @@
       <section class="content-section">
         <div class="section-heading">
           <div>
-            <p class="section-kicker">Releases</p>
+            <p class="section-kicker">版本发布</p>
             <h2>最近发布</h2>
           </div>
-          <a class="text-link" id="all-releases-link" href="#" target="_blank" rel="noreferrer">查看全部 Releases →</a>
+          <a class="text-link" id="all-releases-link" href="#" target="_blank" rel="noreferrer">查看全部版本发布 →</a>
         </div>
         <div class="release-list" id="release-list"></div>
       </section>
     </main>
 
     <footer>
-      <span id="generated-at">Data not loaded</span>
-      <span>Dashboard 只读，不参与编译或发布决策。</span>
+      <span id="generated-at">数据尚未加载</span>
+      <span>构建看板只读，不会触发编译、修改配置或发布版本。</span>
     </footer>
   </div>
 
@@ -140,7 +140,7 @@
         <p class="muted release-meta"></p>
       </div>
       <div class="release-assets"></div>
-      <a class="button secondary release-link" href="#" target="_blank" rel="noreferrer">查看 Release</a>
+      <a class="button secondary release-link" href="#" target="_blank" rel="noreferrer">查看版本发布</a>
     </article>
   </template>
 
