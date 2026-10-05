@@ -18,7 +18,7 @@ from typing import Any
 
 API_ROOT = "https://api.github.com"
 
-FRAMEWORK_VERSION_RE = re.compile(r"^[0-9]+\\.[0-9]+\\.[0-9]+$")
+FRAMEWORK_VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
 
 class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
