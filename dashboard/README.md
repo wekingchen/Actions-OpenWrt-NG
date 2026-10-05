@@ -1,72 +1,84 @@
-# Dashboard
+# 构建看板与配置方案向导
 
-OpenWrt NG V1.3 的 GitHub Pages Dashboard 与 Profile Wizard。
+dashboard/ 是 OpenWrt NG 的公开 GitHub Pages 前端。它负责展示只读状态、提供本地配置方案向导，以及跳转到独立的管理中心。
 
-## 当前状态
+当前框架版本由仓库根目录 VERSION 统一提供。构建看板本身不参与编译、自动更新判断或版本发布。
 
-- 静态响应式 UI：已完成
-- 真实 GitHub 数据导出：已完成
-- schema / 敏感信息校验：已完成
-- Pages Artifact 打包：已完成真实验证
-- GitHub Pages 主干部署：已完成真实验证
-- Profile Wizard 主干部署与 Core 契约测试：已完成真实验证
-- 正式地址：<https://wekingchen.github.io/Actions-OpenWrt-NG/>
+## 页面组成
 
-## 目录
+- index.html：构建看板。查看配置方案、最近构建、上游状态和版本发布。
+- wizard.html：配置方案向导。在浏览器本地生成标准配置方案 ZIP。
+- connect.html：管理中心连接页。只读取公开连接配置，不处理 GitHub 登录凭据。
+- assets/app.js：构建看板渲染逻辑。
+- assets/wizard.js：向导交互逻辑。
+- assets/wizard-core.js：配置校验、7 个标准文件生成和 ZIP 封装。
+- assets/connect.js：管理中心连接状态展示。
+- assets/control-plane.js：公开连接配置校验。
+- data/status.json：构建看板数据占位文件，发布 Pages 前由 CI 写入真实数据。
+- data/control-plane.json：管理中心公开连接配置。
 
-- `index.html`：页面结构
-- `assets/style.css`：响应式样式
-- `assets/app.js`：只读 Dashboard 渲染逻辑
-- `wizard.html`：Profile Wizard 页面
-- `assets/wizard.js`：Wizard 表单、预览与本地下载逻辑
-- `assets/wizard-core.js`：Profile 校验、文件生成与 ZIP 封装核心
-- `connect.html`：V2 Control Plane 安全交接页
-- `assets/control-plane.js`：公开 Control Plane 配置校验与 URL 构造
-- `assets/connect.js`：V2 交接页渲染逻辑
-- `data/status.json`：占位 schema；CI 发布前会用真实数据覆盖
-- `../scripts/dashboard/export-data.py`：GitHub / Profile 数据导出器
-- `../scripts/dashboard/validate-data.py`：schema 与敏感信息校验
+## 数据和权限
 
-## 数据与权限
+浏览器端不会直接使用 GitHub Token，也不会调用需要仓库写权限的 GitHub API。
 
-Dashboard 浏览器端不调用 GitHub API，也不持有 Token。
+Pages 工作流读取仓库和 Actions 状态后生成静态数据。部署任务只需要 GitHub Pages 所需权限。构建看板发生故障不会影响 Builder、Update Checker 或版本发布。
 
-Pages Workflow 使用：
+## 配置方案向导
 
-- `contents: read`
-- `actions: read`
+向导生成的是标准 7 文件结构：
 
-生成静态数据；只有独立 deploy job 拥有：
+~~~text
+profiles/<id>/
+├── .config
+├── profile.env
+├── diy-part1.sh
+├── diy-part2.sh
+├── required-packages.txt
+├── watch-sources.txt
+└── feeds.conf
+~~~
 
-- `pages: write`
-- `id-token: write`
+其中 diy-part1.sh 和 diy-part2.sh 保持可执行权限，其余文件为普通文本文件。
 
-Dashboard 不参与 Core 的编译、追新或 Release 决策。
+向导会在当前浏览器内处理 .config 和表单内容，不上传文件。生成结果与管理中心的新建配置方案模板使用同一套核心规则，并由自动测试检查两边输出是否一致。
 
-## Pages 首次启用
+向导适合：
 
-正式合入 main 后，需要在仓库 Settings → Pages 中把 Build and deployment Source 设置为 **GitHub Actions**。这是仓库级一次性设置，Dashboard Workflow 不使用额外 PAT 自动修改 Pages 配置。
+- 不想部署管理中心，只需要本地生成一套配置方案。
+- 想先离线准备配置，再手工提交到仓库。
 
-## Profile Wizard
+如果已经部署管理中心，更推荐直接在管理中心新建或图形编辑配置方案，保存时会自动走独立分支和合并请求（PR）。
 
-V1.3 新增 `wizard.html`。
+## 管理中心入口
 
-- 浏览器本地读取 / 粘贴 `.config`
-- 生成标准 `profiles/<id>/` 六文件结构
-- Profile ID 与 Core 共用安全命名边界：字母或数字开头，最大 64 个字符
-- 对上传 / 粘贴内容做基础 Kconfig 形态校验
-- 客户端生成 ZIP，不上传配置
-- 生成器回归测试：`scripts/dashboard/test-wizard.mjs`
-- Core 集成测试：`scripts/dashboard/test-wizard.sh`
+公共模板仓库默认保持 dashboard/data/control-plane.json 为：
 
-正式地址：<https://wekingchen.github.io/Actions-OpenWrt-NG/wizard.html>
+~~~json
+{
+  "version": 1,
+  "enabled": false,
+  "controlPlaneUrl": "",
+  "githubAppSlug": ""
+}
+~~~
 
+这是安全默认值，避免使用模板创建的新仓库误连到维护者自己的服务。
 
-## V2 Control Plane
+只有在自己的仓库已经完成管理中心部署、真实登录和仓库操作验证后，才应填入自己的公开地址并把 enabled 改为 true。
 
-公开 Pages 只展示 Control Plane 的连接状态，不执行 GitHub OAuth，也不读取登录 Session。
+这个文件只能放公开信息，不能写 Client Secret、GitHub Token、TOKEN_ENCRYPTION_KEY 或其他密钥。
 
-- `data/control-plane.json` 只能包含公开配置，默认 `enabled=false`
-- 配置校验会拒绝常见 GitHub Token / Secret 字段
-- 登录后的控制面必须运行在独立同源 BFF 上
-- GitHub Token 不得回传到 Pages 或写入浏览器存储
+## GitHub Pages 首次启用
+
+在仓库 Settings → Pages 中，把 Build and deployment 的 Source 设置为 GitHub Actions。这个设置通常只需要做一次。
+
+正式页面由 pages-dashboard.yml 生成和部署。
+
+## 验证
+
+相关测试包括：
+
+- scripts/dashboard/test-wizard.mjs：检查向导输入、文件生成和 ZIP。
+- scripts/dashboard/test-wizard.sh：把生成结果放回真实 profiles/ 路径，验证 profile.sh、更新检查和固件清单校验兼容性。
+- scripts/dashboard/validate-data.py：检查构建看板数据结构和敏感信息。
+- control-plane/contract.test.mjs：检查管理中心版本和前端契约。
