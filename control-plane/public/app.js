@@ -149,11 +149,26 @@ function showControlPlaneView(name) {
   const grid = $("workspace-grid");
   const build = $("build-card");
   const recent = $("recent-build-card");
+  const trash = $("deleted-profiles-card");
+  const profile = $("profile-card");
 
   grid.hidden = name === "builder";
-  grid.classList.toggle("config-only", name === "profiles");
+  grid.classList.toggle(
+    "config-only",
+    name === "profiles" || name === "trash"
+  );
   build.hidden = name !== "builder";
   recent.hidden = name !== "workspace";
+  if (trash) trash.hidden = name !== "trash";
+
+  if (profile && (name === "workspace" || name === "profiles")) {
+    profile.hidden = false;
+  }
+  if (name === "trash") {
+    if (profile) profile.hidden = true;
+    $("new-profile-card").hidden = true;
+    $("editor-card").hidden = true;
+  }
 }
 
 function scrollToPanel(node) {
@@ -189,6 +204,14 @@ async function navigateControlPlane(destination) {
     } else {
       scrollToPanel($("profile-card"));
     }
+    return;
+  }
+
+  if (destination === "trash") {
+    showControlPlaneView("trash");
+    setActiveNavigation("profiles");
+    await loadDeletedProfiles(repo, repositoryState.selectionVersion);
+    scrollToPanel($("deleted-profiles-card"));
     return;
   }
 
@@ -2352,10 +2375,10 @@ async function restoreDeletedProfile(repo, profile, button) {
 }
 
 async function loadDeletedProfiles(repo, selectionVersion) {
-  const section = $("deleted-profiles-section");
   const root = $("deleted-profiles");
-  section.hidden = true;
-  root.replaceChildren();
+  root.replaceChildren(
+    buildStateMessage("正在读取回收站", "正在读取最近删除的配置方案…")
+  );
 
   let data;
   try {
@@ -2368,7 +2391,9 @@ async function loadDeletedProfiles(repo, selectionVersion) {
       selectionVersion !== repositoryState.selectionVersion ||
       repositoryState.selectedFullName !== repo.fullName
     ) return;
-    console.warn("Deleted profile history unavailable", error);
+    root.replaceChildren(
+      buildStateMessage("回收站暂时不可用", friendlyError(error))
+    );
     return;
   }
 
@@ -2378,7 +2403,14 @@ async function loadDeletedProfiles(repo, selectionVersion) {
   ) return;
 
   const profiles = Array.isArray(data.profiles) ? data.profiles : [];
-  if (!profiles.length) return;
+  root.replaceChildren();
+
+  if (!profiles.length) {
+    root.replaceChildren(
+      buildStateMessage("回收站是空的", "目前没有可恢复的已删除配置方案。")
+    );
+    return;
+  }
 
   for (const profile of profiles) {
     const row = document.createElement("div");
@@ -2428,7 +2460,6 @@ async function loadDeletedProfiles(repo, selectionVersion) {
     row.append(leading, actions);
     root.appendChild(row);
   }
-  section.hidden = false;
 }
 
 async function loadProfiles(repo, selectionVersion, options = {}) {
@@ -2663,7 +2694,6 @@ async function loadProfiles(repo, selectionVersion, options = {}) {
     );
   }
 
-  await loadDeletedProfiles(repo, selectionVersion);
   await setupBuildHistory(repo);
   return data.profiles;
 }
@@ -4894,6 +4924,9 @@ document.addEventListener("keydown", (event) => {
     if (!$("profile-lifecycle-dialog").hidden) closeProfileLifecycleDialog();
     if (!$("update-checker-dialog").hidden) closeUpdateCheckerDialog();
     if (!$("release-existing-dialog").hidden) closeReleaseExistingDialog();
+    if (!$("deleted-profiles-card").hidden) {
+      navigateControlPlane("profiles").catch((error) => showError(error));
+    }
     if (!$("config-studio-dialog").hidden) {
       closeConfigStudio({ cleanup: false }).catch((error) => showError(error));
     }
@@ -4907,6 +4940,14 @@ $("update-checker-open").addEventListener("click", () => {
     return;
   }
   openUpdateCheckerDialog(repo).catch((error) => showError(error));
+});
+
+$("deleted-profiles-open").addEventListener("click", () => {
+  navigateControlPlane("trash").catch((error) => showError(error));
+});
+
+$("deleted-profiles-back").addEventListener("click", () => {
+  navigateControlPlane("profiles").catch((error) => showError(error));
 });
 
 $("new-profile-open").addEventListener("click", openNewProfileForm);

@@ -190,7 +190,9 @@ jobs:
         grep -q 'updateCheckerMatch' control-plane/server.mjs
         grep -q 'id="update-checker-dialog"' control-plane/public/index.html
         grep -q 'id="release-existing-dialog"' control-plane/public/index.html
-        grep -q 'id="deleted-profiles-section"' control-plane/public/index.html
+        grep -q 'id="deleted-profiles-card"' control-plane/public/index.html
+        grep -q 'id="deleted-profiles-open"' control-plane/public/index.html
+        ! grep -q 'id="deleted-profiles-section"' control-plane/public/index.html
         grep -q 'openUpdateCheckerDialog' control-plane/public/app.js
         grep -q 'openReleaseExistingDialog' control-plane/public/app.js
         grep -q 'loadDeletedProfiles' control-plane/public/app.js
