@@ -1,53 +1,64 @@
-# Adapter Contract
+# Adapter 接入规范
 
-Adapter 的职责只有一个：把 Profile 指定的源码准备成可编译的 OpenWrt 根目录。
+Adapter 用来把不同 OpenWrt 源码树接到同一套构建流程里。当前仓库只有一个正式 Adapter：**direct-openwrt**，适用于 OpenWrt、Lean LEDE、ImmortalWrt 以及大多数保持标准 OpenWrt 目录结构的分支。
 
-Workflow 会执行：
+普通用户通常不需要直接修改 Adapter。只有源码树的准备方式、feeds 处理方式或编译入口与标准 OpenWrt 明显不同，才应该新增 Adapter。
 
-```bash
-"$ADAPTER_SCRIPT" install-deps
-"$ADAPTER_SCRIPT" prepare
-```
+## 当前调用顺序
 
-要求：
+正式构建和图形配置都会遵循同一套大体顺序：
 
-1. `install-deps` 可以是空操作；特殊 SDK 可在这里安装额外宿主依赖。
-2. `prepare` 成功后，`$GITHUB_WORKSPACE/openwrt` 必须是 OpenWrt build root（目录或符号链接均可）。
-3. Adapter 必须把实际源码 commit 写入 `SOURCE_COMMIT`：
-   - GitHub Actions 中写入 `$GITHUB_ENV`；
-   - 同时允许后续脚本通过环境变量读取。
-4. Adapter 不负责 feeds、配置、编译、Release；这些属于 Core。
-5. 设备特有补丁优先放 Profile DIY Hook，只有“源码树生成方式”确实特殊时才放 Adapter。
+1. 读取配置方案和 profile.env。
+2. 运行配置方案预检。
+3. 由 Adapter 准备源码树。
+4. 执行 diy-part1.sh。
+5. 合并并更新 feeds。
+6. 安装 feeds，并按配置的同名包策略处理冲突。
+7. 设置 PROFILE_FILES_DIR。
+8. 执行 diy-part2.sh。
+9. 运行 make defconfig。
+10. 后续进入图形配置解析或正式编译。
 
-V0.1 内置 `direct-openwrt.sh`。
+这条顺序是项目契约的一部分。特别是编辑已有配置方案时，管理中心会先还原该方案的 7 个标准文件，再按上面的顺序执行，不能跳过 DIY 脚本或交换 diy-part1.sh / diy-part2.sh 的位置。
 
+## Adapter 必须提供的能力
 
-## Profile Hook
+Adapter 脚本由框架调用，不应自行改写 GitHub 工作流。当前 direct-openwrt.sh 提供标准 OpenWrt 源码树需要的准备、依赖和编译接入逻辑。
 
-除 Adapter 外，Profile 还可以声明以下可选 Hook：
+新增 Adapter 时至少要满足：
 
-- `PREFLIGHT_SCRIPT`：只读 Preflight 阶段运行。通过 `OPENWRT_NG_PREFLIGHT_ENV` 写入 `KEY=value` 元数据；Core 会校验后用短期 Artifact 交给 build。
-- `POST_FEEDS_SCRIPT`：`feeds update -a` 后、feed 指纹与 `feeds install` 前运行。
-- `DIY_PART1`：feeds 更新前。
-- `DIY_PART2`：feeds 安装后、最终 `make defconfig` 前。
+- 能根据 SOURCE_REPO 与 SOURCE_BRANCH 得到可用源码树。
+- 不绕过项目的 feeds 合并、同名包处理和配置留档逻辑。
+- 不绕过 make defconfig。
+- 不自行发布 Release。
+- 不自行上传 Artifact。
+- 不把凭据写进源码树、日志、配置留档或构建产物。
 
-需要给 make 临时补充宿主动态库搜索路径时，可声明：
+## 配置方案 Hook
 
-```bash
-MAKE_LD_LIBRARY_PATH_RELATIVE="staging_dir/hostpkg/lib"
-```
+每套配置方案可以提供：
 
-该路径只注入 make 及诊断重试的子进程，不写入全局 `LD_LIBRARY_PATH`。
+- diy-part1.sh：源码拉取完成后、feeds 更新前执行。
+- diy-part2.sh：feeds 安装完成后、make defconfig 前执行。
 
+两个脚本都应保持可重复执行，失败时必须返回非 0 状态。不要依赖交互输入。
 
-## Heavy Build Options
+## 构建空间
 
-Profile 可以按需声明：
+MAXIMIZE_BUILD_SPACE=true 时，工作流会按项目现有逻辑扩展 GitHub Runner 可用空间。普通 OpenWrt 配置建议保持关闭，只有大型源码或目标确实需要时再打开。
 
-```bash
-MAXIMIZE_BUILD_SPACE="true"
-STREAM_BUILD_LOG="false"
-```
+## 日志说明
 
-- `MAXIMIZE_BUILD_SPACE` 只在需要较大工作盘的 Profile 开启；Core 使用固定 commit 的 `easimon/maximize-build-space`。
-- `STREAM_BUILD_LOG=false` 适合日志量很大的老 SDK；完整日志仍保存在 `build.log`，页面通过心跳显示进度。
+旧版 STREAM_BUILD_LOG 已废弃。现在正常编译默认只显示阶段和心跳，完整并行输出不会持续刷满 GitHub 页面；失败后才提取有限错误上下文，并额外执行受限的单目标详细诊断。
+
+如需框架开发调试，可使用内部变量 OPENWRT_NG_DEBUG_STREAM_LOG=true 临时恢复全量流式日志。这个变量不是配置方案的常规选项，也不应写入新配置方案。
+
+## 新增 Adapter 前的检查
+
+新增 Adapter 后至少要确认：
+
+- shell 语法检查通过。
+- Control Plane CI 全部通过。
+- Config Studio 能按真实源码生成配置目录。
+- Builder 能完成预检、make defconfig、编译和产物校验。
+- 不影响现有 direct-openwrt 路径。
