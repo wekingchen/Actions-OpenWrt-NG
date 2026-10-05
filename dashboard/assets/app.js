@@ -14,7 +14,7 @@
     if (!Number.isFinite(seconds)) return "—";
     const mins = Math.floor(seconds / 60);
     const secs = Math.max(0, Math.floor(seconds % 60));
-    return mins > 0 ? `${mins}m ${String(secs).padStart(2, "0")}s` : `${secs}s`;
+    return mins > 0 ? `${mins} 分 ${String(secs).padStart(2, "0")} 秒` : `${secs} 秒`;
   };
   const statusClass = (status) => {
     if (status === "success") return "success";
@@ -26,8 +26,25 @@
     success: "构建成功",
     failure: "构建失败",
     in_progress: "构建中",
-    queued: "排队中"
-  }[status] || status || "未知");
+    queued: "排队中",
+    requested: "等待中",
+    waiting: "等待中",
+    pending: "等待中",
+    cancelled: "已取消",
+    skipped: "已跳过",
+    timed_out: "超时",
+    action_required: "需要操作",
+    neutral: "已完成"
+  }[status] || "状态未知");
+  const eventLabel = (event) => ({
+    workflow_dispatch: "手动触发",
+    repository_dispatch: "自动触发",
+    schedule: "定时检查",
+    push: "代码推送",
+    pull_request: "合并请求",
+    workflow_run: "工作流联动"
+  }[event] || (event ? `其他（${event}）` : "—"));
+  const adapterLabel = (adapter) => adapter === "direct-openwrt" ? "标准 OpenWrt" : (adapter || "—");
 
   function setLinks(repo) {
     const base = repo.html_url || "#";
@@ -98,7 +115,7 @@
       const rows = [
         ["源码", profile.source_repo || "—"],
         ["分支", profile.source_branch || "—"],
-        ["源码类型", profile.adapter || "—"],
+        ["源码类型", adapterLabel(profile.adapter)],
         ["最新提交", profile.last_commit ? profile.last_commit.slice(0, 12) : "—"]
       ];
       node.querySelector(".profile-meta").innerHTML = rows.map(([k, v]) =>
@@ -124,7 +141,7 @@
       tr.innerHTML = `
         <td><span class="state-dot ${statusClass(build.status)}"></span>${escapeHtml(statusLabel(build.status))}</td>
         <td>${escapeHtml(build.profile || "—")}</td>
-        <td>${escapeHtml(build.event || "—")}</td>
+        <td>${escapeHtml(eventLabel(build.event))}</td>
         <td class="mono">${escapeHtml(build.commit ? build.commit.slice(0, 12) : "—")}</td>
         <td>${escapeHtml(fmtDuration(build.duration_seconds))}</td>
         <td>${escapeHtml(fmtTime(build.created_at))}</td>
