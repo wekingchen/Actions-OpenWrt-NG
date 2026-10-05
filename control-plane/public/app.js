@@ -760,7 +760,6 @@ function readNewProfileInput() {
     uploadRelease: $("new-upload-release").checked,
     uploadFirmware: $("new-upload-firmware").checked,
     maximizeSpace: $("new-maximize-space").checked,
-    streamLog: false,
     requiredPackages: $("new-required-packages").value,
     watchSources: $("new-watch-sources").value,
     extraFeeds: $("new-extra-feeds").value,

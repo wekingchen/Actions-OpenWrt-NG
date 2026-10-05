@@ -23,8 +23,7 @@ const BOOLEAN_KEYS = Object.freeze([
   "autoUpdate",
   "uploadRelease",
   "uploadFirmware",
-  "maximizeSpace",
-  "streamLog"
+  "maximizeSpace"
 ]);
 
 export class ProfileTemplateError extends Error {
@@ -99,6 +98,15 @@ function validateShape(input) {
         `${key} 必须是布尔值。`
       );
     }
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(input, "streamLog") &&
+    typeof input.streamLog !== "boolean"
+  ) {
+    throw new ProfileTemplateError(
+      "invalid_profile_template",
+      "streamLog 必须是布尔值。"
+    );
   }
 }
 
@@ -254,7 +262,6 @@ export function buildProfileTemplateFiles(input) {
       input.maximizeSpace ? "true" : "false"
     )}`,
     `FEED_PRIORITY_MODE=${shellQuote(feedPriorityMode)}`,
-    "STREAM_BUILD_LOG='false'",
     "",
     "UPLOAD_BIN_DIR='false'",
     `UPLOAD_FIRMWARE=${shellQuote(

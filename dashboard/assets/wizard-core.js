@@ -21,8 +21,7 @@ const BOOLEAN_KEYS = [
   "autoUpdate",
   "uploadRelease",
   "uploadFirmware",
-  "maximizeSpace",
-  "streamLog"
+  "maximizeSpace"
 ];
 
 export function shellQuote(value) {
@@ -80,6 +79,12 @@ export function validateProfileInput(input) {
     if (typeof input[key] !== "boolean") {
       errors.push(`${key} 必须是布尔值。`);
     }
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(input, "streamLog") &&
+    typeof input.streamLog !== "boolean"
+  ) {
+    errors.push("streamLog 必须是布尔值。");
   }
 
   const profileId = String(input.profileId ?? "");
@@ -212,7 +217,6 @@ export function buildProfileFiles(input) {
     `AUTO_UPDATE=${shellQuote(input.autoUpdate ? "true" : "false")}`,
     `MAXIMIZE_BUILD_SPACE=${shellQuote(input.maximizeSpace ? "true" : "false")}`,
     `FEED_PRIORITY_MODE=${shellQuote(feedPriorityMode)}`,
-    "STREAM_BUILD_LOG='false'",
     "",
     `UPLOAD_BIN_DIR='false'`,
     `UPLOAD_FIRMWARE=${shellQuote(input.uploadFirmware ? "true" : "false")}`,

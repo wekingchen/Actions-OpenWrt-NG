@@ -18,6 +18,8 @@ from typing import Any
 
 API_ROOT = "https://api.github.com"
 
+FRAMEWORK_VERSION_RE = re.compile(r"^[0-9]+\\.[0-9]+\\.[0-9]+$")
+
 
 class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Do not forward GitHub bearer credentials to signed artifact hosts."""
@@ -43,6 +45,19 @@ PROFILE_KEYS = (
     "AUTO_UPDATE",
     "UPLOAD_RELEASE",
 )
+
+
+def framework_version(root: Path) -> str:
+    path = root / "VERSION"
+    try:
+        value = path.read_text(encoding="utf-8").strip()
+    except OSError as error:
+        raise RuntimeError(f"framework VERSION is unavailable: {path}") from error
+    if not FRAMEWORK_VERSION_RE.fullmatch(value):
+        raise RuntimeError(
+            f"framework VERSION must use MAJOR.MINOR.PATCH: {value!r}"
+        )
+    return value
 
 
 def iso_now() -> str:
@@ -527,7 +542,7 @@ def main() -> int:
             "releases_url": f"{repo.get('html_url')}/releases",
             "default_branch": repo.get("default_branch"),
             "is_template": repo.get("is_template", False),
-            "version": "V1.3",
+            "version": f"V{framework_version(root)}",
             "baseline_profile": next(
                 (profile["id"] for profile in profiles if profile.get("baseline")),
                 None,

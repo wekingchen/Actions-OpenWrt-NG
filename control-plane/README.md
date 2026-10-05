@@ -351,6 +351,8 @@ profiles/<id>/feeds.conf
 
 ### 11. V2.0E：Config Studio / Web Menuconfig
 
+0.21.11 正式废弃 Profile 级 `STREAM_BUILD_LOG`。旧请求仍可携带 `streamLog`、旧 Profile 仍可包含 `STREAM_BUILD_LOG`，但都只用于向后兼容并被忽略；新 Profile 模板不再生成该字段。完整流式编译日志只保留内部 Core 调试变量 `OPENWRT_NG_DEBUG_STREAM_LOG=true`。框架 / Dashboard 版本改由仓库根 `VERSION` 单一来源管理，Control Plane 继续保持独立 `0.21.x` 版本线。
+
 0.21.10 在 Profile 创建流程中增加 Feed 冲突策略。默认 `per-package` 按二进制包版本择优，并对同一 source 的分裂赢家 fail-safe；`feed-order` 按第三方优先 feed 的声明顺序整源选择。旧 Profile 未声明时自动使用 `per-package`。每轮 Feed 决策、被替换项与跨 feed 依赖告警都会随构建进入 `config-record/feed-priority.json`。
 
 0.21.9 增加 Profile Merge Policy。部署变量 `PROFILE_MERGE_POLICY` 支持 `immediate`（默认，保持原行为）、`after-checks`（通过 GitHub Auto-merge 在必需检查/审核满足后 squash 合并）和 `manual`（只创建 PR）。`after-checks` 依赖仓库已启用 Auto-merge 且存在会阻止立即合并的规则；如果 GitHub 无法启用 Auto-merge，PR 会保留供人工处理，不会退回即时合并。合并后补偿清理扩展到所有 Control Plane Profile PR，删除/重命名继续额外处理 Config Studio 会话。
@@ -363,7 +365,7 @@ profiles/<id>/feeds.conf
 
 0.21.2 补齐 Profile 生命周期管理：配置列表新增删除入口，删除前读取默认分支最新基线并二次确认；服务端只允许删除目标 Profile 的 7 个标准文件，通过独立分支 → Pull Request → 自动 squash 合并 → 临时分支清理完成，不直接写默认分支。初版曾固定保护 `default`，0.21.3 已改为保护 `profiles/.baseline` 指向的逻辑基准 Profile；目标 Profile 存在 queued / running Builder 时返回 `409 profile_build_active`，避免运行中的构建失去配置；若默认分支已变化则沿用 `409 repository_changed` 并要求重新加载。删除 PR 自动合并成功后前端会无缓存刷新 Profile 列表，Git 历史和 PR 审计记录仍保留。
 
-0.21.1 统一 Builder 日志策略：正常 `make -jN` 默认静默写入 Runner 临时文件，GitHub step 只显示定期心跳；仅在失败后提取有限错误上下文并执行有限时单目标 `-j1 V=s` 诊断，详细诊断同样先写文件，再只显示错误附近内容。失败 Artifact 改为 `build-error-context.log`、`build-failure.log` 和 OpenWrt 自身 logs，不再上传整份并行 `build.log`。旧 Profile 中的 `STREAM_BUILD_LOG=true` 保留兼容解析但不再开启全量页面输出；新建 Profile UI 同时移除“流式日志”选项并固定写入 `STREAM_BUILD_LOG=false`。只有 Core 调试时可通过内部 `OPENWRT_NG_DEBUG_STREAM_LOG=true` 临时恢复全量流式输出。
+0.21.1 统一 Builder 日志策略：正常 `make -jN` 默认静默写入 Runner 临时文件，GitHub step 只显示定期心跳；仅在失败后提取有限错误上下文并执行有限时单目标 `-j1 V=s` 诊断，详细诊断同样先写文件，再只显示错误附近内容。失败 Artifact 改为 `build-error-context.log`、`build-failure.log` 和 OpenWrt 自身 logs，不再上传整份并行 `build.log`。旧 Profile 中的 `STREAM_BUILD_LOG=true` 保留兼容解析但不再开启全量页面输出；新建 Profile UI 移除“流式日志”选项；0.21.11 起新 Profile 模板也不再写入 `STREAM_BUILD_LOG`。只有 Core 调试时可通过内部 `OPENWRT_NG_DEBUG_STREAM_LOG=true` 临时恢复全量流式输出。
 
 0.21.0 将“编辑已有 Profile → 图形配置”升级为完整编辑器快照模式。点击图形配置前，浏览器先把当前正在编辑的文件写回内存，然后把 7 个标准 Profile 文件连同基线 SHA 发送给 Control Plane；服务端校验后把这份快照写入专用 `openwrt-ng/config-session-*` 临时分支，并保留 DIY 脚本的可执行权限。Config Studio workflow 改为 checkout 该 session 分支，因此 `profile.env`、`diy-part1.sh`、`diy-part2.sh`、`feeds.conf` 和当前未保存的 `.config` 都按编辑器中的版本生效，而不是重新读取默认分支旧内容。准备顺序同时与 Builder 进一步对齐：加载 Profile → Profile Preflight → Adapter/源码 → DIY Part 1 → feeds → feeds install → PROFILE_FILES_DIR → DIY Part 2 → `make defconfig` → 图形菜单。图形配置完成后仅以 Kconfig 结果替换 session 快照中的 `.config`，其余 6 个文件按进入图形配置时的编辑器快照一起创建 PR；若默认分支在会话期间发生变化，仍返回 `409 repository_changed`，不会覆盖并发修改。
 

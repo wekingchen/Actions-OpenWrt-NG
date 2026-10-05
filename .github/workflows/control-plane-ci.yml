@@ -6,6 +6,7 @@ on:
     branches:
       - main
     paths:
+      - "VERSION"
       - "control-plane/**"
       - ".github/workflows/control-plane-ci.yml"
       - ".github/workflows/deploy-control-plane.yml"
@@ -21,6 +22,7 @@ on:
       - "dashboard/**"
   pull_request:
     paths:
+      - "VERSION"
       - "control-plane/**"
       - ".github/workflows/control-plane-ci.yml"
       - ".github/workflows/deploy-control-plane.yml"
@@ -110,6 +112,12 @@ jobs:
         bash -n scripts/cleanup-workflow-runs.sh
         python3 -m py_compile scripts/cleanup-actions-caches.py
         python3 scripts/test-cleanup-actions-caches.py
+        python3 -m py_compile scripts/dashboard/export-data.py
+        python3 scripts/test-framework-version.py
+        ! grep -q "STREAM_BUILD_LOG='false'" control-plane/lib/profile-template.mjs
+        ! grep -q "STREAM_BUILD_LOG='false'" dashboard/assets/wizard-core.js
+        ! grep -q 'emit_env STREAM_BUILD_LOG' scripts/profile.sh
+        grep -q 'STREAM_BUILD_LOG 已废弃' scripts/profile.sh
         bash -n scripts/write-summary.sh
         bash -n scripts/profile.sh
         grep -q 'OPENWRT_NG_GIT_TIMEOUT' scripts/resolve-update-state.sh
